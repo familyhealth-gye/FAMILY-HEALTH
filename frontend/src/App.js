@@ -127,7 +127,7 @@ function App() {
   };
 
   const resetDoctorForm = () => {
-    setDoctorForm({ nombre: "", especialidad: "" });
+    setDoctorForm({ nombre: "", especialidad: "", porcentaje: 50 });
     setEditingDoctor(null);
   };
 
