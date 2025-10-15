@@ -110,7 +110,7 @@ function App() {
 
   const handleEditDoctor = (doctor) => {
     setEditingDoctor(doctor);
-    setDoctorForm({ nombre: doctor.nombre, especialidad: doctor.especialidad });
+    setDoctorForm({ nombre: doctor.nombre, especialidad: doctor.especialidad, porcentaje: doctor.porcentaje || 50 });
     setDoctorDialog(true);
   };
 
