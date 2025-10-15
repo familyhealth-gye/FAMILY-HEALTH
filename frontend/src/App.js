@@ -21,8 +21,13 @@ const API = `${BACKEND_URL}/api`;
 function App() {
   const [doctors, setDoctors] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [doctorPayments, setDoctorPayments] = useState([]);
   const [specialties, setSpecialties] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [monthlyTotals, setMonthlyTotals] = useState({});
   
   // Doctor form
   const [doctorDialog, setDoctorDialog] = useState(false);
