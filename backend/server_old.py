@@ -223,23 +223,6 @@ async def get_specialties():
         ]
     }
 
-# Categories endpoint
-@api_router.get("/categories")
-async def get_categories():
-    return {
-        "categories": [
-            "Odontología",
-            "Medicina General",
-            "Nutrición",
-            "Psicología",
-            "Ginecología",
-            "Laboratorio Clínico",
-            "Material Quirúrgico",
-            "Consumibles",
-            "Otros"
-        ]
-    }
-
 # ========== DOCTOR ENDPOINTS ==========
 
 @api_router.post("/doctors", response_model=Doctor)
@@ -260,6 +243,7 @@ async def get_doctors():
     for doctor in doctors:
         if isinstance(doctor['created_at'], str):
             doctor['created_at'] = datetime.fromisoformat(doctor['created_at'])
+        # Set default porcentaje if not exists
         if 'porcentaje' not in doctor:
             doctor['porcentaje'] = 50.0
     
@@ -381,7 +365,8 @@ async def get_monthly_totals():
     
     monthly_totals = defaultdict(float)
     for invoice in invoices:
-        year_month = invoice['fecha'][:7]
+        # Extract year-month from fecha (format: YYYY-MM-DD)
+        year_month = invoice['fecha'][:7]  # Gets YYYY-MM
         monthly_totals[year_month] += invoice['valor']
     
     return {"monthly_totals": dict(monthly_totals)}
@@ -393,11 +378,13 @@ async def export_invoices():
     output = io.StringIO()
     writer = csv.writer(output)
     
+    # Write header
     writer.writerow([
         'Número Factura', 'Paciente', 'Cédula', 'Doctor', 
         'Especialidad', 'Servicio', 'Valor', 'Fecha', 'Tipo Pago'
     ])
     
+    # Write data
     for invoice in invoices:
         writer.writerow([
             invoice['numero_factura'],
@@ -511,12 +498,15 @@ async def delete_inventory_item(item_id: str):
         raise HTTPException(status_code=404, detail="Item no encontrado")
     return {"message": "Item eliminado exitosamente"}
 
+# ========== INVENTORY MOVEMENTS ==========
+
 @api_router.post("/inventory/movements", response_model=InventoryMovement)
 async def create_inventory_movement(input: InventoryMovementCreate):
     item = await db.inventory.find_one({"id": input.item_id}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Item no encontrado")
     
+    # Update item quantity
     if input.tipo == "entrada":
         new_quantity = item['cantidad'] + input.cantidad
     elif input.tipo == "salida":
@@ -524,10 +514,11 @@ async def create_inventory_movement(input: InventoryMovementCreate):
             raise HTTPException(status_code=400, detail="Cantidad insuficiente en inventario")
         new_quantity = item['cantidad'] - input.cantidad
     else:
-        raise HTTPException(status_code=400, detail="Tipo inválido")
+        raise HTTPException(status_code=400, detail="Tipo inválido. Use 'entrada' o 'salida'")
     
     await db.inventory.update_one({"id": input.item_id}, {"$set": {"cantidad": new_quantity}})
     
+    # Create movement record
     movement_dict = input.model_dump()
     movement_dict['item_nombre'] = item['nombre']
     movement_obj = InventoryMovement(**movement_dict)
@@ -548,18 +539,21 @@ async def get_inventory_movements():
     
     return movements
 
-# ========== DOCTOR PAYMENTS ==========
+# ========== DOCTOR PAYMENTS ENDPOINTS ==========
 
 @api_router.post("/doctor-payments/calculate")
 async def calculate_doctor_payments(input: DoctorPaymentCreate):
+    """Calculate payment for a specific doctor for a given month/year"""
     doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor no encontrado")
     
+    # Get all invoices for this doctor in the specified month
     invoices = await db.invoices.find({"doctor_id": input.doctor_id}, {"_id": 0}).to_list(1000)
     
     total_facturado = 0
     for invoice in invoices:
+        # Parse fecha (YYYY-MM-DD) and check if it matches month/year
         invoice_date = invoice['fecha'].split('-')
         if len(invoice_date) >= 2:
             invoice_year = int(invoice_date[0])
@@ -570,6 +564,7 @@ async def calculate_doctor_payments(input: DoctorPaymentCreate):
     porcentaje = doctor.get('porcentaje', 50.0)
     total_pagar = (total_facturado * porcentaje) / 100
     
+    # Check if payment already exists
     existing_payment = await db.doctor_payments.find_one({
         "doctor_id": input.doctor_id,
         "mes": input.mes,
@@ -577,6 +572,7 @@ async def calculate_doctor_payments(input: DoctorPaymentCreate):
     }, {"_id": 0})
     
     if existing_payment:
+        # Update existing
         await db.doctor_payments.update_one(
             {"id": existing_payment['id']},
             {"$set": {
@@ -594,6 +590,7 @@ async def calculate_doctor_payments(input: DoctorPaymentCreate):
             existing_payment['created_at'] = datetime.fromisoformat(existing_payment['created_at'])
         return DoctorPayment(**existing_payment)
     else:
+        # Create new
         payment_obj = DoctorPayment(
             doctor_id=input.doctor_id,
             doctor_nombre=doctor['nombre'],
@@ -645,7 +642,7 @@ async def delete_doctor_payment(payment_id: str):
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     return {"message": "Pago eliminado exitosamente"}
 
-# Include the router
+# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
@@ -656,6 +653,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
