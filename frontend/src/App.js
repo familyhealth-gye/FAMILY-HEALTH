@@ -62,14 +62,24 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const [doctorsRes, appointmentsRes, specialtiesRes] = await Promise.all([
+      const [doctorsRes, appointmentsRes, specialtiesRes, categoriesRes, invoicesRes, inventoryRes, paymentsRes, totalsRes] = await Promise.all([
         axios.get(`${API}/doctors`),
         axios.get(`${API}/appointments`),
-        axios.get(`${API}/specialties`)
+        axios.get(`${API}/specialties`),
+        axios.get(`${API}/categories`),
+        axios.get(`${API}/invoices`),
+        axios.get(`${API}/inventory`),
+        axios.get(`${API}/doctor-payments`),
+        axios.get(`${API}/invoices/monthly-totals`)
       ]);
       setDoctors(doctorsRes.data);
       setAppointments(appointmentsRes.data);
       setSpecialties(specialtiesRes.data.specialties);
+      setCategories(categoriesRes.data.categories);
+      setInvoices(invoicesRes.data);
+      setInventory(inventoryRes.data);
+      setDoctorPayments(paymentsRes.data);
+      setMonthlyTotals(totalsRes.data.monthly_totals);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Error al cargar los datos");
