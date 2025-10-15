@@ -295,6 +295,18 @@ function App() {
                           </SelectContent>
                         </Select>
                       </div>
+                      <div className="form-field">
+                        <Label>Porcentaje de Comisión (%)</Label>
+                        <Input
+                          data-testid="doctor-percentage-input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={doctorForm.porcentaje}
+                          onChange={(e) => setDoctorForm({...doctorForm, porcentaje: parseFloat(e.target.value)})}
+                          required
+                        />
+                      </div>
                     </div>
                     <DialogFooter>
                       <Button type="submit" disabled={loading} data-testid="save-doctor-button">
