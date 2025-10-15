@@ -1,0 +1,59 @@
+          {/* Doctors Tab - Same as before */}
+          <TabsContent value="doctors" className="tab-content">
+            {/* ... Same content as Phase 1 ... */}
+          </TabsContent>
+
+          {/* Appointments Tab - Same as before with WhatsApp */}
+          <TabsContent value="appointments" className="tab-content">
+            {/* ... Same content as Phase 1 ... */}
+          </TabsContent>
+
+          {/* NEW: Invoices Tab */}
+          <TabsContent value="invoices" className="tab-content">
+            <div className="section-header">
+              <div>
+                <h2 className="section-title">Gestión de Facturas</h2>
+                <p className="section-subtitle">Registra y controla las facturas emitidas</p>
+              </div>
+              <div style={{display: 'flex', gap: '0.5rem'}}>
+                <Button onClick={handleExportInvoices} variant="outline" data-testid="export-invoices-button">
+                  <Download className="button-icon" />
+                  Exportar CSV
+                </Button>
+                <Dialog open={invoiceDialog} onOpenChange={(open) => { setInvoiceDialog(open); if (!open) resetInvoiceForm(); }}>
+                  <DialogTrigger asChild>
+                    <Button className="add-button" data-testid="add-invoice-button">
+                      <UserPlus className="button-icon" />
+                      Nueva Factura
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="dialog-content dialog-wide">
+                    <DialogHeader>
+                      <DialogTitle>{editingInvoice ? "Editar Factura" : "Registrar Nueva Factura"}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleInvoiceSubmit}>
+                      {/* Invoice form fields */}
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+            {/* Monthly totals, search, table */}
+          </TabsContent>
+
+          {/* NEW: Inventory Tab */}
+          <TabsContent value="inventory" className="tab-content">
+            {/* Inventory management */}
+          </TabsContent>
+
+          {/* NEW: Payments Tab */}
+          <TabsContent value="payments" className="tab-content">
+            {/* Doctor payments */}
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}
+
+export default App;
