@@ -32,7 +32,7 @@ function App() {
   // Doctor form
   const [doctorDialog, setDoctorDialog] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState(null);
-  const [doctorForm, setDoctorForm] = useState({ nombre: "", especialidad: "" });
+  const [doctorForm, setDoctorForm] = useState({ nombre: "", especialidad: "", porcentaje: 50 });
   
   // Appointment form
   const [appointmentDialog, setAppointmentDialog] = useState(false);
