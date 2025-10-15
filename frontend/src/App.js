@@ -239,14 +239,26 @@ function App() {
       {/* Main Content */}
       <main className="main-container">
         <Tabs defaultValue="appointments" className="tabs-container">
-          <TabsList className="tabs-list">
+          <TabsList className="tabs-list tabs-list-extended">
             <TabsTrigger value="appointments" data-testid="appointments-tab">
               <Users className="tab-icon" />
-              Citas Médicas
+              Citas
             </TabsTrigger>
             <TabsTrigger value="doctors" data-testid="doctors-tab">
               <Stethoscope className="tab-icon" />
               Doctores
+            </TabsTrigger>
+            <TabsTrigger value="invoices" data-testid="invoices-tab">
+              <FileText className="tab-icon" />
+              Facturas
+            </TabsTrigger>
+            <TabsTrigger value="inventory" data-testid="inventory-tab">
+              <Package className="tab-icon" />
+              Inventario
+            </TabsTrigger>
+            <TabsTrigger value="payments" data-testid="payments-tab">
+              <DollarSign className="tab-icon" />
+              Pagos
             </TabsTrigger>
           </TabsList>
 
