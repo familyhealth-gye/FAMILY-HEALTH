@@ -53,6 +53,8 @@ function App() {
   // Search
   const [searchDoctor, setSearchDoctor] = useState("");
   const [searchAppointment, setSearchAppointment] = useState("");
+  const [searchInvoice, setSearchInvoice] = useState("");
+  const [searchInventory, setSearchInventory] = useState("");
 
   useEffect(() => {
     fetchData();
