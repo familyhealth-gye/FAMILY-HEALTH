@@ -14,6 +14,9 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon, Phone, Edit, Trash2, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, AlertTriangle, MessageCircle } from "lucide-react";
+import { InvoicesTab } from "@/components/InvoicesTab";
+import { InventoryTab } from "@/components/InventoryTab";
+import { PaymentsTab } from "@/components/PaymentsTab";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
