@@ -399,6 +399,56 @@ body {
   font-weight: 500;
 }
 
+/* Amount cell */
+.amount-cell {
+  font-weight: 600;
+  color: #059669;
+}
+
+/* Stock alerts */
+.low-stock-row {
+  background: #FEF2F2 !important;
+}
+
+.stock-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #DC2626;
+  font-weight: 600;
+}
+
+.stock-ok {
+  color: #059669;
+  font-weight: 600;
+}
+
+.alert-icon-small {
+  width: 14px;
+  height: 14px;
+}
+
+/* Payment status */
+.status-paid {
+  display: inline-block;
+  padding: 0.375rem 0.75rem;
+  background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+  color: #065F46;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.status-pending {
+  display: inline-block;
+  padding: 0.375rem 0.75rem;
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+  color: #92400E;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .medical-header {
@@ -442,5 +492,10 @@ body {
 
   .actions-cell {
     flex-direction: column;
+  }
+
+  .tabs-list button {
+    font-size: 0.875rem;
+    padding: 0.75rem 0.5rem;
   }
 }
