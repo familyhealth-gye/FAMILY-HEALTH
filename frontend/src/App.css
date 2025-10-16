@@ -84,6 +84,11 @@ body {
   border-bottom: 2px solid #BFDBFE;
 }
 
+.tabs-list-extended {
+  display: flex;
+  flex-wrap: wrap;
+}
+
 .tabs-list button {
   flex: 1;
   display: flex;
