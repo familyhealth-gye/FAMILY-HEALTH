@@ -632,203 +632,30 @@ function App() {
           </TabsContent>
 
           {/* Invoices Tab */}
-          <TabsContent value="invoices" className="tab-content">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">Gestión de Facturas</h2>
-                <p className="section-subtitle">Total facturado este mes: ${Object.values(monthlyTotals).reduce((a, b) => a + b, 0).toFixed(2)}</p>
-              </div>
-              <Button onClick={async () => {
-                try {
-                  const response = await axios.get(`${API}/invoices/export`, { responseType: 'blob' });
-                  const url = window.URL.createObjectURL(new Blob([response.data]));
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.setAttribute('download', 'facturas_family_health.csv');
-                  document.body.appendChild(link);
-                  link.click();
-                  link.remove();
-                  toast.success("Facturas exportadas");
-                } catch (error) {
-                  toast.error("Error al exportar");
-                }
-              }} variant="outline">
-                <Download className="button-icon" />
-                Exportar CSV
-              </Button>
-            </div>
-            <div className="search-box">
-              <Input
-                placeholder="Buscar por paciente, doctor o número de factura..."
-                value={searchInvoice}
-                onChange={(e) => setSearchInvoice(e.target.value)}
-              />
-            </div>
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>N° Factura</th>
-                    <th>Paciente</th>
-                    <th>Doctor</th>
-                    <th>Servicio</th>
-                    <th>Valor</th>
-                    <th>Fecha</th>
-                    <th>Pago</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.filter(i =>
-                    i.paciente_nombre.toLowerCase().includes(searchInvoice.toLowerCase()) ||
-                    i.numero_factura.includes(searchInvoice) ||
-                    i.doctor_nombre.toLowerCase().includes(searchInvoice.toLowerCase())
-                  ).map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td><strong>{invoice.numero_factura}</strong></td>
-                      <td>{invoice.paciente_nombre}</td>
-                      <td>{invoice.doctor_nombre}</td>
-                      <td>{invoice.servicio}</td>
-                      <td className="amount-cell">${invoice.valor.toFixed(2)}</td>
-                      <td>{invoice.fecha}</td>
-                      <td><span className="badge-payment">{invoice.tipo_pago}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {invoices.length === 0 && (
-                <div className="empty-state">
-                  <FileText className="empty-icon" />
-                  <p>No hay facturas registradas</p>
-                </div>
-              )}
-            </div>
+          <TabsContent value="invoices">
+            <InvoicesTab 
+              invoices={invoices} 
+              searchInvoice={searchInvoice} 
+              setSearchInvoice={setSearchInvoice}
+              monthlyTotals={monthlyTotals}
+            />
           </TabsContent>
 
           {/* Inventory Tab */}
-          <TabsContent value="inventory" className="tab-content">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">Inventario Médico</h2>
-                <p className="section-subtitle">Control de insumos y materiales</p>
-              </div>
-            </div>
-            <div className="search-box">
-              <Input
-                placeholder="Buscar por nombre o categoría..."
-                value={searchInventory}
-                onChange={(e) => setSearchInventory(e.target.value)}
-              />
-            </div>
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Categoría</th>
-                    <th>Cantidad</th>
-                    <th>Costo Unit.</th>
-                    <th>Stock Mín.</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventory.filter(i =>
-                    i.nombre.toLowerCase().includes(searchInventory.toLowerCase()) ||
-                    i.categoria.toLowerCase().includes(searchInventory.toLowerCase())
-                  ).map((item) => (
-                    <tr key={item.id} className={item.cantidad <= item.stock_minimo ? 'low-stock-row' : ''}>
-                      <td>{item.nombre}</td>
-                      <td><span className="badge">{item.categoria}</span></td>
-                      <td><strong>{item.cantidad}</strong></td>
-                      <td>${item.costo_unitario.toFixed(2)}</td>
-                      <td>{item.stock_minimo}</td>
-                      <td>
-                        {item.cantidad <= item.stock_minimo ? (
-                          <span className="stock-alert">
-                            <AlertTriangle className="alert-icon-small" />
-                            Bajo
-                          </span>
-                        ) : (
-                          <span className="stock-ok">OK</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {inventory.length === 0 && (
-                <div className="empty-state">
-                  <Package className="empty-icon" />
-                  <p>No hay items en inventario</p>
-                </div>
-              )}
-            </div>
+          <TabsContent value="inventory">
+            <InventoryTab 
+              inventory={inventory} 
+              searchInventory={searchInventory} 
+              setSearchInventory={setSearchInventory}
+            />
           </TabsContent>
 
-          {/* Doctor Payments Tab */}
-          <TabsContent value="payments" className="tab-content">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">Pagos a Doctores</h2>
-                <p className="section-subtitle">Control de comisiones y pagos</p>
-              </div>
-            </div>
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Doctor</th>
-                    <th>Mes/Año</th>
-                    <th>Total Facturado</th>
-                    <th>% Comisión</th>
-                    <th>Total a Pagar</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {doctorPayments.map((payment) => (
-                    <tr key={payment.id}>
-                      <td><strong>{payment.doctor_nombre}</strong></td>
-                      <td>{payment.mes}/{payment.año}</td>
-                      <td className="amount-cell">${payment.total_facturado.toFixed(2)}</td>
-                      <td>{payment.porcentaje}%</td>
-                      <td className="amount-cell"><strong>${payment.total_pagar.toFixed(2)}</strong></td>
-                      <td>
-                        <span className={payment.estado === "Pagado" ? "status-paid" : "status-pending"}>
-                          {payment.estado}
-                        </span>
-                      </td>
-                      <td>
-                        {payment.estado === "Pendiente" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              try {
-                                await axios.put(`${API}/doctor-payments/${payment.id}`, { estado: "Pagado" });
-                                toast.success("Estado actualizado");
-                                fetchData();
-                              } catch (error) {
-                                toast.error("Error al actualizar");
-                              }
-                            }}
-                          >
-                            Marcar Pagado
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {doctorPayments.length === 0 && (
-                <div className="empty-state">
-                  <DollarSign className="empty-icon" />
-                  <p>No hay pagos registrados</p>
-                </div>
-              )}
-            </div>
+          {/* Payments Tab */}
+          <TabsContent value="payments">
+            <PaymentsTab 
+              doctorPayments={doctorPayments} 
+              fetchData={fetchData}
+            />
           </TabsContent>
 
         </Tabs>
