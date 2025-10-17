@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -6,19 +6,14 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from typing import List
+from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional
+import uuid
+from datetime import datetime, timezone
 import io
 import csv
 from collections import defaultdict
-from datetime import datetime
 
-# Import local modules
-from models import *
-from auth import (
-    get_password_hash, verify_password, create_access_token,
-    get_current_user, require_role, Token, TokenData
-)
-from pdf_generator import generate_prescription_pdf
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,204 +23,207 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app
+# Create the main app without a prefix
 app = FastAPI()
+
+# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# ========== AUTH ENDPOINTS ==========
 
-@api_router.post("/auth/register", response_model=UserResponse)
-async def register(user_input: UserCreate):
-    # Check if user exists
-    existing = await db.users.find_one({"username": user_input.username})
-    if existing:
-        raise HTTPException(status_code=400, detail="Usuario ya existe")
-    
-    # Create user
-    hashed_password = get_password_hash(user_input.password)
-    user_dict = user_input.model_dump()
-    user_dict.pop('password')
-    user_dict['hashed_password'] = hashed_password
-    
-    user_obj = User(**user_dict)
-    doc = user_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
-    await db.users.insert_one(doc)
-    
-    return UserResponse(**user_obj.model_dump())
+# ========== MODELS ==========
 
-@api_router.post("/auth/login", response_model=Token)
-async def login(credentials: UserLogin):
-    user = await db.users.find_one({"username": credentials.username}, {"_id": 0})
+# Doctor Models
+class Doctor(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     
-    if not user or not verify_password(credentials.password, user['hashed_password']):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    
-    if not user.get('is_active', True):
-        raise HTTPException(status_code=403, detail="Usuario inactivo")
-    
-    access_token = create_access_token(
-        data={"sub": user['username'], "role": user['role']}
-    )
-    
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        user={
-            "id": user['id'],
-            "username": user['username'],
-            "nombre_completo": user['nombre_completo'],
-            "email": user['email'],
-            "role": user['role']
-        }
-    )
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nombre: str
+    especialidad: str
+    porcentaje: float = 50.0  # Default 50%
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-@api_router.get("/auth/me", response_model=UserResponse)
-async def get_current_user_info(current_user: TokenData = Depends(get_current_user)):
-    user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return UserResponse(**user)
+class DoctorCreate(BaseModel):
+    nombre: str
+    especialidad: str
+    porcentaje: float = 50.0
 
-# ========== MEDICAL HISTORY ENDPOINTS ==========
+class DoctorUpdate(BaseModel):
+    nombre: Optional[str] = None
+    especialidad: Optional[str] = None
+    porcentaje: Optional[float] = None
 
-@api_router.post("/medical-history", response_model=MedicalHistory)
-async def create_medical_history(
-    input: MedicalHistoryCreate,
-    current_user: TokenData = Depends(get_current_user)
-):
-    # Get patient info from appointment
-    appointment = await db.appointments.find_one({"id": input.paciente_id}, {"_id": 0})
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+# Appointment Models
+class Appointment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     
-    # Get doctor info
-    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
-    if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor no encontrado")
-    
-    history_dict = input.model_dump()
-    history_dict['paciente_nombre'] = appointment['nombre_completo']
-    history_dict['paciente_cedula'] = appointment['cedula']
-    history_dict['doctor_nombre'] = doctor['nombre']
-    
-    history_obj = MedicalHistory(**history_dict)
-    doc = history_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
-    await db.medical_histories.insert_one(doc)
-    return history_obj
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nombre_completo: str
+    cedula: str
+    edad: int
+    telefono: str
+    especialidad: str
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    hora: str
+    tipo_pago: str
+    observaciones: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-@api_router.get("/medical-history", response_model=List[MedicalHistory])
-async def get_medical_histories(current_user: TokenData = Depends(get_current_user)):
-    histories = await db.medical_histories.find({}, {"_id": 0}).to_list(1000)
-    
-    for history in histories:
-        if isinstance(history['created_at'], str):
-            history['created_at'] = datetime.fromisoformat(history['created_at'])
-    
-    return histories
+class AppointmentCreate(BaseModel):
+    nombre_completo: str
+    cedula: str
+    edad: int
+    telefono: str
+    especialidad: str
+    doctor_id: str
+    fecha: str
+    hora: str
+    tipo_pago: str
+    observaciones: str = ""
 
-@api_router.get("/medical-history/patient/{paciente_id}", response_model=List[MedicalHistory])
-async def get_patient_medical_history(
-    paciente_id: str,
-    current_user: TokenData = Depends(get_current_user)
-):
-    histories = await db.medical_histories.find(
-        {"paciente_id": paciente_id}, {"_id": 0}
-    ).to_list(1000)
-    
-    for history in histories:
-        if isinstance(history['created_at'], str):
-            history['created_at'] = datetime.fromisoformat(history['created_at'])
-    
-    return histories
+class AppointmentUpdate(BaseModel):
+    nombre_completo: Optional[str] = None
+    cedula: Optional[str] = None
+    edad: Optional[int] = None
+    telefono: Optional[str] = None
+    especialidad: Optional[str] = None
+    doctor_id: Optional[str] = None
+    fecha: Optional[str] = None
+    hora: Optional[str] = None
+    tipo_pago: Optional[str] = None
+    observaciones: Optional[str] = None
 
-# ========== PRESCRIPTION ENDPOINTS ==========
+# Invoice Models
+class Invoice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    numero_factura: str
+    paciente_nombre: str
+    paciente_cedula: str
+    doctor_id: str
+    doctor_nombre: str
+    especialidad: str
+    servicio: str
+    valor: float
+    fecha: str
+    tipo_pago: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-@api_router.post("/prescriptions", response_model=Prescription)
-async def create_prescription(
-    input: PrescriptionCreate,
-    current_user: TokenData = Depends(get_current_user)
-):
-    # Get patient info
-    appointment = await db.appointments.find_one({"id": input.paciente_id}, {"_id": 0})
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    # Get doctor info
-    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
-    if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor no encontrado")
-    
-    prescription_dict = input.model_dump()
-    prescription_dict['paciente_nombre'] = appointment['nombre_completo']
-    prescription_dict['paciente_cedula'] = appointment['cedula']
-    prescription_dict['paciente_edad'] = appointment['edad']
-    prescription_dict['doctor_nombre'] = doctor['nombre']
-    prescription_dict['doctor_especialidad'] = doctor['especialidad']
-    
-    prescription_obj = Prescription(**prescription_dict)
-    doc = prescription_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
-    await db.prescriptions.insert_one(doc)
-    return prescription_obj
+class InvoiceCreate(BaseModel):
+    numero_factura: str
+    paciente_nombre: str
+    paciente_cedula: str
+    doctor_id: str
+    especialidad: str
+    servicio: str
+    valor: float
+    fecha: str
+    tipo_pago: str
 
-@api_router.get("/prescriptions", response_model=List[Prescription])
-async def get_prescriptions(current_user: TokenData = Depends(get_current_user)):
-    prescriptions = await db.prescriptions.find({}, {"_id": 0}).to_list(1000)
-    
-    for prescription in prescriptions:
-        if isinstance(prescription['created_at'], str):
-            prescription['created_at'] = datetime.fromisoformat(prescription['created_at'])
-    
-    return prescriptions
+class InvoiceUpdate(BaseModel):
+    numero_factura: Optional[str] = None
+    paciente_nombre: Optional[str] = None
+    paciente_cedula: Optional[str] = None
+    doctor_id: Optional[str] = None
+    especialidad: Optional[str] = None
+    servicio: Optional[str] = None
+    valor: Optional[float] = None
+    fecha: Optional[str] = None
+    tipo_pago: Optional[str] = None
 
-@api_router.get("/prescriptions/{prescription_id}/pdf")
-async def download_prescription_pdf(
-    prescription_id: str,
-    current_user: TokenData = Depends(get_current_user)
-):
-    prescription = await db.prescriptions.find_one({"id": prescription_id}, {"_id": 0})
-    if not prescription:
-        raise HTTPException(status_code=404, detail="Receta no encontrada")
+# Inventory Models
+class InventoryItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     
-    # Generate PDF
-    pdf_buffer = generate_prescription_pdf(prescription)
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nombre: str
+    categoria: str
+    cantidad: int
+    costo_unitario: float
+    stock_minimo: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class InventoryItemCreate(BaseModel):
+    nombre: str
+    categoria: str
+    cantidad: int
+    costo_unitario: float
+    stock_minimo: int
+
+class InventoryItemUpdate(BaseModel):
+    nombre: Optional[str] = None
+    categoria: Optional[str] = None
+    cantidad: Optional[int] = None
+    costo_unitario: Optional[float] = None
+    stock_minimo: Optional[int] = None
+
+class InventoryMovement(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     
-    return StreamingResponse(
-        pdf_buffer,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=receta_{prescription['paciente_cedula']}_{prescription['fecha']}.pdf"
-        }
-    )
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    item_id: str
+    item_nombre: str
+    tipo: str  # "entrada" o "salida"
+    cantidad: int
+    motivo: str
+    fecha: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class InventoryMovementCreate(BaseModel):
+    item_id: str
+    tipo: str
+    cantidad: int
+    motivo: str
+    fecha: str
+
+# Doctor Payment Models
+class DoctorPayment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    doctor_id: str
+    doctor_nombre: str
+    mes: int
+    año: int
+    total_facturado: float
+    porcentaje: float
+    total_pagar: float
+    estado: str  # "Pendiente" o "Pagado"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class DoctorPaymentCreate(BaseModel):
+    doctor_id: str
+    mes: int
+    año: int
+    estado: str = "Pendiente"
+
+class DoctorPaymentUpdate(BaseModel):
+    estado: Optional[str] = None
 
 
-# ========== EXISTING ENDPOINTS (from Phase 2) ==========
+# ========== ROUTES ==========
 
 @api_router.get("/")
 async def root():
-    return {"message": "Family Health API - Fase 3"}
+    return {"message": "Family Health API - Fase 2"}
 
+# Specialties endpoint
 @api_router.get("/specialties")
 async def get_specialties():
     return {
         "specialties": [
             "Odontología",
             "Medicina General",
-            "Pediatría",
-            "Ginecología",
-            "Psicología",
             "Nutrición",
-            "Laboratorio Clínico",
-            "Ecografía",
-            "Terapia Física"
+            "Psicología",
+            "Ginecología",
+            "Laboratorio Clínico"
         ]
     }
 
+# Categories endpoint
 @api_router.get("/categories")
 async def get_categories():
     return {
@@ -242,23 +240,29 @@ async def get_categories():
         ]
     }
 
-# Doctor endpoints
+# ========== DOCTOR ENDPOINTS ==========
+
 @api_router.post("/doctors", response_model=Doctor)
 async def create_doctor(input: DoctorCreate):
-    doctor_obj = Doctor(**input.model_dump())
+    doctor_dict = input.model_dump()
+    doctor_obj = Doctor(**doctor_dict)
+    
     doc = doctor_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
+    
     await db.doctors.insert_one(doc)
     return doctor_obj
 
 @api_router.get("/doctors", response_model=List[Doctor])
 async def get_doctors():
     doctors = await db.doctors.find({}, {"_id": 0}).to_list(1000)
+    
     for doctor in doctors:
         if isinstance(doctor['created_at'], str):
             doctor['created_at'] = datetime.fromisoformat(doctor['created_at'])
         if 'porcentaje' not in doctor:
             doctor['porcentaje'] = 50.0
+    
     return doctors
 
 @api_router.put("/doctors/{doctor_id}", response_model=Doctor)
@@ -266,12 +270,16 @@ async def update_doctor(doctor_id: str, input: DoctorUpdate):
     existing = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Doctor no encontrado")
+    
     update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    
     if update_data:
         await db.doctors.update_one({"id": doctor_id}, {"$set": update_data})
+    
     updated = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
     if isinstance(updated['created_at'], str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
     return Doctor(**updated)
 
 @api_router.delete("/doctors/{doctor_id}")
@@ -281,7 +289,8 @@ async def delete_doctor(doctor_id: str):
         raise HTTPException(status_code=404, detail="Doctor no encontrado")
     return {"message": "Doctor eliminado exitosamente"}
 
-# Appointment endpoints
+# ========== APPOINTMENT ENDPOINTS ==========
+
 @api_router.post("/appointments", response_model=Appointment)
 async def create_appointment(input: AppointmentCreate):
     doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
@@ -301,11 +310,11 @@ async def create_appointment(input: AppointmentCreate):
 @api_router.get("/appointments", response_model=List[Appointment])
 async def get_appointments():
     appointments = await db.appointments.find({}, {"_id": 0}).to_list(1000)
+    
     for appointment in appointments:
         if isinstance(appointment['created_at'], str):
             appointment['created_at'] = datetime.fromisoformat(appointment['created_at'])
-        if 'estado' not in appointment:
-            appointment['estado'] = 'Programada'
+    
     return appointments
 
 @api_router.put("/appointments/{appointment_id}", response_model=Appointment)
@@ -338,7 +347,8 @@ async def delete_appointment(appointment_id: str):
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     return {"message": "Cita eliminada exitosamente"}
 
-# Invoice endpoints  
+# ========== INVOICE ENDPOINTS ==========
+
 @api_router.post("/invoices", response_model=Invoice)
 async def create_invoice(input: InvoiceCreate):
     doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
@@ -358,50 +368,78 @@ async def create_invoice(input: InvoiceCreate):
 @api_router.get("/invoices", response_model=List[Invoice])
 async def get_invoices():
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    
     for invoice in invoices:
         if isinstance(invoice['created_at'], str):
             invoice['created_at'] = datetime.fromisoformat(invoice['created_at'])
+    
     return invoices
 
 @api_router.get("/invoices/monthly-totals")
 async def get_monthly_totals():
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    
     monthly_totals = defaultdict(float)
     for invoice in invoices:
         year_month = invoice['fecha'][:7]
         monthly_totals[year_month] += invoice['valor']
+    
     return {"monthly_totals": dict(monthly_totals)}
 
 @api_router.get("/invoices/export")
 async def export_invoices():
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Número Factura', 'Paciente', 'Cédula', 'Doctor', 'Especialidad', 'Servicio', 'Valor', 'Fecha', 'Tipo Pago'])
+    
+    writer.writerow([
+        'Número Factura', 'Paciente', 'Cédula', 'Doctor', 
+        'Especialidad', 'Servicio', 'Valor', 'Fecha', 'Tipo Pago'
+    ])
+    
     for invoice in invoices:
-        writer.writerow([invoice['numero_factura'], invoice['paciente_nombre'], invoice['paciente_cedula'],
-                        invoice['doctor_nombre'], invoice['especialidad'], invoice['servicio'],
-                        invoice['valor'], invoice['fecha'], invoice['tipo_pago']])
+        writer.writerow([
+            invoice['numero_factura'],
+            invoice['paciente_nombre'],
+            invoice['paciente_cedula'],
+            invoice['doctor_nombre'],
+            invoice['especialidad'],
+            invoice['servicio'],
+            invoice['valor'],
+            invoice['fecha'],
+            invoice['tipo_pago']
+        ])
+    
     output.seek(0)
-    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
-                           headers={"Content-Disposition": "attachment; filename=facturas_family_health.csv"})
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=facturas_family_health.csv"}
+    )
 
 @api_router.put("/invoices/{invoice_id}", response_model=Invoice)
 async def update_invoice(invoice_id: str, input: InvoiceUpdate):
     existing = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
+    
     update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    
     if 'doctor_id' in update_data and update_data['doctor_id']:
         doctor = await db.doctors.find_one({"id": update_data['doctor_id']}, {"_id": 0})
         if not doctor:
             raise HTTPException(status_code=404, detail="Doctor no encontrado")
         update_data['doctor_nombre'] = doctor['nombre']
+    
     if update_data:
         await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+    
     updated = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if isinstance(updated['created_at'], str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
     return Invoice(**updated)
 
 @api_router.delete("/invoices/{invoice_id}")
@@ -411,31 +449,42 @@ async def delete_invoice(invoice_id: str):
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     return {"message": "Factura eliminada exitosamente"}
 
-# Inventory endpoints
+# ========== INVENTORY ENDPOINTS ==========
+
 @api_router.post("/inventory", response_model=InventoryItem)
 async def create_inventory_item(input: InventoryItemCreate):
     item_obj = InventoryItem(**input.model_dump())
+    
     doc = item_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
+    
     await db.inventory.insert_one(doc)
     return item_obj
 
 @api_router.get("/inventory", response_model=List[InventoryItem])
 async def get_inventory():
     items = await db.inventory.find({}, {"_id": 0}).to_list(1000)
+    
     for item in items:
         if isinstance(item['created_at'], str):
             item['created_at'] = datetime.fromisoformat(item['created_at'])
+    
     return items
 
 @api_router.get("/inventory/alerts")
 async def get_inventory_alerts():
     items = await db.inventory.find({}, {"_id": 0}).to_list(1000)
+    
     alerts = []
     for item in items:
         if item['cantidad'] <= item['stock_minimo']:
-            alerts.append({"id": item['id'], "nombre": item['nombre'],
-                          "cantidad": item['cantidad'], "stock_minimo": item['stock_minimo']})
+            alerts.append({
+                "id": item['id'],
+                "nombre": item['nombre'],
+                "cantidad": item['cantidad'],
+                "stock_minimo": item['stock_minimo']
+            })
+    
     return {"alerts": alerts}
 
 @api_router.put("/inventory/{item_id}", response_model=InventoryItem)
@@ -443,12 +492,16 @@ async def update_inventory_item(item_id: str, input: InventoryItemUpdate):
     existing = await db.inventory.find_one({"id": item_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Item no encontrado")
+    
     update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    
     if update_data:
         await db.inventory.update_one({"id": item_id}, {"$set": update_data})
+    
     updated = await db.inventory.find_one({"id": item_id}, {"_id": 0})
     if isinstance(updated['created_at'], str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
     return InventoryItem(**updated)
 
 @api_router.delete("/inventory/{item_id}")
@@ -488,12 +541,15 @@ async def create_inventory_movement(input: InventoryMovementCreate):
 @api_router.get("/inventory/movements", response_model=List[InventoryMovement])
 async def get_inventory_movements():
     movements = await db.inventory_movements.find({}, {"_id": 0}).to_list(1000)
+    
     for movement in movements:
         if isinstance(movement['created_at'], str):
             movement['created_at'] = datetime.fromisoformat(movement['created_at'])
+    
     return movements
 
-# Doctor payment endpoints
+# ========== DOCTOR PAYMENTS ==========
+
 @api_router.post("/doctor-payments/calculate")
 async def calculate_doctor_payments(input: DoctorPaymentCreate):
     doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
@@ -501,6 +557,7 @@ async def calculate_doctor_payments(input: DoctorPaymentCreate):
         raise HTTPException(status_code=404, detail="Doctor no encontrado")
     
     invoices = await db.invoices.find({"doctor_id": input.doctor_id}, {"_id": 0}).to_list(1000)
+    
     total_facturado = 0
     for invoice in invoices:
         invoice_date = invoice['fecha'].split('-')
@@ -514,14 +571,20 @@ async def calculate_doctor_payments(input: DoctorPaymentCreate):
     total_pagar = (total_facturado * porcentaje) / 100
     
     existing_payment = await db.doctor_payments.find_one({
-        "doctor_id": input.doctor_id, "mes": input.mes, "año": input.año
+        "doctor_id": input.doctor_id,
+        "mes": input.mes,
+        "año": input.año
     }, {"_id": 0})
     
     if existing_payment:
         await db.doctor_payments.update_one(
             {"id": existing_payment['id']},
-            {"$set": {"total_facturado": total_facturado, "porcentaje": porcentaje,
-                     "total_pagar": total_pagar, "estado": input.estado}}
+            {"$set": {
+                "total_facturado": total_facturado,
+                "porcentaje": porcentaje,
+                "total_pagar": total_pagar,
+                "estado": input.estado
+            }}
         )
         existing_payment['total_facturado'] = total_facturado
         existing_payment['porcentaje'] = porcentaje
@@ -532,22 +595,30 @@ async def calculate_doctor_payments(input: DoctorPaymentCreate):
         return DoctorPayment(**existing_payment)
     else:
         payment_obj = DoctorPayment(
-            doctor_id=input.doctor_id, doctor_nombre=doctor['nombre'],
-            mes=input.mes, año=input.año,
-            total_facturado=total_facturado, porcentaje=porcentaje,
-            total_pagar=total_pagar, estado=input.estado
+            doctor_id=input.doctor_id,
+            doctor_nombre=doctor['nombre'],
+            mes=input.mes,
+            año=input.año,
+            total_facturado=total_facturado,
+            porcentaje=porcentaje,
+            total_pagar=total_pagar,
+            estado=input.estado
         )
+        
         doc = payment_obj.model_dump()
         doc['created_at'] = doc['created_at'].isoformat()
+        
         await db.doctor_payments.insert_one(doc)
         return payment_obj
 
 @api_router.get("/doctor-payments", response_model=List[DoctorPayment])
 async def get_doctor_payments():
     payments = await db.doctor_payments.find({}, {"_id": 0}).to_list(1000)
+    
     for payment in payments:
         if isinstance(payment['created_at'], str):
             payment['created_at'] = datetime.fromisoformat(payment['created_at'])
+    
     return payments
 
 @api_router.put("/doctor-payments/{payment_id}", response_model=DoctorPayment)
@@ -555,12 +626,16 @@ async def update_doctor_payment(payment_id: str, input: DoctorPaymentUpdate):
     existing = await db.doctor_payments.find_one({"id": payment_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
+    
     update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    
     if update_data:
         await db.doctor_payments.update_one({"id": payment_id}, {"$set": update_data})
+    
     updated = await db.doctor_payments.find_one({"id": payment_id}, {"_id": 0})
     if isinstance(updated['created_at'], str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
     return DoctorPayment(**updated)
 
 @api_router.delete("/doctor-payments/{payment_id}")
@@ -570,7 +645,7 @@ async def delete_doctor_payment(payment_id: str):
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     return {"message": "Pago eliminado exitosamente"}
 
-# Include router
+# Include the router
 app.include_router(api_router)
 
 app.add_middleware(
