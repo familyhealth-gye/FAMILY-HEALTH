@@ -692,6 +692,113 @@ function App() {
             </div>
           </TabsContent>
 
+          {/* Medical History Tab */}
+          <TabsContent value="history" className="tab-content">
+            <div className="section-header">
+              <div>
+                <h2 className="section-title">Historias Clínicas</h2>
+                <p className="section-subtitle">{medicalHistories.length} registros médicos</p>
+              </div>
+            </div>
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Paciente</th>
+                    <th>Doctor</th>
+                    <th>Diagnóstico</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {medicalHistories.map((history) => (
+                    <tr key={history.id}>
+                      <td>{history.fecha}</td>
+                      <td>{history.paciente_nombre}</td>
+                      <td>{history.doctor_nombre}</td>
+                      <td>{history.diagnostico}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {medicalHistories.length === 0 && (
+                <div className="empty-state">
+                  <ClipboardList className="empty-icon" />
+                  <p>No hay historias clínicas registradas</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Prescriptions Tab */}
+          <TabsContent value="prescriptions" className="tab-content">
+            <div className="section-header">
+              <div>
+                <h2 className="section-title">Recetas Médicas</h2>
+                <p className="section-subtitle">{prescriptions.length} recetas emitidas</p>
+              </div>
+            </div>
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Paciente</th>
+                    <th>Doctor</th>
+                    <th>Diagnóstico</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prescriptions.map((prescription) => (
+                    <tr key={prescription.id}>
+                      <td>{prescription.fecha}</td>
+                      <td>{prescription.paciente_nombre}</td>
+                      <td>{prescription.doctor_nombre}</td>
+                      <td>{prescription.diagnostico}</td>
+                      <td>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              const response = await axios.get(
+                                `${API}/prescriptions/${prescription.id}/pdf`,
+                                { 
+                                  headers: { Authorization: `Bearer ${token}` },
+                                  responseType: 'blob' 
+                                }
+                              );
+                              const url = window.URL.createObjectURL(new Blob([response.data]));
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.setAttribute('download', `receta_${prescription.paciente_cedula}.pdf`);
+                              document.body.appendChild(link);
+                              link.click();
+                              link.remove();
+                              toast.success("Receta descargada");
+                            } catch (error) {
+                              toast.error("Error al descargar receta");
+                            }
+                          }}
+                        >
+                          <Download className="button-icon" />
+                          PDF
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {prescriptions.length === 0 && (
+                <div className="empty-state">
+                  <FileText className="empty-icon" />
+                  <p>No hay recetas registradas</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
           {/* Invoices Tab */}
           <TabsContent value="invoices">
             <InvoicesTab 
