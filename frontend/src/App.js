@@ -278,8 +278,16 @@ function App() {
             <Stethoscope className="logo-icon" />
             <div>
               <h1 data-testid="app-title" className="clinic-name">Family Health</h1>
-              <p className="clinic-location">Mucho Lote 2, Guayaquil</p>
+              <p className="clinic-location">Toledo Externo, Mz 2833 V15 - Guayaquil</p>
             </div>
+          </div>
+          <div className="user-section">
+            <span className="user-name">{user.nombre_completo}</span>
+            <span className="user-role">{user.role}</span>
+            <Button variant="ghost" onClick={handleLogout} className="logout-button">
+              <LogOut className="button-icon" />
+              Salir
+            </Button>
           </div>
         </div>
       </header>
