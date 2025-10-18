@@ -23,11 +23,15 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [doctors, setDoctors] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [doctorPayments, setDoctorPayments] = useState([]);
+  const [medicalHistories, setMedicalHistories] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
   const [specialties, setSpecialties] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
