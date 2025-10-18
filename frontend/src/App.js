@@ -82,16 +82,20 @@ function App() {
   }, [token]);
 
   const fetchData = async () => {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    
     try {
-      const [doctorsRes, appointmentsRes, specialtiesRes, categoriesRes, invoicesRes, inventoryRes, paymentsRes, totalsRes] = await Promise.all([
-        axios.get(`${API}/doctors`),
-        axios.get(`${API}/appointments`),
-        axios.get(`${API}/specialties`),
-        axios.get(`${API}/categories`),
-        axios.get(`${API}/invoices`),
-        axios.get(`${API}/inventory`),
-        axios.get(`${API}/doctor-payments`),
-        axios.get(`${API}/invoices/monthly-totals`)
+      const [doctorsRes, appointmentsRes, specialtiesRes, categoriesRes, invoicesRes, inventoryRes, paymentsRes, totalsRes, historiesRes, prescriptionsRes] = await Promise.all([
+        axios.get(`${API}/doctors`, { headers }),
+        axios.get(`${API}/appointments`, { headers }),
+        axios.get(`${API}/specialties`, { headers }),
+        axios.get(`${API}/categories`, { headers }),
+        axios.get(`${API}/invoices`, { headers }),
+        axios.get(`${API}/inventory`, { headers }),
+        axios.get(`${API}/doctor-payments`, { headers }),
+        axios.get(`${API}/invoices/monthly-totals`, { headers }),
+        axios.get(`${API}/medical-history`, { headers }),
+        axios.get(`${API}/prescriptions`, { headers })
       ]);
       setDoctors(doctorsRes.data);
       setAppointments(appointmentsRes.data);
@@ -101,11 +105,34 @@ function App() {
       setInventory(inventoryRes.data);
       setDoctorPayments(paymentsRes.data);
       setMonthlyTotals(totalsRes.data.monthly_totals);
+      setMedicalHistories(historiesRes.data);
+      setPrescriptions(prescriptionsRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
-      toast.error("Error al cargar los datos");
+      if (error.response?.status === 401) {
+        handleLogout();
+      } else {
+        toast.error("Error al cargar los datos");
+      }
     }
   };
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    setToken(localStorage.getItem("token"));
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+    setToken(null);
+    toast.info("Sesión cerrada");
+  };
+
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   // Doctor handlers
   const handleDoctorSubmit = async (e) => {
