@@ -65,8 +65,21 @@ function App() {
   const [searchInventory, setSearchInventory] = useState("");
 
   useEffect(() => {
-    fetchData();
+    // Check if user is logged in
+    const savedToken = localStorage.getItem("token");
+    const savedUser = localStorage.getItem("user");
+    
+    if (savedToken && savedUser) {
+      setToken(savedToken);
+      setUser(JSON.parse(savedUser));
+    }
   }, []);
+
+  useEffect(() => {
+    if (token) {
+      fetchData();
+    }
+  }, [token]);
 
   const fetchData = async () => {
     try {
