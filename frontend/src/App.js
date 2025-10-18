@@ -304,6 +304,14 @@ function App() {
               <Stethoscope className="tab-icon" />
               Doctores
             </TabsTrigger>
+            <TabsTrigger value="history" data-testid="history-tab">
+              <ClipboardList className="tab-icon" />
+              Historias
+            </TabsTrigger>
+            <TabsTrigger value="prescriptions" data-testid="prescriptions-tab">
+              <FileText className="tab-icon" />
+              Recetas
+            </TabsTrigger>
             <TabsTrigger value="invoices" data-testid="invoices-tab">
               <FileText className="tab-icon" />
               Facturas
