@@ -22,14 +22,12 @@ export const Login = ({ onLogin }) => {
       const response = await axios.post(`${API}/auth/login`, { username, password });
       const { access_token, user } = response.data;
       
-      // Save to localStorage
       localStorage.setItem("token", access_token);
       localStorage.setItem("user", JSON.stringify(user));
       
       toast.success(`Bienvenido, ${user.nombre_completo}`);
       onLogin(user);
     } catch (error) {
-      console.error("Login error:", error);
       toast.error(error.response?.data?.detail || "Error al iniciar sesión");
     }
     
@@ -70,12 +68,7 @@ export const Login = ({ onLogin }) => {
             />
           </div>
 
-          <Button 
-            type="submit" 
-            className="login-button" 
-            disabled={loading}
-            data-testid="login-button"
-          >
+          <Button type="submit" className="login-button" disabled={loading} data-testid="login-button">
             {loading ? "Ingresando..." : "Iniciar Sesión"}
           </Button>
         </form>
