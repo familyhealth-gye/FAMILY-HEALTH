@@ -208,11 +208,20 @@ export const AppointmentsWithAttention = ({
                 />
               )}
               
-              {!["Medicina General", "Pediatría"].includes(selectedAppointment.especialidad) && (
+              {selectedAppointment.especialidad === "Odontología" && (
+                <OdontologiaForm
+                  appointment={selectedAppointment}
+                  token={token}
+                  onClose={() => setAttentionDialog(false)}
+                  onSuccess={handleAttentionSuccess}
+                />
+              )}
+              
+              {!["Medicina General", "Pediatría", "Odontología"].includes(selectedAppointment.especialidad) && (
                 <div style={{padding: '2rem', textAlign: 'center'}}>
                   <p>Historia clínica de {selectedAppointment.especialidad} aún no implementada.</p>
                   <p style={{marginTop: '1rem', color: '#64748B'}}>
-                    Por ahora solo está disponible Medicina General y Pediatría.
+                    Por ahora están disponibles Medicina General, Pediatría y Odontología.
                   </p>
                   <Button 
                     onClick={() => setAttentionDialog(false)} 
