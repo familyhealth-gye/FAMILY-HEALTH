@@ -367,13 +367,14 @@ function App() {
             )}
           </TabsList>
 
-          {/* Doctors Tab */}
-          <TabsContent value="doctors" className="tab-content">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">Gestión de Doctores</h2>
-                <p className="section-subtitle">Administra el personal médico del centro</p>
-              </div>
+          {/* Doctors Tab - Admin Only */}
+          {user.role === "Administrador" && (
+            <TabsContent value="doctors" className="tab-content">
+              <div className="section-header">
+                <div>
+                  <h2 className="section-title">Gestión de Doctores</h2>
+                  <p className="section-subtitle">Administra el personal médico del centro</p>
+                </div>
               <Dialog open={doctorDialog} onOpenChange={(open) => { setDoctorDialog(open); if (!open) resetDoctorForm(); }}>
                 <DialogTrigger asChild>
                   <Button className="add-button" data-testid="add-doctor-button">
