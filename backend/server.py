@@ -336,6 +336,70 @@ async def get_pediatric_history_by_appointment(
     
     return MedicalHistoryPediatric(**history)
 
+# Odontología
+@api_router.post("/medical-history/odontology", response_model=MedicalHistoryOdontology)
+async def create_odontology_history(
+    input: MedicalHistoryOdontologyCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    # Get appointment data
+    appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    
+    # Get current user data
+    user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
+    
+    history_dict = input.model_dump()
+    history_dict['paciente_id'] = appointment['id']
+    history_dict['paciente_nombre'] = appointment['nombre_completo']
+    history_dict['paciente_cedula'] = appointment['cedula']
+    history_dict['paciente_edad'] = appointment['edad']
+    history_dict['paciente_sexo'] = appointment.get('sexo', 'No especificado')
+    history_dict['doctor_id'] = user.get('doctor_id', '')
+    history_dict['doctor_nombre'] = user['nombre_completo']
+    history_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    
+    history_obj = MedicalHistoryOdontology(**history_dict)
+    doc = history_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.medical_history_odontology.insert_one(doc)
+    
+    # Update appointment status to Pendiente de Pago
+    await db.appointments.update_one(
+        {"id": input.appointment_id},
+        {"$set": {"estado": "Pendiente de Pago"}}
+    )
+    
+    return history_obj
+
+@api_router.get("/medical-history/odontology", response_model=List[MedicalHistoryOdontology])
+async def get_odontology_histories(current_user: TokenData = Depends(get_current_user)):
+    histories = await db.medical_history_odontology.find({}, {"_id": 0}).to_list(1000)
+    
+    for history in histories:
+        if isinstance(history['created_at'], str):
+            history['created_at'] = datetime.fromisoformat(history['created_at'])
+    
+    return histories
+
+@api_router.get("/medical-history/odontology/appointment/{appointment_id}", response_model=MedicalHistoryOdontology)
+async def get_odontology_history_by_appointment(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    history = await db.medical_history_odontology.find_one(
+        {"appointment_id": appointment_id}, {"_id": 0}
+    )
+    if not history:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    
+    if isinstance(history['created_at'], str):
+        history['created_at'] = datetime.fromisoformat(history['created_at'])
+    
+    return MedicalHistoryOdontology(**history)
+
 # ========== PRESCRIPTION ENDPOINTS ==========
 
 @api_router.post("/prescriptions", response_model=Prescription)
