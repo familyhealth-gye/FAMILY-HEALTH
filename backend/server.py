@@ -14,6 +14,10 @@ from datetime import datetime
 
 # Import local modules
 from models import *
+from medical_history_models import (
+    MedicalHistoryGeneral, MedicalHistoryGeneralCreate,
+    MedicalHistoryPediatric, MedicalHistoryPediatricCreate
+)
 from auth import (
     get_password_hash, verify_password, create_access_token,
     get_current_user, require_role, Token, TokenData
