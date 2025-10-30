@@ -299,8 +299,8 @@ async def create_general_history(
     history_dict['paciente_cedula'] = appointment['cedula']
     history_dict['paciente_edad'] = appointment['edad']
     history_dict['paciente_sexo'] = appointment.get('sexo', 'No especificado')
-    history_dict['doctor_id'] = user.get('doctor_id', '')
-    history_dict['doctor_nombre'] = user['nombre_completo']
+    history_dict['doctor_id'] = user.get('doctor_id') or appointment.get('doctor_id', 'N/A')
+    history_dict['doctor_nombre'] = user.get('nombre_completo', 'Sin nombre')
     history_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
     history_obj = MedicalHistoryGeneral(**history_dict)
@@ -363,8 +363,8 @@ async def create_pediatric_history(
     history_dict['paciente_cedula'] = appointment['cedula']
     history_dict['paciente_edad'] = appointment['edad']
     history_dict['paciente_sexo'] = appointment.get('sexo', 'No especificado')
-    history_dict['doctor_id'] = user.get('doctor_id', '')
-    history_dict['doctor_nombre'] = user['nombre_completo']
+    history_dict['doctor_id'] = user.get('doctor_id') or appointment.get('doctor_id', 'N/A')
+    history_dict['doctor_nombre'] = user.get('nombre_completo', 'Sin nombre')
     history_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
     history_obj = MedicalHistoryPediatric(**history_dict)
@@ -427,8 +427,8 @@ async def create_odontology_history(
     history_dict['paciente_cedula'] = appointment['cedula']
     history_dict['paciente_edad'] = appointment['edad']
     history_dict['paciente_sexo'] = appointment.get('sexo', 'No especificado')
-    history_dict['doctor_id'] = user.get('doctor_id', '')
-    history_dict['doctor_nombre'] = user['nombre_completo']
+    history_dict['doctor_id'] = user.get('doctor_id') or appointment.get('doctor_id', 'N/A')
+    history_dict['doctor_nombre'] = user.get('nombre_completo', 'Sin nombre')
     history_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
     history_obj = MedicalHistoryOdontology(**history_dict)
