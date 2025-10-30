@@ -489,6 +489,7 @@ function App() {
               )}
             </div>
           </TabsContent>
+          )}
 
           {/* Appointments Tab */}
           <TabsContent value="appointments" className="tab-content">
