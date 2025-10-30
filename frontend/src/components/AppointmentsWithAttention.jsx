@@ -64,6 +64,26 @@ export const AppointmentsWithAttention = ({
 
   return (
     <>
+      {/* Filtro de fecha */}
+      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', background: '#F0F9FF', padding: '1rem', borderRadius: '8px' }}>
+        <Label style={{ fontWeight: 600, color: '#0C4A6E' }}>Mostrar citas del:</Label>
+        <input
+          type="date"
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          style={{
+            padding: '0.5rem',
+            borderRadius: '8px',
+            border: '2px solid #BFDBFE',
+            fontSize: '0.9375rem',
+            fontWeight: 500
+          }}
+        />
+        <span style={{ color: '#64748B', fontSize: '0.875rem' }}>
+          ({sortedAppointments.length} citas)
+        </span>
+      </div>
+
       <table className="data-table">
         <thead>
           <tr>
