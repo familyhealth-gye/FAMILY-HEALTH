@@ -832,11 +832,6 @@ function App() {
             </TabsContent>
           )}
 
-          {/* Odontograma Tab - All users */}
-          <TabsContent value="odontograma">
-            <OdontogramaTab token={token} />
-          </TabsContent>
-
         </Tabs>
       </main>
     </div>
