@@ -29,7 +29,8 @@ from models import (
 )
 from medical_history_models import (
     MedicalHistoryGeneral, MedicalHistoryGeneralCreate,
-    MedicalHistoryPediatric, MedicalHistoryPediatricCreate
+    MedicalHistoryPediatric, MedicalHistoryPediatricCreate,
+    MedicalHistoryOdontology, MedicalHistoryOdontologyCreate, EstadoDental
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
