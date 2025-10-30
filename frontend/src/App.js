@@ -352,6 +352,22 @@ function App() {
                 </TabsTrigger>
               </>
             )}
+            {(user.role === "Administrador" || user.role === "Recepcion") && (
+              <>
+                <TabsTrigger value="proformas" data-testid="proformas-tab">
+                  <Receipt className="tab-icon" />
+                  Proformas
+                </TabsTrigger>
+                <TabsTrigger value="abonos" data-testid="abonos-tab">
+                  <CreditCard className="tab-icon" />
+                  Abonos
+                </TabsTrigger>
+              </>
+            )}
+            <TabsTrigger value="odontograma" data-testid="odontograma-tab">
+              <Activity className="tab-icon" />
+              Odontograma
+            </TabsTrigger>
           </TabsList>
 
           {/* Doctors Tab */}
