@@ -113,75 +113,93 @@ user_problem_statement: |
 backend:
   - task: "Modelos Proformas, Abonos y Odontogramas"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/models.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Agregados modelos Pydantic para Proformas (con items, descuentos), Abonos (pagos parciales vinculados a proformas), Odontogramas (32 dientes con estados) y ToothState"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Todos los modelos funcionan correctamente. ProformaItem con cálculos, Abono con vinculación a proformas, Odontogram con 32 dientes y estados, ToothState con caras dentales. Validaciones Pydantic operativas."
   
   - task: "Endpoints API Proformas"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implementados endpoints CRUD completos para proformas: crear, listar, obtener por ID, actualizar estado, eliminar. Calcula subtotales y totales automáticamente"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/proformas (cálculos correctos: subtotal=210, total=200 con descuento), GET /api/proformas (listado completo), PUT /api/proformas/{id} (actualización de estado). Autenticación JWT requerida y funcionando."
   
   - task: "Endpoints API Abonos"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implementados endpoints para abonos: registrar, listar todos, filtrar por paciente (cédula), actualizar, eliminar"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/abonos (creación con vinculación a proformas), GET /api/abonos (listado completo), GET /api/abonos/patient/{cedula} (filtrado por paciente). Integración proforma-abono verificada con cálculos de saldos."
   
   - task: "Endpoints API Odontogramas"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoints para odontogramas: crear, listar, obtener por paciente, actualizar, eliminar"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/odontograms (creación con 32 dientes y estados variados), GET /api/odontograms (listado), GET /api/odontograms/patient/{paciente_id} (filtrado por paciente). Vinculación correcta con doctores y pacientes."
   
   - task: "Modelo Historia Clínica Odontológica"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/medical_history_models.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Modelo completo MedicalHistoryOdontology con motivo consulta, dolor dental, antecedentes odontológicos, antecedentes médicos, hábitos, examen intraoral (EstadoDental), diagnóstico, plan tratamiento, medicamentos"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Modelo MedicalHistoryOdontology completo con EstadoDental funcionando. Todos los campos opcionales y requeridos validados correctamente. Integración con appointment_id operativa."
   
   - task: "Endpoints Historia Clínica Odontológica"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoints para historia odontológica: crear, listar, obtener por appointment_id"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/medical-history/odontology (requiere usuario Doctor con doctor_id), GET /api/medical-history/odontology (listado), GET /api/medical-history/odontology/appointment/{appointment_id} (búsqueda por cita). Autenticación de rol Doctor verificada."
 
 frontend:
   - task: "Componente ProformasTab"
