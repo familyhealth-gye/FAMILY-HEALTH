@@ -233,7 +233,8 @@ export const UsersTab = ({ users, fetchData, token }) => {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <div className="table-container">
