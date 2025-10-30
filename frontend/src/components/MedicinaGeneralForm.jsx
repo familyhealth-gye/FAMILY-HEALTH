@@ -74,7 +74,8 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
     laboratorios: "",
     diagnostico: "",
     cie10_codigo: "",
-    plan_tratamiento: "",
+    medicamentos: [{nombre: '', dosis: '', frecuencia: '', duracion: '', indicaciones: ''}],
+    indicaciones_generales: "",
     observaciones: ""
   });
 
