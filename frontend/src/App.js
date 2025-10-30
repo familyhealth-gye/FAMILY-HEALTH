@@ -290,7 +290,7 @@ function App() {
       <header className="medical-header">
         <div className="header-content">
           <div className="logo-section">
-            <Stethoscope className="logo-icon" />
+            <img src="/logo.png" alt="Family Health" className="logo-image" />
             <div>
               <h1 data-testid="app-title" className="clinic-name">Family Health</h1>
               <p className="clinic-location">Toledo Externo, Mz 2833 V15 - Guayaquil</p>
