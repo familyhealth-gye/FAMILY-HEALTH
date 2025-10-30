@@ -152,6 +152,77 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {"message": "Usuario eliminado exitosamente"}
 
+
+@api_router.post("/users/create-from-doctors")
+async def create_users_from_doctors(
+    current_user: TokenData = Depends(require_role("Administrador"))
+):
+    """
+    Crear usuarios automáticamente para todos los doctores que no tengan usuario
+    Username format: nombre.apellido (lowercase)
+    Password: cambiar123 (to be changed on first login)
+    """
+    doctors = await db.doctors.find({}, {"_id": 0}).to_list(1000)
+    created_users = []
+    skipped_doctors = []
+    
+    for doctor in doctors:
+        # Check if doctor already has a user
+        existing_user = await db.users.find_one({"doctor_id": doctor['id']}, {"_id": 0})
+        if existing_user:
+            skipped_doctors.append(f"{doctor['nombre']} (ya tiene usuario: {existing_user['username']})")
+            continue
+        
+        # Generate username from doctor name
+        # Format: primer_nombre.primer_apellido
+        name_parts = doctor['nombre'].strip().split()
+        if len(name_parts) >= 2:
+            username = f"{name_parts[0]}.{name_parts[1]}".lower()
+        else:
+            username = name_parts[0].lower()
+        
+        # Check if username already exists
+        username_check = await db.users.find_one({"username": username}, {"_id": 0})
+        if username_check:
+            # Add number suffix
+            counter = 1
+            while True:
+                test_username = f"{username}{counter}"
+                username_check = await db.users.find_one({"username": test_username}, {"_id": 0})
+                if not username_check:
+                    username = test_username
+                    break
+                counter += 1
+        
+        # Create user
+        user_dict = {
+            "username": username,
+            "email": f"{username}@familyhealth.com",
+            "nombre_completo": doctor['nombre'],
+            "role": "Doctor",
+            "doctor_id": doctor['id'],
+            "hashed_password": get_password_hash("cambiar123"),
+            "is_active": True
+        }
+        
+        user_obj = User(**user_dict)
+        doc = user_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.users.insert_one(doc)
+        created_users.append({
+            "doctor": doctor['nombre'],
+            "username": username,
+            "password": "cambiar123",
+            "doctor_id": doctor['id']
+        })
+    
+    return {
+        "created": created_users,
+        "skipped": skipped_doctors,
+        "message": f"Se crearon {len(created_users)} usuarios. {len(skipped_doctors)} doctores ya tenían usuario."
+    }
+
 # ========== MEDICAL HISTORY ENDPOINTS ==========
 
 @api_router.post("/medical-history", response_model=MedicalHistory)
