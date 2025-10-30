@@ -799,15 +799,21 @@ function App() {
                         </Button>
                       </td>
                     </tr>
-                  ))}
+                    ));
+                  })()}
                 </tbody>
               </table>
-              {prescriptions.length === 0 && (
-                <div className="empty-state">
-                  <FileText className="empty-icon" />
-                  <p>No hay recetas registradas</p>
-                </div>
-              )}
+              {(() => {
+                const filtered = user?.role === "Doctor" && user?.doctor_id
+                  ? prescriptions.filter(p => p.doctor_id === user.doctor_id)
+                  : prescriptions;
+                return filtered.length === 0 && (
+                  <div className="empty-state">
+                    <FileText className="empty-icon" />
+                    <p>No hay recetas registradas</p>
+                  </div>
+                );
+              })()}
             </div>
           </TabsContent>
 
