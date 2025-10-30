@@ -317,10 +317,12 @@ function App() {
               <Users className="tab-icon" />
               Citas
             </TabsTrigger>
-            <TabsTrigger value="doctors" data-testid="doctors-tab">
-              <Stethoscope className="tab-icon" />
-              Doctores
-            </TabsTrigger>
+            {user.role === "Administrador" && (
+              <TabsTrigger value="doctors" data-testid="doctors-tab">
+                <Stethoscope className="tab-icon" />
+                Doctores
+              </TabsTrigger>
+            )}
             <TabsTrigger value="history" data-testid="history-tab">
               <ClipboardList className="tab-icon" />
               Historias
