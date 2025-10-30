@@ -594,6 +594,20 @@ body {
   font-size: 0.9375rem;
 }
 
+/* Medications list */
+.medications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.medication-item {
+  padding: 1rem;
+  background: white;
+  border: 2px solid #E0F2FE;
+  border-radius: 8px;
+}
+
 /* Status badges for appointments */
 .status-badge {
   display: inline-block;
