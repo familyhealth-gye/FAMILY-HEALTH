@@ -326,18 +326,28 @@ function App() {
               <FileText className="tab-icon" />
               Recetas
             </TabsTrigger>
-            <TabsTrigger value="invoices" data-testid="invoices-tab">
-              <FileText className="tab-icon" />
-              Facturas
-            </TabsTrigger>
-            <TabsTrigger value="inventory" data-testid="inventory-tab">
-              <Package className="tab-icon" />
-              Inventario
-            </TabsTrigger>
-            <TabsTrigger value="payments" data-testid="payments-tab">
-              <DollarSign className="tab-icon" />
-              Pagos
-            </TabsTrigger>
+            {(user.role === "Administrador" || user.role === "Recepcion") && (
+              <TabsTrigger value="invoices" data-testid="invoices-tab">
+                <FileText className="tab-icon" />
+                Facturas
+              </TabsTrigger>
+            )}
+            {user.role === "Administrador" && (
+              <>
+                <TabsTrigger value="inventory" data-testid="inventory-tab">
+                  <Package className="tab-icon" />
+                  Inventario
+                </TabsTrigger>
+                <TabsTrigger value="payments" data-testid="payments-tab">
+                  <DollarSign className="tab-icon" />
+                  Pagos
+                </TabsTrigger>
+                <TabsTrigger value="users" data-testid="users-tab">
+                  <UserCog className="tab-icon" />
+                  Usuarios
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           {/* Doctors Tab */}
