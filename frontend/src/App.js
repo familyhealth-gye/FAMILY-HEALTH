@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Phone, Edit, Trash2, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, AlertTriangle, MessageCircle, ClipboardList, LogOut, UserCog } from "lucide-react";
+import { CalendarIcon, Phone, Edit, Trash2, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, AlertTriangle, MessageCircle, ClipboardList, LogOut, UserCog, Receipt, CreditCard, Activity } from "lucide-react";
 import { InvoicesTab } from "@/components/InvoicesTab";
 import { InventoryTab } from "@/components/InventoryTab";
 import { PaymentsTab } from "@/components/PaymentsTab";
