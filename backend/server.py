@@ -13,7 +13,20 @@ from collections import defaultdict
 from datetime import datetime
 
 # Import local modules
-from models import *
+from models import (
+    User, UserCreate, UserLogin, UserResponse,
+    MedicalHistory, MedicalHistoryCreate, MedicalHistoryUpdate,
+    Prescription, PrescriptionCreate, Medication,
+    Doctor, DoctorCreate, DoctorUpdate,
+    Appointment, AppointmentCreate, AppointmentUpdate,
+    Invoice, InvoiceCreate, InvoiceUpdate,
+    InventoryItem, InventoryItemCreate, InventoryItemUpdate,
+    InventoryMovement, InventoryMovementCreate,
+    DoctorPayment, DoctorPaymentCreate, DoctorPaymentUpdate,
+    Proforma, ProformaCreate, ProformaUpdate, ProformaItem,
+    Abono, AbonoCreate, AbonoUpdate,
+    Odontogram, OdontogramCreate, OdontogramUpdate, ToothState
+)
 from medical_history_models import (
     MedicalHistoryGeneral, MedicalHistoryGeneralCreate,
     MedicalHistoryPediatric, MedicalHistoryPediatricCreate
