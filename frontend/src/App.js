@@ -26,6 +26,7 @@ const API = `${BACKEND_URL}/api`;
 function App() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
+  const [users, setUsers] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [invoices, setInvoices] = useState([]);
