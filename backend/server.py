@@ -88,6 +88,52 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return UserResponse(**user)
 
+# ========== USER MANAGEMENT ENDPOINTS (Admin only) ==========
+
+@api_router.get("/users", response_model=List[UserResponse])
+async def get_users(current_user: TokenData = Depends(require_role("Administrador"))):
+    users = await db.users.find({}, {"_id": 0}).to_list(1000)
+    return [UserResponse(**user) for user in users]
+
+@api_router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: str,
+    user_update: dict,
+    current_user: TokenData = Depends(require_role("Administrador"))
+):
+    existing = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # If password is being updated, hash it
+    if 'password' in user_update and user_update['password']:
+        user_update['hashed_password'] = get_password_hash(user_update['password'])
+        del user_update['password']
+    
+    # Remove empty values
+    update_data = {k: v for k, v in user_update.items() if v is not None and v != ""}
+    
+    if update_data:
+        await db.users.update_one({"id": user_id}, {"$set": update_data})
+    
+    updated = await db.users.find_one({"id": user_id}, {"_id": 0})
+    return UserResponse(**updated)
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user: TokenData = Depends(require_role("Administrador"))
+):
+    # Prevent deleting yourself
+    current_user_data = await db.users.find_one({"username": current_user.username}, {"_id": 0})
+    if current_user_data['id'] == user_id:
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu propio usuario")
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"message": "Usuario eliminado exitosamente"}
+
 # ========== MEDICAL HISTORY ENDPOINTS ==========
 
 @api_router.post("/medical-history", response_model=MedicalHistory)
