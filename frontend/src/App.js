@@ -18,6 +18,7 @@ import { InvoicesTab } from "@/components/InvoicesTab";
 import { InventoryTab } from "@/components/InventoryTab";
 import { PaymentsTab } from "@/components/PaymentsTab";
 import { UsersTab } from "@/components/UsersTab";
+import { AppointmentsWithAttention } from "@/components/AppointmentsWithAttention";
 import { Login } from "@/pages/Login";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
