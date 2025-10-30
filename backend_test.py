@@ -469,6 +469,15 @@ class BackendTester:
         self.log("Testing Medical History Odontology endpoints...")
         results = {}
         
+        # Authenticate as doctor for medical history operations
+        if not self.authenticate_as_doctor():
+            self.log("Failed to authenticate as doctor. Skipping medical history tests.", "ERROR")
+            return {
+                "create_odontology_history": False,
+                "list_odontology_histories": False,
+                "get_odontology_history_by_appointment": False
+            }
+        
         # Test POST /api/medical-history/odontology
         history_data = {
             "appointment_id": self.test_data["appointment_id"],
