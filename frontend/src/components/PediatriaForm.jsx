@@ -80,16 +80,60 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
     setLoading(true);
 
     try {
+      // Save medical history
+      const historyData = { ...form, appointment_id: appointment.id };
+      delete historyData.medicamentos;
+      
+      historyData.plan_tratamiento = form.medicamentos.map((m, i) => 
+        `${i + 1}. ${m.nombre} ${m.dosis} - ${m.frecuencia} por ${m.duracion}`
+      ).join('\n');
+
       await axios.post(
         `${API}/medical-history/pediatric`,
-        { ...form, appointment_id: appointment.id },
+        historyData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      toast.success("Historia pediátrica guardada exitosamente");
+      // Create prescription
+      const prescriptionData = {
+        paciente_id: appointment.id,
+        doctor_id: appointment.doctor_id,
+        fecha: new Date().toISOString().split('T')[0],
+        diagnostico: form.diagnostico,
+        cie10_codigo: form.cie10_codigo || "",
+        cie10_descripcion: "",
+        medicamentos: form.medicamentos,
+        indicaciones_generales: form.indicaciones_padres || ""
+      };
+
+      const prescriptionRes = await axios.post(
+        `${API}/prescriptions`,
+        prescriptionData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Download prescription PDF
+      const pdfRes = await axios.get(
+        `${API}/prescriptions/${prescriptionRes.data.id}/pdf`,
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+
+      const url = window.URL.createObjectURL(new Blob([pdfRes.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `receta_${appointment.cedula}_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success("Historia pediátrica y receta generadas exitosamente");
       onSuccess();
       onClose();
     } catch (error) {
+      console.error(error);
       toast.error(error.response?.data?.detail || "Error al guardar");
     }
     setLoading(false);
