@@ -850,6 +850,17 @@ function App() {
             />
           </TabsContent>
 
+          {/* Users Tab - Admin Only */}
+          {user.role === "Administrador" && (
+            <TabsContent value="users">
+              <UsersTab 
+                users={users}
+                fetchData={fetchData}
+                token={token}
+              />
+            </TabsContent>
+          )}
+
         </Tabs>
       </main>
     </div>
