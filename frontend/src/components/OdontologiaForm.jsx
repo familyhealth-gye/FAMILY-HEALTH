@@ -83,18 +83,62 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
     recomendaciones: ""
   });
 
+  const handleToothClick = (toothNumber) => {
+    setSelectedTooth(toothNumber);
+  };
+
+  const updateToothState = (toothNumber, field, value) => {
+    const newTeeth = form.dientes.map(tooth =>
+      tooth.tooth_number === toothNumber
+        ? { ...tooth, [field]: value }
+        : tooth
+    );
+    setForm({ ...form, dientes: newTeeth });
+  };
+
+  const getToothColor = (toothNumber) => {
+    const tooth = form.dientes.find(t => t.tooth_number === toothNumber);
+    const state = TOOTH_STATES.find(s => s.value === tooth?.estado);
+    return state?.color || "#ffffff";
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      await axios.post(
-        `${API}/medical-history/odontology`,
-        { ...form, appointment_id: appointment.id },
+      // Primero guardar el odontograma
+      const odontogramData = {
+        paciente_id: appointment.id,
+        doctor_id: appointment.doctor_id,
+        fecha: new Date().toISOString().split('T')[0],
+        dientes: form.dientes,
+        diagnostico_general: form.diagnostico,
+        tratamiento_recomendado: form.plan_tratamiento,
+        observaciones: form.observaciones
+      };
+
+      const odontogramRes = await axios.post(
+        `${API}/odontograms`,
+        odontogramData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      toast.success("Historia clínica odontológica guardada exitosamente");
+      // Luego guardar la historia clínica con referencia al odontograma
+      const historyData = { 
+        ...form, 
+        appointment_id: appointment.id,
+        odontograma_id: odontogramRes.data.id 
+      };
+      delete historyData.dientes; // No guardar dientes en historia, ya están en odontograma
+
+      await axios.post(
+        `${API}/medical-history/odontology`,
+        historyData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      toast.success("Historia clínica y odontograma guardados exitosamente");
       onSuccess();
       onClose();
     } catch (error) {
@@ -103,6 +147,52 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
     }
     setLoading(false);
   };
+
+  const selectedToothData = selectedTooth 
+    ? form.dientes.find(t => t.tooth_number === selectedTooth)
+    : null;
+
+  // Renderizar diente individual
+  const renderTooth = (toothNumber) => {
+    const color = getToothColor(toothNumber);
+    const isSelected = selectedTooth === toothNumber;
+    
+    return (
+      <div
+        key={toothNumber}
+        onClick={() => handleToothClick(toothNumber)}
+        style={{
+          width: '35px',
+          height: '45px',
+          backgroundColor: color,
+          border: isSelected ? '3px solid #00a8cc' : '2px solid #334155',
+          borderRadius: '5px',
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          transition: 'all 0.2s',
+          fontSize: '0.7rem',
+          fontWeight: 600,
+          color: color === '#000000' ? '#ffffff' : '#000000',
+          boxShadow: isSelected ? '0 4px 12px rgba(0, 168, 204, 0.4)' : 'none'
+        }}
+      >
+        {toothNumber}
+      </div>
+    );
+  };
+
+  // Renderizar arcada dental
+  const renderDentalArch = (start, end, label) => (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <h4 style={{ marginBottom: '0.75rem', color: '#0C4A6E', fontWeight: 600, fontSize: '0.875rem' }}>{label}</h4>
+      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+        {Array.from({ length: end - start + 1 }, (_, i) => start + i).map(renderTooth)}
+      </div>
+    </div>
+  );
 
   return (
     <form onSubmit={handleSubmit} className="medical-history-form">
