@@ -681,7 +681,14 @@ function App() {
             <div className="section-header">
               <div>
                 <h2 className="section-title">Historias Clínicas</h2>
-                <p className="section-subtitle">{medicalHistories.length} registros médicos</p>
+                <p className="section-subtitle">
+                  {(() => {
+                    const filtered = user?.role === "Doctor" && user?.doctor_id
+                      ? medicalHistories.filter(h => h.doctor_id === user.doctor_id)
+                      : medicalHistories;
+                    return `${filtered.length} registros médicos`;
+                  })()}
+                </p>
               </div>
             </div>
             <div className="table-container">
@@ -695,22 +702,32 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {medicalHistories.map((history) => (
-                    <tr key={history.id}>
-                      <td>{history.fecha}</td>
-                      <td>{history.paciente_nombre}</td>
-                      <td>{history.doctor_nombre}</td>
-                      <td>{history.diagnostico}</td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const filtered = user?.role === "Doctor" && user?.doctor_id
+                      ? medicalHistories.filter(h => h.doctor_id === user.doctor_id)
+                      : medicalHistories;
+                    return filtered.map((history) => (
+                      <tr key={history.id}>
+                        <td>{history.fecha}</td>
+                        <td>{history.paciente_nombre}</td>
+                        <td>{history.doctor_nombre}</td>
+                        <td>{history.diagnostico}</td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
-              {medicalHistories.length === 0 && (
-                <div className="empty-state">
-                  <ClipboardList className="empty-icon" />
-                  <p>No hay historias clínicas registradas</p>
-                </div>
-              )}
+              {(() => {
+                const filtered = user?.role === "Doctor" && user?.doctor_id
+                  ? medicalHistories.filter(h => h.doctor_id === user.doctor_id)
+                  : medicalHistories;
+                return filtered.length === 0 && (
+                  <div className="empty-state">
+                    <ClipboardList className="empty-icon" />
+                    <p>No hay historias clínicas registradas</p>
+                  </div>
+                );
+              })()}
             </div>
           </TabsContent>
 
