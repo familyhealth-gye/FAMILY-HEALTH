@@ -69,7 +69,7 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
     estado_nutricional: "",
     diagnostico: "",
     cie10_codigo: "",
-    plan_tratamiento: "",
+    medicamentos: [{nombre: '', dosis: '', frecuencia: '', duracion: '', indicaciones: ''}],
     indicaciones_padres: "",
     proximo_control: "",
     observaciones: ""
