@@ -13,10 +13,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Phone, Edit, Trash2, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, AlertTriangle, MessageCircle, ClipboardList, LogOut } from "lucide-react";
+import { CalendarIcon, Phone, Edit, Trash2, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, AlertTriangle, MessageCircle, ClipboardList, LogOut, UserCog } from "lucide-react";
 import { InvoicesTab } from "@/components/InvoicesTab";
 import { InventoryTab } from "@/components/InventoryTab";
 import { PaymentsTab } from "@/components/PaymentsTab";
+import { UsersTab } from "@/components/UsersTab";
 import { Login } from "@/pages/Login";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
