@@ -309,4 +309,141 @@ class DoctorPaymentCreate(BaseModel):
 
 
 class DoctorPaymentUpdate(BaseModel):
+    total_facturado: Optional[float] = None
+    porcentaje: Optional[float] = None
+    total_pagar: Optional[float] = None
     estado: Optional[str] = None
+
+
+# ========== PROFORMA MODELS ==========
+class ProformaItem(BaseModel):
+    descripcion: str
+    cantidad: int
+    precio_unitario: float
+    subtotal: float
+
+
+class Proforma(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    numero_proforma: str
+    paciente_nombre: str
+    paciente_cedula: str
+    paciente_telefono: str
+    doctor_id: str
+    doctor_nombre: str
+    especialidad: str
+    items: List[ProformaItem]
+    subtotal: float
+    descuento: float = 0.0
+    total: float
+    fecha_emision: str
+    validez_dias: int = 30
+    estado: str = "Pendiente"  # Pendiente, Aceptada, Rechazada, Facturada
+    observaciones: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ProformaCreate(BaseModel):
+    numero_proforma: str
+    paciente_nombre: str
+    paciente_cedula: str
+    paciente_telefono: str
+    doctor_id: str
+    especialidad: str
+    items: List[ProformaItem]
+    descuento: float = 0.0
+    fecha_emision: str
+    validez_dias: int = 30
+    observaciones: str = ""
+
+
+class ProformaUpdate(BaseModel):
+    estado: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+# ========== ABONO MODELS ==========
+class Abono(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    paciente_nombre: str
+    paciente_cedula: str
+    monto: float
+    fecha: str
+    tipo_pago: str  # Efectivo, Transferencia, Tarjeta
+    concepto: str  # Descripción del servicio o tratamiento
+    proforma_id: Optional[str] = None  # Vincula con proforma si existe
+    appointment_id: Optional[str] = None  # Vincula con cita si existe
+    saldo_pendiente: float = 0.0
+    recibo_numero: str
+    observaciones: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AbonoCreate(BaseModel):
+    paciente_nombre: str
+    paciente_cedula: str
+    monto: float
+    fecha: str
+    tipo_pago: str
+    concepto: str
+    proforma_id: Optional[str] = None
+    appointment_id: Optional[str] = None
+    saldo_pendiente: float = 0.0
+    recibo_numero: str
+    observaciones: str = ""
+
+
+class AbonoUpdate(BaseModel):
+    monto: Optional[float] = None
+    saldo_pendiente: Optional[float] = None
+    observaciones: Optional[str] = None
+
+
+# ========== ODONTOGRAM MODELS ==========
+class ToothState(BaseModel):
+    tooth_number: int  # 1-32
+    estado: str = "Sano"  # Sano, Caries, Obturación, Extracción, Corona, Endodoncia, Implante
+    cara_oclusal: str = ""  # Estado de cara oclusal
+    cara_vestibular: str = ""
+    cara_palatina: str = ""
+    cara_mesial: str = ""
+    cara_distal: str = ""
+    observaciones: str = ""
+
+
+class Odontogram(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    paciente_id: str
+    paciente_nombre: str
+    paciente_cedula: str
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    dientes: List[ToothState]  # 32 dientes
+    diagnostico_general: str = ""
+    tratamiento_recomendado: str = ""
+    observaciones: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class OdontogramCreate(BaseModel):
+    paciente_id: str
+    doctor_id: str
+    fecha: str
+    dientes: List[ToothState]
+    diagnostico_general: str = ""
+    tratamiento_recomendado: str = ""
+    observaciones: str = ""
+
+
+class OdontogramUpdate(BaseModel):
+    dientes: Optional[List[ToothState]] = None
+    diagnostico_general: Optional[str] = None
+    tratamiento_recomendado: Optional[str] = None
+    observaciones: Optional[str] = None
