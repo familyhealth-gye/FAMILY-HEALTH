@@ -646,74 +646,15 @@ function App() {
             </div>
 
             <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Paciente</th>
-                    <th>Cédula</th>
-                    <th>Edad</th>
-                    <th>Teléfono</th>
-                    <th>Especialidad</th>
-                    <th>Doctor</th>
-                    <th>Fecha</th>
-                    <th>Hora</th>
-                    <th>Pago</th>
-                    <th className="actions-column">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAppointments.map((appointment) => (
-                    <tr key={appointment.id} data-testid={`appointment-row-${appointment.id}`}>
-                      <td>{appointment.nombre_completo}</td>
-                      <td>{appointment.cedula}</td>
-                      <td>{appointment.edad}</td>
-                      <td>
-                        <div className="phone-cell">
-                          {appointment.telefono}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openWhatsApp(appointment.telefono)}
-                            className="whatsapp-button"
-                            data-testid={`whatsapp-${appointment.id}`}
-                          >
-                            <Phone className="whatsapp-icon" />
-                          </Button>
-                        </div>
-                      </td>
-                      <td><span className="badge">{appointment.especialidad}</span></td>
-                      <td>{appointment.doctor_nombre}</td>
-                      <td>{appointment.fecha}</td>
-                      <td>{appointment.hora}</td>
-                      <td><span className="badge-payment">{appointment.tipo_pago}</span></td>
-                      <td className="actions-cell">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditAppointment(appointment)}
-                          data-testid={`edit-appointment-${appointment.id}`}
-                        >
-                          <Edit className="action-icon" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteAppointment(appointment.id)}
-                          data-testid={`delete-appointment-${appointment.id}`}
-                        >
-                          <Trash2 className="action-icon delete-icon" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filteredAppointments.length === 0 && (
-                <div className="empty-state">
-                  <Users className="empty-icon" />
-                  <p>No hay citas agendadas</p>
-                </div>
-              )}
+              <AppointmentsWithAttention
+                filteredAppointments={filteredAppointments}
+                user={user}
+                token={token}
+                handleEditAppointment={handleEditAppointment}
+                handleDeleteAppointment={handleDeleteAppointment}
+                openWhatsApp={openWhatsApp}
+                fetchData={fetchData}
+              />
             </div>
           </TabsContent>
 
