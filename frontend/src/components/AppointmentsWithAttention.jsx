@@ -130,7 +130,8 @@ export const AppointmentsWithAttention = ({
               <td>{appointment.fecha}</td>
               <td>{appointment.hora}</td>
               <td className="actions-cell">
-                {(appointment.estado === "Programada" || !appointment.estado) && user?.role === "Doctor" && (
+                {/* Permitir iniciar o continuar atención */}
+                {(appointment.estado === "Programada" || appointment.estado === "En Atención" || !appointment.estado) && user?.role === "Doctor" && (
                   <Button
                     size="sm"
                     variant="default"
@@ -139,7 +140,7 @@ export const AppointmentsWithAttention = ({
                     data-testid={`start-attention-${appointment.id}`}
                   >
                     <Play className="button-icon" size={14} />
-                    Atender
+                    {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
                   </Button>
                 )}
                 
