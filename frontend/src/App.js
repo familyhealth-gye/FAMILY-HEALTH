@@ -736,7 +736,14 @@ function App() {
             <div className="section-header">
               <div>
                 <h2 className="section-title">Recetas Médicas</h2>
-                <p className="section-subtitle">{prescriptions.length} recetas emitidas</p>
+                <p className="section-subtitle">
+                  {(() => {
+                    const filtered = user?.role === "Doctor" && user?.doctor_id
+                      ? prescriptions.filter(p => p.doctor_id === user.doctor_id)
+                      : prescriptions;
+                    return `${filtered.length} recetas emitidas`;
+                  })()}
+                </p>
               </div>
             </div>
             <div className="table-container">
@@ -751,38 +758,42 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {prescriptions.map((prescription) => (
-                    <tr key={prescription.id}>
-                      <td>{prescription.fecha}</td>
-                      <td>{prescription.paciente_nombre}</td>
-                      <td>{prescription.doctor_nombre}</td>
-                      <td>{prescription.diagnostico}</td>
-                      <td>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            try {
-                              const response = await axios.get(
-                                `${API}/prescriptions/${prescription.id}/pdf`,
-                                { 
-                                  headers: { Authorization: `Bearer ${token}` },
-                                  responseType: 'blob' 
-                                }
-                              );
-                              const url = window.URL.createObjectURL(new Blob([response.data]));
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.setAttribute('download', `receta_${prescription.paciente_cedula}.pdf`);
-                              document.body.appendChild(link);
-                              link.click();
-                              link.remove();
-                              toast.success("Receta descargada");
-                            } catch (error) {
-                              toast.error("Error al descargar receta");
-                            }
-                          }}
-                        >
+                  {(() => {
+                    const filtered = user?.role === "Doctor" && user?.doctor_id
+                      ? prescriptions.filter(p => p.doctor_id === user.doctor_id)
+                      : prescriptions;
+                    return filtered.map((prescription) => (
+                      <tr key={prescription.id}>
+                        <td>{prescription.fecha}</td>
+                        <td>{prescription.paciente_nombre}</td>
+                        <td>{prescription.doctor_nombre}</td>
+                        <td>{prescription.diagnostico}</td>
+                        <td>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                const response = await axios.get(
+                                  `${API}/prescriptions/${prescription.id}/pdf`,
+                                  { 
+                                    headers: { Authorization: `Bearer ${token}` },
+                                    responseType: 'blob' 
+                                  }
+                                );
+                                const url = window.URL.createObjectURL(new Blob([response.data]));
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.setAttribute('download', `receta_${prescription.paciente_cedula}.pdf`);
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                                toast.success("Receta descargada");
+                              } catch (error) {
+                                toast.error("Error al descargar receta");
+                              }
+                            }}
+                          >
                           <Download className="button-icon" />
                           PDF
                         </Button>
