@@ -21,7 +21,6 @@ import { UsersTab } from "@/components/UsersTab";
 import { AppointmentsWithAttention } from "@/components/AppointmentsWithAttention";
 import { ProformasTab } from "@/components/ProformasTab";
 import { AbonosTab } from "@/components/AbonosTab";
-import { OdontogramaTab } from "@/components/OdontogramaTab";
 import { Login } from "@/pages/Login";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
