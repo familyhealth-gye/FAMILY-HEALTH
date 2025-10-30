@@ -324,3 +324,125 @@ class MedicalHistoryPediatricCreate(BaseModel):
     indicaciones_padres: Optional[str] = ""
     proximo_control: Optional[str] = ""
     observaciones: Optional[str] = ""
+
+
+# ========== ODONTOLOGÍA ==========
+
+class EstadoDental(BaseModel):
+    higiene_oral: Optional[str] = ""  # Buena, Regular, Mala
+    encia: Optional[str] = ""  # Sana, Gingivitis, Periodontitis
+    mucosa_oral: Optional[str] = ""
+    lengua: Optional[str] = ""
+    paladar: Optional[str] = ""
+    atm: Optional[str] = ""  # Articulación Temporomandibular
+
+
+class MedicalHistoryOdontology(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    appointment_id: str
+    paciente_id: str
+    paciente_nombre: str
+    paciente_cedula: str
+    paciente_edad: int
+    paciente_sexo: str
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    
+    # Motivo de consulta
+    motivo_consulta: str
+    dolor_dental: bool = False
+    ubicacion_dolor: Optional[str] = ""
+    intensidad_dolor: Optional[str] = ""  # Leve, Moderado, Severo
+    tiempo_dolor: Optional[str] = ""
+    
+    # Antecedentes odontológicos
+    ultima_visita_odonto: Optional[str] = ""
+    frecuencia_cepillado: Optional[str] = ""
+    uso_hilo_dental: bool = False
+    uso_enjuague: bool = False
+    tratamientos_previos: Optional[str] = ""
+    
+    # Antecedentes médicos relevantes
+    diabetes: bool = False
+    hipertension: bool = False
+    cardiopatias: bool = False
+    hepatitis: bool = False
+    vih: bool = False
+    epilepsia: bool = False
+    embarazo: bool = False
+    semanas_embarazo: Optional[int] = None
+    alergias_medicamentos: Optional[str] = ""
+    medicamentos_actuales: Optional[str] = ""
+    
+    # Hábitos
+    fumador: bool = False
+    cigarrillos_dia: Optional[int] = None
+    bruxismo: bool = False
+    succion_digital: bool = False
+    
+    # Examen intraoral
+    estado_dental: EstadoDental
+    
+    # Odontograma (referencia)
+    odontograma_id: Optional[str] = None
+    
+    # Diagnóstico
+    diagnostico: str
+    cie10_codigo: Optional[str] = ""
+    
+    # Plan de tratamiento
+    plan_tratamiento: str
+    procedimientos_realizados: Optional[str] = ""
+    materiales_utilizados: Optional[str] = ""
+    
+    # Receta (medicamentos)
+    medicamentos: Optional[str] = ""
+    
+    # Seguimiento
+    proximo_control: Optional[str] = ""
+    observaciones: Optional[str] = ""
+    recomendaciones: Optional[str] = ""
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class MedicalHistoryOdontologyCreate(BaseModel):
+    appointment_id: str
+    motivo_consulta: str
+    dolor_dental: bool = False
+    ubicacion_dolor: Optional[str] = ""
+    intensidad_dolor: Optional[str] = ""
+    tiempo_dolor: Optional[str] = ""
+    ultima_visita_odonto: Optional[str] = ""
+    frecuencia_cepillado: Optional[str] = ""
+    uso_hilo_dental: bool = False
+    uso_enjuague: bool = False
+    tratamientos_previos: Optional[str] = ""
+    diabetes: bool = False
+    hipertension: bool = False
+    cardiopatias: bool = False
+    hepatitis: bool = False
+    vih: bool = False
+    epilepsia: bool = False
+    embarazo: bool = False
+    semanas_embarazo: Optional[int] = None
+    alergias_medicamentos: Optional[str] = ""
+    medicamentos_actuales: Optional[str] = ""
+    fumador: bool = False
+    cigarrillos_dia: Optional[int] = None
+    bruxismo: bool = False
+    succion_digital: bool = False
+    estado_dental: EstadoDental
+    odontograma_id: Optional[str] = None
+    diagnostico: str
+    cie10_codigo: Optional[str] = ""
+    plan_tratamiento: str
+    procedimientos_realizados: Optional[str] = ""
+    materiales_utilizados: Optional[str] = ""
+    medicamentos: Optional[str] = ""
+    proximo_control: Optional[str] = ""
+    observaciones: Optional[str] = ""
+    recomendaciones: Optional[str] = ""
