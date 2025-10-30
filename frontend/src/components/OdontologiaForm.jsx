@@ -450,6 +450,116 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
         </div>
       </div>
 
+      {/* Odontograma Visual Integrado */}
+      <div className="form-section">
+        <h3 className="section-title-small">Odontograma Dental</h3>
+        
+        {/* Leyenda de colores */}
+        <div style={{ background: '#F8FAFC', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+          <Label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Leyenda de Estados:</Label>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            {TOOTH_STATES.map(state => (
+              <div key={state.value} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  backgroundColor: state.color,
+                  border: '1px solid #334155',
+                  borderRadius: '4px'
+                }} />
+                <span style={{ fontSize: '0.875rem' }}>{state.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Odontograma visual */}
+        <div style={{ background: '#F0F9FF', padding: '1.5rem', borderRadius: '12px', border: '2px solid #BFDBFE', marginBottom: '1rem' }}>
+          <h4 style={{ marginBottom: '1rem', textAlign: 'center', color: '#00a8cc', fontWeight: 700, fontSize: '0.95rem' }}>
+            Mapa Dental - Click en cada diente para editar
+          </h4>
+          
+          {/* Arcadas dentales */}
+          {renderDentalArch(18, 11, "Superior Derecha (18-11)")}
+          {renderDentalArch(21, 28, "Superior Izquierda (21-28)")}
+          {renderDentalArch(48, 41, "Inferior Derecha (48-41)")}
+          {renderDentalArch(31, 38, "Inferior Izquierda (31-38)")}
+        </div>
+
+        {/* Detalles del diente seleccionado */}
+        {selectedToothData && (
+          <div style={{ background: '#E0F2FE', padding: '1rem', borderRadius: '8px' }}>
+            <h4 style={{ marginBottom: '1rem', color: '#0C4A6E', fontWeight: 600 }}>
+              Diente #{selectedToothData.tooth_number} - Detalles
+            </h4>
+            <div className="form-grid">
+              <div className="form-field">
+                <Label>Estado General</Label>
+                <Select
+                  value={selectedToothData.estado}
+                  onValueChange={(val) => updateToothState(selectedToothData.tooth_number, 'estado', val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TOOTH_STATES.map(state => (
+                      <SelectItem key={state.value} value={state.value}>
+                        {state.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="form-field">
+                <Label>Cara Oclusal</Label>
+                <Input
+                  value={selectedToothData.cara_oclusal}
+                  onChange={(e) => updateToothState(selectedToothData.tooth_number, 'cara_oclusal', e.target.value)}
+                  placeholder="Estado oclusal"
+                />
+              </div>
+              <div className="form-field">
+                <Label>Cara Vestibular</Label>
+                <Input
+                  value={selectedToothData.cara_vestibular}
+                  onChange={(e) => updateToothState(selectedToothData.tooth_number, 'cara_vestibular', e.target.value)}
+                />
+              </div>
+              <div className="form-field">
+                <Label>Cara Palatina</Label>
+                <Input
+                  value={selectedToothData.cara_palatina}
+                  onChange={(e) => updateToothState(selectedToothData.tooth_number, 'cara_palatina', e.target.value)}
+                />
+              </div>
+              <div className="form-field">
+                <Label>Cara Mesial</Label>
+                <Input
+                  value={selectedToothData.cara_mesial}
+                  onChange={(e) => updateToothState(selectedToothData.tooth_number, 'cara_mesial', e.target.value)}
+                />
+              </div>
+              <div className="form-field">
+                <Label>Cara Distal</Label>
+                <Input
+                  value={selectedToothData.cara_distal}
+                  onChange={(e) => updateToothState(selectedToothData.tooth_number, 'cara_distal', e.target.value)}
+                />
+              </div>
+              <div className="form-field full-width">
+                <Label>Observaciones del Diente</Label>
+                <Textarea
+                  value={selectedToothData.observaciones}
+                  onChange={(e) => updateToothState(selectedToothData.tooth_number, 'observaciones', e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="form-section">
         <h3 className="section-title-small">Diagnóstico</h3>
         <div className="form-grid">
