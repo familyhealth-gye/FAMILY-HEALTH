@@ -102,13 +102,44 @@ export const UsersTab = ({ users, fetchData, token }) => {
           <h2 className="section-title">Gestión de Usuarios</h2>
           <p className="section-subtitle">{users.length} usuarios registrados</p>
         </div>
-        <Dialog open={dialog} onOpenChange={(open) => { setDialog(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button className="add-button" data-testid="add-user-button">
-              <Plus className="button-icon" />
-              Nuevo Usuario
-            </Button>
-          </DialogTrigger>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <Button 
+            variant="outline"
+            onClick={async () => {
+              if (!window.confirm("¿Crear usuarios automáticamente para todos los doctores que no tengan usuario?\n\nUsername: nombre.apellido\nPassword: cambiar123")) return;
+              
+              try {
+                const response = await axios.post(
+                  `${API}/users/create-from-doctors`,
+                  {},
+                  { headers: { Authorization: `Bearer ${token}` } }
+                );
+                
+                toast.success(response.data.message);
+                
+                if (response.data.created.length > 0) {
+                  const details = response.data.created.map(u => 
+                    `${u.doctor}: ${u.username} (pass: ${u.password})`
+                  ).join('\n');
+                  console.log("Usuarios creados:\n" + details);
+                }
+                
+                fetchData();
+              } catch (error) {
+                toast.error("Error al crear usuarios");
+              }
+            }}
+          >
+            <UserPlus className="button-icon" />
+            Crear desde Doctores
+          </Button>
+          <Dialog open={dialog} onOpenChange={(open) => { setDialog(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button className="add-button" data-testid="add-user-button">
+                <Plus className="button-icon" />
+                Nuevo Usuario
+              </Button>
+            </DialogTrigger>
           <DialogContent className="dialog-content">
             <DialogHeader>
               <DialogTitle>{editingUser ? "Editar Usuario" : "Crear Nuevo Usuario"}</DialogTitle>
