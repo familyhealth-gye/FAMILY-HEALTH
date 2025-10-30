@@ -822,6 +822,25 @@ function App() {
             </TabsContent>
           )}
 
+          {/* Proformas Tab - Admin & Recepcion */}
+          {(user.role === "Administrador" || user.role === "Recepcion") && (
+            <TabsContent value="proformas">
+              <ProformasTab token={token} />
+            </TabsContent>
+          )}
+
+          {/* Abonos Tab - Admin & Recepcion */}
+          {(user.role === "Administrador" || user.role === "Recepcion") && (
+            <TabsContent value="abonos">
+              <AbonosTab token={token} />
+            </TabsContent>
+          )}
+
+          {/* Odontograma Tab - All users */}
+          <TabsContent value="odontograma">
+            <OdontogramaTab token={token} />
+          </TabsContent>
+
         </Tabs>
       </main>
     </div>
