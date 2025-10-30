@@ -111,6 +111,29 @@ class BackendTester:
                 doctor = response.json()
                 self.test_data["doctor_id"] = doctor["id"]
                 self.log(f"Test doctor created: {doctor['id']}")
+                
+                # Create a doctor user linked to this doctor
+                doctor_user_data = {
+                    "username": "doctor_test",
+                    "password": "doctor123",
+                    "email": "doctor@test.com",
+                    "nombre_completo": "Dr. Juan Pérez",
+                    "role": "Doctor",
+                    "doctor_id": doctor["id"]
+                }
+                
+                # Register doctor user
+                register_response = self.make_request("POST", "/auth/register", doctor_user_data)
+                if register_response.status_code in [200, 201]:
+                    self.log("Doctor user created successfully")
+                    # Store doctor credentials for later use
+                    self.test_data["doctor_user"] = {
+                        "username": "doctor_test",
+                        "password": "doctor123"
+                    }
+                else:
+                    self.log(f"Failed to create doctor user: {register_response.status_code} - {register_response.text}", "WARNING")
+                    
             else:
                 self.log(f"Failed to create doctor: {response.status_code} - {response.text}", "ERROR")
                 return False
