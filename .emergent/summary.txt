@@ -1,0 +1,118 @@
+<analysis>
+The AI engineer successfully developed the Family Health medical application in several phases, starting from basic patient and appointment management (Phase 1). It then added modules for billing, inventory, and doctor payments (Phase 2). Following this, a significant Phase 3 introduced JWT authentication with roles (Admin, Reception, Doctor), a general clinical history, medical prescriptions with PDF generation, and a user management module. The latest iteration focuses on implementing specialized clinical histories (Medicina General, Pediatría) and integrating prescription generation directly into the consultation flow. The AI has demonstrated proficiency in full-stack development using React, FastAPI, and MongoDB, adhering to design guidelines and user feedback. It has iteratively built out the application's core features, handling backend data models, API endpoints, and corresponding frontend UI components, while also managing minor debugging and environment restarts. The most recent task involves refining the clinical history forms to include prescription details and trigger automatic recipe creation upon consultation completion.
+</analysis>
+
+<product_requirements>
+The Family Health application is a medical-administrative system for a clinic in Guayaquil, Ecuador, designed to centralize management across specialties like odontology, general medicine, nutrition, psychology, and gynecology. Initially, it provided patient registration (name, ID, age, phone, specialty, doctor, date/time, payment, observations) and appointment scheduling (date, time, doctor, service), including a WhatsApp button for manual patient messaging.
+
+The application has been expanded to include:
+- **Facturación (Billing):** Form for recording invoices (not electronic generation), including invoice number, patient, doctor, specialty, service, value, date, payment type. It also features a searchable list of invoices by patient, doctor, month, or number, with monthly totals and a CSV/Excel export option.
+- **Inventario Médico (Medical Inventory):** An editable table for medical supplies with fields for name, category, quantity, unit cost, and minimum stock. It supports manual entry/exit movements and visual alerts for low stock. Automatic deduction of materials used in treatments is planned, but currently manual.
+- **Pagos a Doctores (Doctor Payments):** Calculates doctor payments based on an editable percentage of services rendered. It provides a monthly report showing doctor, total services, total billed, percentage, total payable, and payment status (Pending/Paid).
+- **WhatsApp Automático (Automatic WhatsApp):** Generates direct WhatsApp links with pre-filled confirmation messages for appointments (e.g., Hola [nombre del paciente], tu cita en Family Health ha sido agendada para el [fecha] a las [hora]).
+- **Acceso y Diseño:** Implements JWT-based login with user roles (Admin, Doctor), professional medical design (azul #00a8cc, verde menta #6decb9, blanco #f5faff), includes a Family Health logo, and is fully responsive.
+- **Doctores (Doctors):** Registration now includes specialty and subspecialty, with configurable percentages for payments.
+- **Pacientes y Citas (Patients and Appointments):** Patients are registered with comprehensive details. The system supports a flow where patients schedule appointments, which a doctor can then initiate to begin attention.
+- **Módulo de Usuarios (User Module):** An admin-only interface to create and manage users, assigning roles (e.g., Doctor) that control access to different modules. Doctors created here can log in using their credentials.
+- **Historias Clínicas (Clinical Histories):** Includes a general clinical history. Specific forms for Medicina General and Pediatría have been prioritized and implemented, allowing doctors to record patient data according to their specialty. The latest update integrates prescription generation directly within these clinical history forms, changing plan de tratamiento to receta and observaciones.
+- **Recetas Médicas (Medical Prescriptions):** Generates prescriptions (with CIE-10, diagnosis, medications, doses, precautions) and exports them to PDF with the clinic logo. This is now directly linked to the clinical history forms.
+
+Authentication is required, with roles for access control. The objective is to consolidate all functionalities into a single application for internal control, with future integrations planned for SRI invoicing and advanced WhatsApp automation.
+</product_requirements>
+
+<key_technical_concepts>
+- **Full-stack Architecture:** React (frontend), FastAPI (backend), MongoDB (database).
+- **UI Framework:** Shadcn UI, Tailwind CSS for styling.
+- **Data Handling:** Pydantic for data validation and MongoDB object handling.
+- **Authentication:** JWT (JSON Web Tokens) for user authentication and role-based access control.
+- **PDF Generation:** Backend service for creating PDF documents (prescriptions).
+- **RESTful APIs:** CRUD operations via FastAPI endpoints.
+- **Modular Development:** Separation of concerns into components and modules (e.g., , , , , , ).
+</key_technical_concepts>
+
+<code_architecture>
+
+
+- ****:
+    - Main FastAPI application.
+    - Manages routes for patients, doctors, appointments, invoices, inventory, payments, users, medical histories, and prescriptions.
+    - Imports and utilizes , , , and .
+    - **Changes:** Continuously updated with new endpoints for all modules across phases, including authentication, user management, specialized clinical histories, and prescription generation.
+- ****:
+    - Handles JWT authentication logic, including user registration, login, token generation, and role-based access control.
+    - Defines  and  Pydantic models.
+    - **Changes:** Created in Phase 3 to implement authentication.
+- ****:
+    - Contains Pydantic models for various database entities like , , , , , , , , .
+    - **Changes:** Created in Phase 2 for new modules, and extended in Phase 3 for authentication and medical records.
+- ****:
+    - Responsible for generating PDF documents, specifically for medical prescriptions, including dynamic data and the clinic's logo.
+    - **Changes:** Created in Phase 3 to support prescription PDF export.
+- ****:
+    - Defines specialized Pydantic models for different types of clinical histories, such as  and , incorporating detailed fields based on user-provided templates.
+    - **Changes:** Created to support the specialized clinical history requirement in Phase 3.
+- ****:
+    - Main React component, responsible for overall application layout, routing (using ), state management (user authentication, active tab), and rendering various modules via .
+    - Imports and conditionally renders components like , , , , , and .
+    - **Changes:** Heavily modified across all phases to add new routes, implement authentication logic, manage user roles for UI visibility, and integrate new tab components.
+- ****:
+    - Frontend component providing the user login interface, handling input and API calls for authentication.
+    - **Changes:** Created in Phase 3 to enable user authentication.
+- ****:
+    - Frontend component for managing invoice records, including a form to add new invoices, a list of existing invoices with search filters, and a CSV export button.
+    - **Changes:** Created in Phase 2 for the billing module.
+- ****:
+    - Frontend component for displaying and managing medical inventory items, with editable fields and stock alerts.
+    - **Changes:** Created in Phase 2 for the inventory module.
+- ****:
+    - Frontend component for viewing doctor payment calculations and status.
+    - **Changes:** Created in Phase 2 for the doctor payments module.
+- ****:
+    - Admin-only frontend component for creating, viewing, and managing user accounts, including assigning roles.
+    - **Changes:** Created in Phase 3 to implement user management.
+- ****:
+    - Frontend component for the clinical history form specific to General Medicine, with fields for diagnosis, symptoms, and now includes fields for medications to integrate prescription generation.
+    - **Changes:** Created in Phase 3 for specialized histories, recently modified to integrate prescription details.
+- ****:
+    - Frontend component for the clinical history form specific to Pediatrics, similar to General Medicine but with pediatric-specific fields, also updated for integrated prescription generation.
+    - **Changes:** Created in Phase 3 for specialized histories, recently modified to integrate prescription details.
+- ****:
+    - This component replaces the simpler appointments table. It manages the list of appointments, allows doctors to initiate an attention flow, and dynamically renders the appropriate specialized clinical history form (e.g., , ) based on the appointment's specialty.
+    - **Changes:** Created to handle the complex doctor workflow and specialized clinical histories in Phase 3.
+- ****:
+    - Static asset, the Family Health clinic logo, used in the frontend header and for PDF generation.
+    - **Changes:** Downloaded and placed here during Phase 3.
+- ** / **:
+    - Styling for the application, including global styles and specific component styles.
+    - **Changes:** Continuously updated to style new components, layout, and ensure responsiveness, including logo styling.
+</code_architecture>
+
+<pending_tasks>
+- Full implementation of specialized clinical histories for Nutrición and Odontología.
+- Implementation of Informed Consents (digital signable PDF templates).
+- Integration with the SRI API for automatic electronic invoicing.
+- Odontogram functionality.
+- Proformas and Abonos (quotations and partial payments management).
+- Comprehensive reporting module (daily/monthly, doctor payments, inventory, abonos, CSV/Excel export).
+- Automatic WhatsApp appointment reminders (currently only manual links).
+- Inventory auto-discount upon treatment confirmation.
+</pending_tasks>
+
+<current_work>
+Immediately before this summary request, the AI engineer was working on integrating prescription generation directly into the specialized clinical history forms, specifically for **Medicina General** and **Pediatría**. The user explicitly requested to change plan de tratamiento to receta and observaciones and to link this directly to issuing/printing the prescription.
+
+The AI has completed the following steps:
+1.  **Updated **:
+    *   Modified the form to include fields for medications and instructions for the prescription.
+    *   Updated the initial state of the form to accommodate these new prescription-related fields.
+    *   Modified the  function to automatically create a medical prescription upon completion of the consultation, using the data entered in the form.
+2.  **Updated **:
+    *   Performed the same modifications as for , adapting the form, initial state, and  function to include prescription details and trigger automatic prescription creation for pediatric consultations.
+3.  **About to add CSS**: The last recorded action is Ahora agregar estilos CSS para la lista de medicamentos:, indicating that the structural and logical changes for prescription integration are complete, and the next step is to style the newly added medication list in the forms.
+
+This work ensures that when a doctor completes a consultation and fills out the clinical history for General Medicine or Pediatrics, a medical prescription is automatically generated, streamlining the patient care process.
+</current_work>
+
+<optional_next_step>
+Add necessary CSS styles for the medication list and prescription-related elements within  and .
+</optional_next_step>
