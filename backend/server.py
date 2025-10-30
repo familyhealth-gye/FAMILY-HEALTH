@@ -10,7 +10,7 @@ from typing import List
 import io
 import csv
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Import local modules
 from models import (
