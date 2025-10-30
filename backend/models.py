@@ -39,6 +39,7 @@ class UserResponse(BaseModel):
     email: str
     nombre_completo: str
     role: str
+    doctor_id: Optional[str] = None
     is_active: bool
 
 
