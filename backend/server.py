@@ -763,6 +763,234 @@ async def delete_doctor_payment(payment_id: str):
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     return {"message": "Pago eliminado exitosamente"}
 
+# ========== PROFORMA ENDPOINTS ==========
+
+@api_router.post("/proformas", response_model=Proforma)
+async def create_proforma(
+    input: ProformaCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    # Get doctor info
+    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor no encontrado")
+    
+    # Calculate totals
+    subtotal = sum(item.subtotal for item in input.items)
+    total = subtotal - input.descuento
+    
+    proforma_dict = input.model_dump()
+    proforma_dict['doctor_nombre'] = doctor['nombre']
+    proforma_dict['subtotal'] = subtotal
+    proforma_dict['total'] = total
+    
+    proforma_obj = Proforma(**proforma_dict)
+    doc = proforma_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.proformas.insert_one(doc)
+    return proforma_obj
+
+@api_router.get("/proformas", response_model=List[Proforma])
+async def get_proformas(current_user: TokenData = Depends(get_current_user)):
+    proformas = await db.proformas.find({}, {"_id": 0}).to_list(1000)
+    for proforma in proformas:
+        if isinstance(proforma['created_at'], str):
+            proforma['created_at'] = datetime.fromisoformat(proforma['created_at'])
+    return proformas
+
+@api_router.get("/proformas/{proforma_id}", response_model=Proforma)
+async def get_proforma(
+    proforma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    proforma = await db.proformas.find_one({"id": proforma_id}, {"_id": 0})
+    if not proforma:
+        raise HTTPException(status_code=404, detail="Proforma no encontrada")
+    
+    if isinstance(proforma['created_at'], str):
+        proforma['created_at'] = datetime.fromisoformat(proforma['created_at'])
+    
+    return Proforma(**proforma)
+
+@api_router.put("/proformas/{proforma_id}", response_model=Proforma)
+async def update_proforma(
+    proforma_id: str,
+    input: ProformaUpdate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.proformas.find_one({"id": proforma_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Proforma no encontrada")
+    
+    update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.proformas.update_one({"id": proforma_id}, {"$set": update_data})
+    
+    updated = await db.proformas.find_one({"id": proforma_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
+    return Proforma(**updated)
+
+@api_router.delete("/proformas/{proforma_id}")
+async def delete_proforma(
+    proforma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    result = await db.proformas.delete_one({"id": proforma_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Proforma no encontrada")
+    return {"message": "Proforma eliminada exitosamente"}
+
+# ========== ABONO ENDPOINTS ==========
+
+@api_router.post("/abonos", response_model=Abono)
+async def create_abono(
+    input: AbonoCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    abono_obj = Abono(**input.model_dump())
+    doc = abono_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.abonos.insert_one(doc)
+    return abono_obj
+
+@api_router.get("/abonos", response_model=List[Abono])
+async def get_abonos(current_user: TokenData = Depends(get_current_user)):
+    abonos = await db.abonos.find({}, {"_id": 0}).to_list(1000)
+    for abono in abonos:
+        if isinstance(abono['created_at'], str):
+            abono['created_at'] = datetime.fromisoformat(abono['created_at'])
+    return abonos
+
+@api_router.get("/abonos/patient/{cedula}", response_model=List[Abono])
+async def get_patient_abonos(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    abonos = await db.abonos.find({"paciente_cedula": cedula}, {"_id": 0}).to_list(1000)
+    for abono in abonos:
+        if isinstance(abono['created_at'], str):
+            abono['created_at'] = datetime.fromisoformat(abono['created_at'])
+    return abonos
+
+@api_router.put("/abonos/{abono_id}", response_model=Abono)
+async def update_abono(
+    abono_id: str,
+    input: AbonoUpdate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.abonos.find_one({"id": abono_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Abono no encontrado")
+    
+    update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.abonos.update_one({"id": abono_id}, {"$set": update_data})
+    
+    updated = await db.abonos.find_one({"id": abono_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
+    return Abono(**updated)
+
+@api_router.delete("/abonos/{abono_id}")
+async def delete_abono(
+    abono_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    result = await db.abonos.delete_one({"id": abono_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Abono no encontrado")
+    return {"message": "Abono eliminado exitosamente"}
+
+# ========== ODONTOGRAM ENDPOINTS ==========
+
+@api_router.post("/odontograms", response_model=Odontogram)
+async def create_odontogram(
+    input: OdontogramCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    # Get patient info from appointment
+    appointment = await db.appointments.find_one({"id": input.paciente_id}, {"_id": 0})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+    
+    # Get doctor info
+    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor no encontrado")
+    
+    odontogram_dict = input.model_dump()
+    odontogram_dict['paciente_nombre'] = appointment['nombre_completo']
+    odontogram_dict['paciente_cedula'] = appointment['cedula']
+    odontogram_dict['doctor_nombre'] = doctor['nombre']
+    
+    odontogram_obj = Odontogram(**odontogram_dict)
+    doc = odontogram_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.odontograms.insert_one(doc)
+    return odontogram_obj
+
+@api_router.get("/odontograms", response_model=List[Odontogram])
+async def get_odontograms(current_user: TokenData = Depends(get_current_user)):
+    odontograms = await db.odontograms.find({}, {"_id": 0}).to_list(1000)
+    for odontogram in odontograms:
+        if isinstance(odontogram['created_at'], str):
+            odontogram['created_at'] = datetime.fromisoformat(odontogram['created_at'])
+    return odontograms
+
+@api_router.get("/odontograms/patient/{paciente_id}", response_model=List[Odontogram])
+async def get_patient_odontograms(
+    paciente_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    odontograms = await db.odontograms.find(
+        {"paciente_id": paciente_id}, {"_id": 0}
+    ).to_list(1000)
+    
+    for odontogram in odontograms:
+        if isinstance(odontogram['created_at'], str):
+            odontogram['created_at'] = datetime.fromisoformat(odontogram['created_at'])
+    
+    return odontograms
+
+@api_router.put("/odontograms/{odontogram_id}", response_model=Odontogram)
+async def update_odontogram(
+    odontogram_id: str,
+    input: OdontogramUpdate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.odontograms.find_one({"id": odontogram_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    
+    update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.odontograms.update_one({"id": odontogram_id}, {"$set": update_data})
+    
+    updated = await db.odontograms.find_one({"id": odontogram_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    
+    return Odontogram(**updated)
+
+@api_router.delete("/odontograms/{odontogram_id}")
+async def delete_odontogram(
+    odontogram_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    result = await db.odontograms.delete_one({"id": odontogram_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    return {"message": "Odontograma eliminado exitosamente"}
+
 # Include router
 app.include_router(api_router)
 
