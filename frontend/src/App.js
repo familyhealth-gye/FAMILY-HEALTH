@@ -364,10 +364,6 @@ function App() {
                 </TabsTrigger>
               </>
             )}
-            <TabsTrigger value="odontograma" data-testid="odontograma-tab">
-              <Activity className="tab-icon" />
-              Odontograma
-            </TabsTrigger>
           </TabsList>
 
           {/* Doctors Tab */}
