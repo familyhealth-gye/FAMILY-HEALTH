@@ -11,8 +11,33 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Estados posibles de los dientes
+const TOOTH_STATES = [
+  { value: "Sano", label: "Sano", color: "#ffffff" },
+  { value: "Caries", label: "Caries", color: "#DC2626" },
+  { value: "Obturación", label: "Obturación", color: "#3B82F6" },
+  { value: "Extracción", label: "Extracción", color: "#000000" },
+  { value: "Corona", label: "Corona", color: "#F59E0B" },
+  { value: "Endodoncia", label: "Endodoncia", color: "#8B5CF6" },
+  { value: "Implante", label: "Implante", color: "#10B981" }
+];
+
 export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [selectedTooth, setSelectedTooth] = useState(null);
+  
+  // Inicializar 32 dientes
+  const initialTeeth = Array.from({ length: 32 }, (_, i) => ({
+    tooth_number: i + 1,
+    estado: "Sano",
+    cara_oclusal: "",
+    cara_vestibular: "",
+    cara_palatina: "",
+    cara_mesial: "",
+    cara_distal: "",
+    observaciones: ""
+  }));
+
   const [form, setForm] = useState({
     motivo_consulta: "",
     dolor_dental: false,
@@ -46,7 +71,7 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
       paladar: "",
       atm: ""
     },
-    odontograma_id: "",
+    dientes: initialTeeth, // Odontograma integrado
     diagnostico: "",
     cie10_codigo: "",
     plan_tratamiento: "",
