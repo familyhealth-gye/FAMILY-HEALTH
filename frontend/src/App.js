@@ -87,7 +87,7 @@ function App() {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     
     try {
-      const [doctorsRes, appointmentsRes, specialtiesRes, categoriesRes, invoicesRes, inventoryRes, paymentsRes, totalsRes, historiesRes, prescriptionsRes] = await Promise.all([
+      const promises = [
         axios.get(`${API}/doctors`, { headers }),
         axios.get(`${API}/appointments`, { headers }),
         axios.get(`${API}/specialties`, { headers }),
@@ -98,17 +98,29 @@ function App() {
         axios.get(`${API}/invoices/monthly-totals`, { headers }),
         axios.get(`${API}/medical-history`, { headers }),
         axios.get(`${API}/prescriptions`, { headers })
-      ]);
-      setDoctors(doctorsRes.data);
-      setAppointments(appointmentsRes.data);
-      setSpecialties(specialtiesRes.data.specialties);
-      setCategories(categoriesRes.data.categories);
-      setInvoices(invoicesRes.data);
-      setInventory(inventoryRes.data);
-      setDoctorPayments(paymentsRes.data);
-      setMonthlyTotals(totalsRes.data.monthly_totals);
-      setMedicalHistories(historiesRes.data);
-      setPrescriptions(prescriptionsRes.data);
+      ];
+
+      // Only fetch users if admin
+      if (user && user.role === "Administrador") {
+        promises.push(axios.get(`${API}/users`, { headers }));
+      }
+
+      const results = await Promise.all(promises);
+      
+      setDoctors(results[0].data);
+      setAppointments(results[1].data);
+      setSpecialties(results[2].data.specialties);
+      setCategories(results[3].data.categories);
+      setInvoices(results[4].data);
+      setInventory(results[5].data);
+      setDoctorPayments(results[6].data);
+      setMonthlyTotals(results[7].data.monthly_totals);
+      setMedicalHistories(results[8].data);
+      setPrescriptions(results[9].data);
+      
+      if (results[10]) {
+        setUsers(results[10].data);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
       if (error.response?.status === 401) {
