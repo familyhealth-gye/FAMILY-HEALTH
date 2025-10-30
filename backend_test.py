@@ -94,6 +94,31 @@ class BackendTester:
             self.log(f"Authentication error: {e}", "ERROR")
             return False
             
+    def authenticate_as_doctor(self) -> bool:
+        """Authenticate as doctor user for medical history tests"""
+        if "doctor_user" not in self.test_data:
+            self.log("No doctor user available for authentication", "ERROR")
+            return False
+            
+        login_data = {
+            "username": self.test_data["doctor_user"]["username"],
+            "password": self.test_data["doctor_user"]["password"]
+        }
+        
+        try:
+            response = self.make_request("POST", "/auth/login", login_data)
+            if response.status_code == 200:
+                token_data = response.json()
+                self.token = token_data["access_token"]
+                self.log("Doctor authentication successful")
+                return True
+            else:
+                self.log(f"Doctor login failed: {response.status_code} - {response.text}", "ERROR")
+                return False
+        except Exception as e:
+            self.log(f"Doctor authentication error: {e}", "ERROR")
+            return False
+            
     def setup_test_data(self) -> bool:
         """Create necessary test data (doctors, appointments)"""
         self.log("Setting up test data...")
