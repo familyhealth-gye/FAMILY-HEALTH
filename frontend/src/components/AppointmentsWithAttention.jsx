@@ -22,6 +22,7 @@ export const AppointmentsWithAttention = ({
 }) => {
   const [attentionDialog, setAttentionDialog] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]); // Fecha actual por defecto
 
   const handleStartAttention = async (appointment) => {
     try {
@@ -48,13 +49,16 @@ export const AppointmentsWithAttention = ({
   };
 
   // Filter appointments by doctor if user is a doctor
-  const visibleAppointments = user?.role === "Doctor" && user?.doctor_id
+  let visibleAppointments = user?.role === "Doctor" && user?.doctor_id
     ? filteredAppointments.filter(apt => apt.doctor_id === user.doctor_id)
     : filteredAppointments;
 
-  // Sort by estado priority
+  // Filter by date (only show appointments for selected date)
+  visibleAppointments = visibleAppointments.filter(apt => apt.fecha === dateFilter);
+
+  // Sort by estado priority: "En Atención" first to allow recovery
   const sortedAppointments = [...visibleAppointments].sort((a, b) => {
-    const priority = { "Programada": 1, "En Atención": 0, "Pendiente de Pago": 2, "Pagada": 3, "Cancelada": 4 };
+    const priority = { "En Atención": 0, "Programada": 1, "Pendiente de Pago": 2, "Pagada": 3, "Cancelada": 4 };
     return priority[a.estado || "Programada"] - priority[b.estado || "Programada"];
   });
 
