@@ -101,3 +101,177 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Usuario solicitó priorizar:
+  1. Proformas (cotizaciones de tratamientos)
+  2. Odontograma del paciente (usado a diario en odontología)
+  3. Historia Clínica de Odontología
+  
+  Continuó con implementación de estos módulos manteniendo funcionalidad existente.
+
+backend:
+  - task: "Modelos Proformas, Abonos y Odontogramas"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Agregados modelos Pydantic para Proformas (con items, descuentos), Abonos (pagos parciales vinculados a proformas), Odontogramas (32 dientes con estados) y ToothState"
+  
+  - task: "Endpoints API Proformas"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implementados endpoints CRUD completos para proformas: crear, listar, obtener por ID, actualizar estado, eliminar. Calcula subtotales y totales automáticamente"
+  
+  - task: "Endpoints API Abonos"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implementados endpoints para abonos: registrar, listar todos, filtrar por paciente (cédula), actualizar, eliminar"
+  
+  - task: "Endpoints API Odontogramas"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Endpoints para odontogramas: crear, listar, obtener por paciente, actualizar, eliminar"
+  
+  - task: "Modelo Historia Clínica Odontológica"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/medical_history_models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Modelo completo MedicalHistoryOdontology con motivo consulta, dolor dental, antecedentes odontológicos, antecedentes médicos, hábitos, examen intraoral (EstadoDental), diagnóstico, plan tratamiento, medicamentos"
+  
+  - task: "Endpoints Historia Clínica Odontológica"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Endpoints para historia odontológica: crear, listar, obtener por appointment_id"
+
+frontend:
+  - task: "Componente ProformasTab"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/ProformasTab.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Tab completo de proformas con formulario de múltiples items, cálculo automático de subtotales/totales, selección de doctor, gestión de estados (Pendiente/Aceptada/Rechazada/Facturada), búsqueda, eliminación"
+  
+  - task: "Componente AbonosTab"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/AbonosTab.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Tab de abonos con vinculación opcional a proformas, cálculo automático de saldo pendiente, gestión de recibos, tipos de pago, edición, eliminación, totalizador de abonos"
+  
+  - task: "Componente OdontogramaTab"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/OdontogramaTab.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Odontograma interactivo visual con 32 dientes, selección por click, estados coloreados (Sano, Caries, Obturación, Extracción, Corona, Endodoncia, Implante), detalles por diente (caras: oclusal, vestibular, palatina, mesial, distal), leyenda de colores, diagnóstico y tratamiento general"
+  
+  - task: "Componente OdontologiaForm"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/OdontologiaForm.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Formulario completo de historia clínica odontológica: motivo consulta, dolor dental (ubicación, intensidad, tiempo), antecedentes odontológicos (última visita, cepillado, hilo dental), antecedentes médicos (diabetes, hipertensión, embarazo, etc), hábitos (fumador, bruxismo), examen intraoral (higiene, encías, mucosa, lengua, paladar, ATM), diagnóstico, plan tratamiento, procedimientos, materiales, medicamentos, seguimiento"
+  
+  - task: "Integración tabs en App.js"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Agregados 3 nuevos tabs: Proformas (Admin/Recepción), Abonos (Admin/Recepción), Odontograma (todos). Importados íconos Receipt, CreditCard, Activity. TabsContent renderizados condicionalmente según rol"
+  
+  - task: "Integración OdontologiaForm en AppointmentsWithAttention"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/AppointmentsWithAttention.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Formulario de odontología integrado en flujo de atención de citas. Se renderiza cuando especialidad es 'Odontología', al igual que Medicina General y Pediatría"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Proformas Tab - crear, listar, cambiar estados"
+    - "Abonos Tab - registrar, vincular con proformas, calcular saldos"
+    - "Odontograma Tab - interacción visual, selección de dientes, guardado"
+    - "Historia Clínica Odontología - flujo completo desde cita"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Implementación completa de Proformas, Abonos y Odontograma con historia clínica de odontología. Backend con modelos y endpoints, frontend con componentes visuales interactivos. Linting pasado en todos los archivos. Backend reiniciado correctamente."
