@@ -50,6 +50,7 @@ function App() {
   // Appointment form
   const [appointmentDialog, setAppointmentDialog] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [searchingPatient, setSearchingPatient] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState({
     nombre_completo: "",
     cedula: "",
