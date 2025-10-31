@@ -14,6 +14,7 @@ class User(BaseModel):
     nombre_completo: str
     role: str  # "Administrador", "Recepcion", "Doctor"
     doctor_id: Optional[str] = None  # Vincula usuario con doctor del sistema
+    especialidad: Optional[str] = None  # "Odontología", "Medicina General", "Pediatría", etc.
     hashed_password: str
     is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -25,6 +26,7 @@ class UserCreate(BaseModel):
     nombre_completo: str
     role: str
     doctor_id: Optional[str] = None
+    especialidad: Optional[str] = None
     password: str
 
 
