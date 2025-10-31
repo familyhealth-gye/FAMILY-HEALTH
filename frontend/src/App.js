@@ -277,6 +277,7 @@ function App() {
 
     // Si la cédula tiene al menos 10 dígitos, buscar paciente
     if (cedula.length >= 10) {
+      setSearchingPatient(true);
       try {
         // Buscar en todas las citas anteriores
         const response = await axios.get(`${API}/appointments`);
@@ -297,13 +298,14 @@ function App() {
             telefono: patientAppointment.telefono,
             // No autocompletar especialidad ni doctor (puede querer otra especialidad)
           });
-          toast.success(`Paciente encontrado: ${patientAppointment.nombre_completo}`, {
+          toast.success(`✓ Paciente: ${patientAppointment.nombre_completo}`, {
             duration: 2000
           });
         }
       } catch (error) {
         console.error("Error buscando paciente:", error);
       }
+      setSearchingPatient(false);
     }
   };
 
