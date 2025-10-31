@@ -249,14 +249,14 @@ export const UsersTab = ({ users, fetchData, token }) => {
                     <div className="form-field">
                       <Label>Vincular con Doctor (Opcional)</Label>
                       <Select 
-                        value={form.doctor_id} 
-                        onValueChange={(val) => setForm({...form, doctor_id: val})}
+                        value={form.doctor_id || "none"} 
+                        onValueChange={(val) => setForm({...form, doctor_id: val === "none" ? "" : val})}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Sin vincular" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Sin vincular</SelectItem>
+                          <SelectItem value="none">Sin vincular</SelectItem>
                           {doctors.map((doc) => (
                             <SelectItem key={doc.id} value={doc.id}>
                               {doc.nombre} - {doc.especialidad}
