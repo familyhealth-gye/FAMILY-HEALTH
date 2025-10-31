@@ -215,6 +215,57 @@ export const UsersTab = ({ users, fetchData, token }) => {
                   </Select>
                 </div>
 
+                {/* Mostrar selectores solo si el rol es Doctor */}
+                {form.role === "Doctor" && (
+                  <>
+                    <div className="form-field">
+                      <Label>Especialidad *</Label>
+                      <Select 
+                        value={form.especialidad} 
+                        onValueChange={(val) => setForm({...form, especialidad: val})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione especialidad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Medicina General">Medicina General</SelectItem>
+                          <SelectItem value="Odontología">Odontología</SelectItem>
+                          <SelectItem value="Endodoncia">Endodoncia</SelectItem>
+                          <SelectItem value="Ortodoncia">Ortodoncia</SelectItem>
+                          <SelectItem value="Periodoncia">Periodoncia</SelectItem>
+                          <SelectItem value="Pediatría">Pediatría</SelectItem>
+                          <SelectItem value="Nutrición">Nutrición</SelectItem>
+                          <SelectItem value="Psicología">Psicología</SelectItem>
+                          <SelectItem value="Ecografía">Ecografía</SelectItem>
+                          <SelectItem value="Ginecología">Ginecología</SelectItem>
+                          <SelectItem value="Obstetricia">Obstetricia</SelectItem>
+                          <SelectItem value="Laboratorio">Laboratorio</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="form-field">
+                      <Label>Vincular con Doctor (Opcional)</Label>
+                      <Select 
+                        value={form.doctor_id} 
+                        onValueChange={(val) => setForm({...form, doctor_id: val})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sin vincular" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Sin vincular</SelectItem>
+                          {doctors.map((doc) => (
+                            <SelectItem key={doc.id} value={doc.id}>
+                              {doc.nombre} - {doc.especialidad}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+
                 <div className="form-field full-width">
                   <Label>{editingUser ? "Nueva Contraseña (dejar vacío para no cambiar)" : "Contraseña"}</Label>
                   <div style={{ position: 'relative' }}>
