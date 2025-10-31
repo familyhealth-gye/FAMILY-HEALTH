@@ -235,7 +235,7 @@ export const AppointmentsWithAttention = ({
               )}
               
               {selectedAppointment.especialidad === "Odontología" && (
-                <OdontologiaForm
+                <OdontologiaFormSimple
                   appointment={selectedAppointment}
                   token={token}
                   onClose={() => setAttentionDialog(false)}
