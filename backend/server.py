@@ -95,7 +95,9 @@ async def login(credentials: UserLogin):
             "username": user['username'],
             "nombre_completo": user['nombre_completo'],
             "email": user['email'],
-            "role": user['role']
+            "role": user['role'],
+            "doctor_id": user.get('doctor_id'),
+            "especialidad": user.get('especialidad')
         }
     )
 
