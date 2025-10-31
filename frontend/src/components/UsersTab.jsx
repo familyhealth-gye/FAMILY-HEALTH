@@ -67,6 +67,8 @@ export const UsersTab = ({ users, fetchData, token }) => {
       email: user.email,
       nombre_completo: user.nombre_completo,
       role: user.role,
+      especialidad: user.especialidad || "",
+      doctor_id: user.doctor_id || "",
       password: ""
     });
     setDialog(true);
