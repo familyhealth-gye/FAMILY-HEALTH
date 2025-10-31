@@ -269,6 +269,43 @@ function App() {
     setEditingAppointment(null);
   };
 
+  // Buscar paciente por cédula y autocompletar datos
+  const handleCedulaChange = async (cedula) => {
+    // Actualizar cédula
+    setAppointmentForm({...appointmentForm, cedula});
+
+    // Si la cédula tiene al menos 10 dígitos, buscar paciente
+    if (cedula.length >= 10) {
+      try {
+        // Buscar en todas las citas anteriores
+        const response = await axios.get(`${API}/appointments`);
+        const allAppointments = response.data;
+        
+        // Encontrar la última cita de este paciente
+        const patientAppointment = allAppointments
+          .filter(apt => apt.cedula === cedula)
+          .sort((a, b) => new Date(b.created_at || b.fecha) - new Date(a.created_at || a.fecha))[0];
+        
+        if (patientAppointment) {
+          // Autocompletar datos del paciente
+          setAppointmentForm({
+            ...appointmentForm,
+            cedula,
+            nombre_completo: patientAppointment.nombre_completo,
+            edad: patientAppointment.edad.toString(),
+            telefono: patientAppointment.telefono,
+            // No autocompletar especialidad ni doctor (puede querer otra especialidad)
+          });
+          toast.success(`Paciente encontrado: ${patientAppointment.nombre_completo}`, {
+            duration: 2000
+          });
+        }
+      } catch (error) {
+        console.error("Error buscando paciente:", error);
+      }
+    }
+  };
+
   const openWhatsApp = (telefono) => {
     const phone = telefono.replace(/[^0-9]/g, "");
     const url = `https://wa.me/593${phone}`;
