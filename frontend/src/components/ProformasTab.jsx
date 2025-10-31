@@ -454,7 +454,27 @@ export const ProformasTab = ({ token }) => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(`${API}/proformas/${proforma.id}/pdf`, '_blank')}
+                        onClick={async () => {
+                          try {
+                            const response = await axios.get(
+                              `${API}/proformas/${proforma.id}/pdf`,
+                              { 
+                                headers: { Authorization: `Bearer ${token}` },
+                                responseType: 'blob'
+                              }
+                            );
+                            const url = window.URL.createObjectURL(new Blob([response.data]));
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.setAttribute('download', `proforma_${proforma.numero_proforma}.pdf`);
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            toast.success("Proforma descargada");
+                          } catch (error) {
+                            toast.error("Error al descargar proforma");
+                          }
+                        }}
                         style={{ marginRight: '0.5rem' }}
                       >
                         <FileText className="button-icon" />
