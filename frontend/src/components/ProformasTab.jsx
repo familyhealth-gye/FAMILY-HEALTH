@@ -194,7 +194,7 @@ export const ProformasTab = ({ token }) => {
               Nueva Proforma
             </Button>
           </DialogTrigger>
-          <DialogContent className="dialog-scrollable max-w-4xl">
+          <DialogContent className="dialog-scrollable max-w-4xl" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <DialogHeader>
               <DialogTitle>Nueva Proforma</DialogTitle>
             </DialogHeader>
