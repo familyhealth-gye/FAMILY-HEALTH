@@ -984,6 +984,96 @@ async def delete_proforma(
         raise HTTPException(status_code=404, detail="Proforma no encontrada")
     return {"message": "Proforma eliminada exitosamente"}
 
+@api_router.get("/proformas/{proforma_id}/pdf")
+async def get_proforma_pdf(
+    proforma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    from fastapi.responses import Response
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import inch
+    from io import BytesIO
+    
+    proforma = await db.proformas.find_one({"id": proforma_id}, {"_id": 0})
+    if not proforma:
+        raise HTTPException(status_code=404, detail="Proforma no encontrada")
+    
+    # Crear PDF
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    
+    # Logo
+    try:
+        c.drawImage("/app/frontend/public/logo.png", 50, height - 100, width=100, height=50, preserveAspectRatio=True)
+    except:
+        pass
+    
+    # Título
+    c.setFont("Helvetica-Bold", 20)
+    c.drawString(200, height - 70, "PROFORMA")
+    
+    # Info
+    c.setFont("Helvetica", 10)
+    y = height - 120
+    c.drawString(50, y, f"N°: {proforma['numero_proforma']}")
+    c.drawString(50, y-15, f"Fecha: {proforma['fecha_emision']}")
+    c.drawString(50, y-30, f"Válida por: {proforma['validez_dias']} días")
+    
+    # Cliente
+    y -= 60
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, "CLIENTE:")
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y-15, proforma['paciente_nombre'])
+    c.drawString(50, y-30, f"CI: {proforma['paciente_cedula']}")
+    c.drawString(50, y-45, f"Teléfono: {proforma['paciente_telefono']}")
+    
+    # Items
+    y -= 80
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(50, y, "DESCRIPCIÓN")
+    c.drawString(350, y, "CANT.")
+    c.drawString(420, y, "P. UNIT")
+    c.drawString(500, y, "SUBTOTAL")
+    
+    c.line(50, y-5, width-50, y-5)
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    for item in proforma['items']:
+        c.drawString(50, y, item['descripcion'][:40])
+        c.drawString(350, y, str(item['cantidad']))
+        c.drawString(420, y, f"${item['precio_unitario']:.2f}")
+        c.drawString(500, y, f"${item['subtotal']:.2f}")
+        y -= 15
+    
+    # Totales
+    y -= 10
+    c.line(400, y, width-50, y)
+    y -= 20
+    c.drawString(420, y, "Subtotal:")
+    c.drawString(500, y, f"${proforma['subtotal']:.2f}")
+    y -= 15
+    c.drawString(420, y, "Descuento:")
+    c.drawString(500, y, f"-${proforma['descuento']:.2f}")
+    y -= 15
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(420, y, "TOTAL:")
+    c.drawString(500, y, f"${proforma['total']:.2f}")
+    
+    # Observaciones
+    if proforma.get('observaciones'):
+        y -= 40
+        c.setFont("Helvetica", 9)
+        c.drawString(50, y, f"Observaciones: {proforma['observaciones']}")
+    
+    c.save()
+    buffer.seek(0)
+    
+    return Response(content=buffer.getvalue(), media_type="application/pdf")
+
 # ========== ABONO ENDPOINTS ==========
 
 @api_router.post("/abonos", response_model=Abono)
