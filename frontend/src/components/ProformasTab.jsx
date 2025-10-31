@@ -452,6 +452,15 @@ export const ProformasTab = ({ token }) => {
                   <td>
                     <div className="actions-cell">
                       <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(`${API}/proformas/${proforma.id}/pdf`, '_blank')}
+                        style={{ marginRight: '0.5rem' }}
+                      >
+                        <FileText className="button-icon" />
+                        Ver PDF
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(proforma.id)}
