@@ -20,9 +20,12 @@ export const UsersTab = ({ users, fetchData, token }) => {
     email: "",
     nombre_completo: "",
     role: "Recepcion",
+    especialidad: "",
+    doctor_id: "",
     password: ""
   });
   const [loading, setLoading] = useState(false);
+  const [doctors, setDoctors] = useState([]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
