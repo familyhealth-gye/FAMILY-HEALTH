@@ -318,6 +318,7 @@ export const UsersTab = ({ users, fetchData, token }) => {
               <th>Usuario</th>
               <th>Email</th>
               <th>Rol</th>
+              <th>Especialidad</th>
               <th>Estado</th>
               <th className="actions-column">Acciones</th>
             </tr>
