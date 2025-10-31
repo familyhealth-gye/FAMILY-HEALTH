@@ -92,11 +92,28 @@ export const UsersTab = ({ users, fetchData, token }) => {
       email: "",
       nombre_completo: "",
       role: "Recepcion",
+      especialidad: "",
+      doctor_id: "",
       password: ""
     });
     setEditingUser(null);
     setShowPassword(false);
   };
+
+  // Cargar doctores
+  const fetchDoctors = async () => {
+    try {
+      const response = await axios.get(`${API}/doctors`);
+      setDoctors(response.data);
+    } catch (error) {
+      console.error("Error loading doctors:", error);
+    }
+  };
+
+  // useEffect para cargar doctores al montar
+  useState(() => {
+    fetchDoctors();
+  }, []);
 
   return (
     <div className="tab-content">
