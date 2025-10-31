@@ -335,6 +335,15 @@ export const UsersTab = ({ users, fetchData, token }) => {
                   </span>
                 </td>
                 <td>
+                  {user.role === 'Doctor' && user.especialidad ? (
+                    <span className="badge" style={{background: '#E0F2FE', color: '#0C4A6E'}}>
+                      {user.especialidad}
+                    </span>
+                  ) : (
+                    <span style={{color: '#94A3B8'}}>-</span>
+                  )}
+                </td>
+                <td>
                   <span className={user.is_active ? "status-active" : "status-inactive"}>
                     {user.is_active ? "Activo" : "Inactivo"}
                   </span>
