@@ -113,7 +113,7 @@ export const UsersTab = ({ users, fetchData, token }) => {
   };
 
   // useEffect para cargar doctores al montar
-  useState(() => {
+  useEffect(() => {
     fetchDoctors();
   }, []);
 
