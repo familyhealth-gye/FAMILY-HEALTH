@@ -562,7 +562,8 @@ function App() {
                         <Input
                           data-testid="appointment-cedula-input"
                           value={appointmentForm.cedula}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, cedula: e.target.value})}
+                          onChange={(e) => handleCedulaChange(e.target.value)}
+                          placeholder="Ingrese cédula - se autocompletará si existe"
                           required
                         />
                       </div>
