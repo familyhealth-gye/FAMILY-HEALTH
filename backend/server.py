@@ -201,6 +201,7 @@ async def create_users_from_doctors(
             "nombre_completo": doctor['nombre'],
             "role": "Doctor",
             "doctor_id": doctor['id'],
+            "especialidad": doctor.get('especialidad', 'General'),  # Copiar especialidad del doctor
             "hashed_password": get_password_hash("cambiar123"),
             "is_active": True
         }
@@ -214,7 +215,8 @@ async def create_users_from_doctors(
             "doctor": doctor['nombre'],
             "username": username,
             "password": "cambiar123",
-            "doctor_id": doctor['id']
+            "doctor_id": doctor['id'],
+            "especialidad": doctor.get('especialidad', 'General')
         })
     
     return {
