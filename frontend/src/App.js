@@ -561,14 +561,28 @@ function App() {
                         />
                       </div>
                       <div className="form-field">
-                        <Label>Cédula</Label>
-                        <Input
-                          data-testid="appointment-cedula-input"
-                          value={appointmentForm.cedula}
-                          onChange={(e) => handleCedulaChange(e.target.value)}
-                          placeholder="Ingrese cédula - se autocompletará si existe"
-                          required
-                        />
+                        <Label>Cédula *</Label>
+                        <div style={{ position: 'relative' }}>
+                          <Input
+                            data-testid="appointment-cedula-input"
+                            value={appointmentForm.cedula}
+                            onChange={(e) => handleCedulaChange(e.target.value)}
+                            placeholder="Ingrese cédula (se autocompletará si existe)"
+                            required
+                          />
+                          {searchingPatient && (
+                            <div style={{ 
+                              position: 'absolute', 
+                              right: '10px', 
+                              top: '50%', 
+                              transform: 'translateY(-50%)',
+                              color: '#00a8cc',
+                              fontSize: '0.875rem'
+                            }}>
+                              Buscando...
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="form-field">
                         <Label>Edad</Label>
