@@ -215,7 +215,7 @@ export const AbonosTab = ({ token }) => {
                         <SelectValue placeholder="Sin vincular" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Sin vincular</SelectItem>
+                        <SelectItem value="none">Sin vincular</SelectItem>
                         {proformas.map((proforma) => (
                           <SelectItem key={proforma.id} value={proforma.id}>
                             {proforma.numero_proforma} - {proforma.paciente_nombre} (${proforma.total})
