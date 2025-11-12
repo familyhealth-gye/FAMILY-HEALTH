@@ -12,6 +12,15 @@ import csv
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from fastapi import FastAPI
+
+app = FastAPI()
+
+# Ruta para el health check
+@app.get("/healthz")
+def health_check():
+    return {"status": "ok"}
+
 # Import local modules
 from models import (
     User, UserCreate, UserLogin, UserResponse,
@@ -1242,9 +1251,9 @@ logger = logging.getLogger(__name__)
 async def shutdown_db_client():
     client.close()
     
-import os
-import uvicorn
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("server:app", host="0.0.0.0", port=port)
+    import uvicorn
+    import os
+
+    port = int(os.environ.get("PORT", 8000))  # Render define el puerto en la variable PORT
+    uvicorn.run(app, host="0.0.0.0", port=port)
