@@ -17,8 +17,8 @@ from fastapi import FastAPI
 app = FastAPI()
 
 @app.get("/")
-def root():
-    return {"status": "ok", "message": "Servidor Family Health activo"}
+def read_root():
+    return {"message": "API Family Health funcionando correctamente 🚀"}
 
 # Ruta para el health check
 @app.get("/healthz")
