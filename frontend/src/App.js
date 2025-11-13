@@ -54,6 +54,7 @@ function App() {
   const [appointmentForm, setAppointmentForm] = useState({
     nombre_completo: "",
     cedula: "",
+    fecha_nacimiento: "",
     edad: "",
     telefono: "",
     especialidad: "",
