@@ -48,6 +48,7 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
     motivo_consulta: "",
     diagnostico: "",
     tratamiento_realizado: "",
+    medicamentos: [{ nombre: "", dosis: "", via: "", frecuencia: "", duracion: "", indicaciones: "" }],
     observaciones: ""
   });
 
