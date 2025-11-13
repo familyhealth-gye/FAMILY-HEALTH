@@ -377,6 +377,123 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
               placeholder="Procedimientos realizados"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Receta Médica */}
+      <div className="form-section">
+        <h3 className="section-title-small">Receta Médica</h3>
+        <div className="medications-list">
+          {form.medicamentos.map((med, idx) => (
+            <div key={idx} className="medication-item">
+              <div className="form-grid">
+                <div className="form-field">
+                  <Label>Medicamento</Label>
+                  <Input
+                    value={med.nombre}
+                    onChange={(e) => {
+                      const newMeds = [...form.medicamentos];
+                      newMeds[idx].nombre = e.target.value;
+                      setForm({...form, medicamentos: newMeds});
+                    }}
+                    placeholder="Ej: Ibuprofeno"
+                  />
+                </div>
+                <div className="form-field">
+                  <Label>Dosis</Label>
+                  <Input
+                    value={med.dosis}
+                    onChange={(e) => {
+                      const newMeds = [...form.medicamentos];
+                      newMeds[idx].dosis = e.target.value;
+                      setForm({...form, medicamentos: newMeds});
+                    }}
+                    placeholder="Ej: 400mg"
+                  />
+                </div>
+                <div className="form-field">
+                  <Label>Vía</Label>
+                  <Input
+                    value={med.via}
+                    onChange={(e) => {
+                      const newMeds = [...form.medicamentos];
+                      newMeds[idx].via = e.target.value;
+                      setForm({...form, medicamentos: newMeds});
+                    }}
+                    placeholder="Oral/IV"
+                  />
+                </div>
+                <div className="form-field">
+                  <Label>Frecuencia</Label>
+                  <Input
+                    value={med.frecuencia}
+                    onChange={(e) => {
+                      const newMeds = [...form.medicamentos];
+                      newMeds[idx].frecuencia = e.target.value;
+                      setForm({...form, medicamentos: newMeds});
+                    }}
+                    placeholder="Cada 8h"
+                  />
+                </div>
+                <div className="form-field">
+                  <Label>Duración</Label>
+                  <Input
+                    value={med.duracion}
+                    onChange={(e) => {
+                      const newMeds = [...form.medicamentos];
+                      newMeds[idx].duracion = e.target.value;
+                      setForm({...form, medicamentos: newMeds});
+                    }}
+                    placeholder="5 días"
+                  />
+                </div>
+                <div className="form-field full-width">
+                  <Label>Indicaciones</Label>
+                  <Input
+                    value={med.indicaciones}
+                    onChange={(e) => {
+                      const newMeds = [...form.medicamentos];
+                      newMeds[idx].indicaciones = e.target.value;
+                      setForm({...form, medicamentos: newMeds});
+                    }}
+                    placeholder="Con alimentos"
+                  />
+                </div>
+              </div>
+              {form.medicamentos.length > 1 && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    const newMeds = form.medicamentos.filter((_, i) => i !== idx);
+                    setForm({...form, medicamentos: newMeds});
+                  }}
+                  style={{ marginTop: '0.5rem' }}
+                >
+                  Eliminar
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setForm({
+                ...form,
+                medicamentos: [...form.medicamentos, { nombre: "", dosis: "", via: "", frecuencia: "", duracion: "", indicaciones: "" }]
+              });
+            }}
+            style={{ marginTop: '0.5rem' }}
+          >
+            + Agregar Medicamento
+          </Button>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <div className="form-grid">
           <div className="form-field full-width">
             <Label>Observaciones</Label>
             <Textarea
