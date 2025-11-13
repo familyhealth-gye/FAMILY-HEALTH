@@ -104,6 +104,9 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
         motivo_consulta: form.motivo_consulta,
         diagnostico: form.diagnostico,
         plan_tratamiento: form.tratamiento_realizado,
+        medicamentos: form.medicamentos.filter(m => m.nombre).map(m => 
+          `${m.nombre} ${m.dosis} ${m.via} - ${m.frecuencia} x ${m.duracion}. ${m.indicaciones}`
+        ).join('; '),
         observaciones: form.observaciones,
         dolor_dental: false,
         diabetes: false,
@@ -129,6 +132,28 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
       await axios.post(`${API}/medical-history/odontology`, historyData, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      // Crear receta si hay medicamentos
+      const medsFiltrados = form.medicamentos.filter(m => m.nombre);
+      if (medsFiltrados.length > 0) {
+        const recetaData = {
+          appointment_id: appointment.id,
+          diagnostico: form.diagnostico,
+          cie10_codigo: "",
+          medications: medsFiltrados.map(m => ({
+            nombre: m.nombre,
+            dosis: m.dosis,
+            via: m.via,
+            frecuencia: m.frecuencia,
+            duracion: m.duracion
+          })),
+          indicaciones: medsFiltrados.map(m => m.indicaciones).join('. ')
+        };
+
+        await axios.post(`${API}/prescriptions`, recetaData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
 
       toast.success("Historia odontológica guardada exitosamente");
       onSuccess();
