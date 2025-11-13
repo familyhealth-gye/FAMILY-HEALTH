@@ -23,7 +23,7 @@ import { ProformasTab } from "@/components/ProformasTab";
 import { AbonosTab } from "@/components/AbonosTab";
 import { Login } from "@/pages/Login";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = "https://family-health.onrender.com/";
 const API = `${BACKEND_URL}/api`;
 
 function App() {
