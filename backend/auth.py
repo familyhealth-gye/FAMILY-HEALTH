@@ -7,6 +7,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
 # Security
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "family-health-secret-key-2025")
 ALGORITHM = "HS256"
