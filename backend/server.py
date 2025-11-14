@@ -11,6 +11,8 @@ import io
 import csv
 from collections import defaultdict
 from datetime import datetime, timezone
+from auth import UserLogin, Token, verify_password, create_access_token
+from database import db
 
 from fastapi import FastAPI
 
@@ -86,31 +88,49 @@ async def register(user_input: UserCreate):
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"username": credentials.username}, {"_id": 0})
+    # Buscar usuario por cedula O username
+    user = await db.users.find_one(
+        {"$or": [
+            {"username": credentials.username},
+            {"cedula": credentials.username}
+        ]},
+        {"_id": 0}
+    )
     
-    if not user or not verify_password(credentials.password, user['hashed_password']):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+
+    # Detectar el nombre real del campo de contraseña
+    stored_password = user.get("hashed_password") or user.get("password") or user.get("password_hash")
+
+    if not stored_password:
+        raise HTTPException(status_code=500, detail="Error interno: contraseña no encontrada")
+
+    # Verificar contraseña
+    if not verify_password(credentials.password, stored_password):
+        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+
+    # Verificar si está activo
     if not user.get('is_active', True):
         raise HTTPException(status_code=403, detail="Usuario inactivo")
-    
+
+    # Crear token
     access_token = create_access_token(
-        data={"sub": user['username'], "role": user['role']}
+        data={"sub": user.get("username") or user.get("cedula"),
+              "role": user['role']}
     )
-    
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        user={
-            "id": user['id'],
-            "username": user['username'],
-            "nombre_completo": user['nombre_completo'],
-            "email": user['email'],
-            "role": user['role'],
-            "doctor_id": user.get('doctor_id'),
-            "especialidad": user.get('especialidad')
+
+    # RETURN OBLIGATORIO
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "username": user.get("username"),
+            "cedula": user.get("cedula"),
+            "role": user["role"],
+            "nombre": user.get("nombre")
         }
-    )
+    }
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_current_user_info(current_user: TokenData = Depends(get_current_user)):
