@@ -11,10 +11,6 @@ import io
 import csv
 from collections import defaultdict
 from datetime import datetime, timezone
-from auth import UserLogin, Token, verify_password, create_access_token
-from database import db
-
-from fastapi import FastAPI
 
 app = FastAPI()
 
