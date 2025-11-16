@@ -29,7 +29,7 @@ def health_check():
 
 # Import local modules
 from models import (
-    User, UserCreate, UserLogin, UserResponse,
+    User, UserCreate, UserResponse,
     MedicalHistory, MedicalHistoryCreate, MedicalHistoryUpdate,
     Prescription, PrescriptionCreate, Medication,
     Doctor, DoctorCreate, DoctorUpdate,
@@ -49,7 +49,8 @@ from medical_history_models import (
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
-    get_current_user, require_role, Token, TokenData
+    get_current_user, require_role, Token, TokenData, UserLogin
+)
 )
 from pdf_generator import generate_prescription_pdf
 
