@@ -51,7 +51,6 @@ from auth import (
     get_password_hash, verify_password, create_access_token,
     get_current_user, require_role, Token, TokenData, UserLogin
 )
-)
 from pdf_generator import generate_prescription_pdf
 
 ROOT_DIR = Path(__file__).parent
