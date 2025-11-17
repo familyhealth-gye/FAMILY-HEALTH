@@ -54,7 +54,16 @@ load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-client = AsyncIOMotorClient(mongo_url)
+
+# Para MongoDB Atlas, agregar parámetros SSL
+if 'mongodb+srv' in mongo_url or 'mongodb.net' in mongo_url:
+    if '?' not in mongo_url:
+        mongo_url += '?'
+    else:
+        mongo_url += '&'
+    mongo_url += 'tls=true&tlsAllowInvalidCertificates=true'
+
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
 db = client[os.environ.get('DB_NAME', 'familyhealth')]
 
 api_router = APIRouter(prefix="/api")
