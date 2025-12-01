@@ -1267,6 +1267,10 @@ async def debug_db():
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+@api_router.get("/debug/dbname")
+async def debug_db_name():
+    return {"db_name_connected": db.name}
+
 app.include_router(api_router)
 
 app.add_middleware(
