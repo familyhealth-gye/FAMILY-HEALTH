@@ -1257,7 +1257,16 @@ async def delete_odontogram(
         raise HTTPException(status_code=404, detail="Odontograma no encontrado")
     return {"message": "Odontograma eliminado exitosamente"}
 
+
 # Include router
+@api_router.get("/debug/db")
+async def debug_db():
+    try:
+        count = await db.users.count_documents({})
+        return {"ok": True, "users": count}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -1284,3 +1293,4 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 8000))  # Render define el puerto en la variable PORT
     uvicorn.run(app, host="0.0.0.0", port=port)
+    
