@@ -53,22 +53,27 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
-# FORZAR LOCAL PARA TESTING - Cambiar en producción
-mongo_url = 'mongodb://localhost:27017'
-# mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 
-# Para MongoDB Atlas, agregar parámetros SSL
-# if 'mongodb+srv' in mongo_url or 'mongodb.net' in mongo_url:
-#     if '?' not in mongo_url:
-#         mongo_url += '?'
-#     else:
-#         mongo_url += '&'
-#     mongo_url += 'tls=true&tlsAllowInvalidCertificates=true'
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+from dotenv import load_dotenv
 
-client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
-db = client[os.environ.get('DB_NAME', 'familyhealth')]
+load_dotenv()
 
-api_router = APIRouter(prefix="/api")
+# Detectar entorno: si existe MONGO_URL en el .env → usar Atlas (Render)
+# Si no → usar Mongo local para Emergent
+if "MONGO_URL" in os.environ and os.environ["MONGO_URL"].startswith("mongodb+srv"):
+    mongo_url = os.environ["MONGO_URL"]  # Render → Atlas
+else:
+    mongo_url = "mongodb://localhost:27017"  # Emergent Preview
+
+# Parámetros extra solo para Atlas
+extra_params = {}
+if mongo_url.startswith("mongodb+srv"):
+    extra_params = dict(tls=True, tlsAllowInvalidCertificates=True)
+
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000, **extra_params)
+db = client[os.environ.get("DB_NAME", "familyhealth")]
 
 # ========== AUTH ENDPOINTS ==========
 
