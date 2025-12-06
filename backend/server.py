@@ -13,6 +13,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 app = FastAPI()
+api_router = APIRouter()
 
 @app.get("/")
 def read_root():
@@ -1305,3 +1306,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))  # Render define el puerto en la variable PORT
     uvicorn.run(app, host="0.0.0.0", port=port)
     
+app.include_router(api_router)    
