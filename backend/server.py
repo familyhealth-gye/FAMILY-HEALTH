@@ -53,28 +53,11 @@ from pdf_generator import generate_prescription_pdf
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-from dotenv import load_dotenv
-
+# MongoDB connection - FORZAR LOCAL PARA EMERGENT
 load_dotenv()
-
-# Detectar entorno: si existe MONGO_URL en el .env → usar Atlas (Render)
-# Si no → usar Mongo local para Emergent
-if "MONGO_URL" in os.environ and os.environ["MONGO_URL"].startswith("mongodb+srv"):
-    mongo_url = os.environ["MONGO_URL"]  # Render → Atlas
-else:
-    mongo_url = "mongodb://localhost:27017"  # Emergent Preview
-
-# Parámetros extra solo para Atlas
-extra_params = {}
-if mongo_url.startswith("mongodb+srv"):
-    extra_params = dict(tls=True, tlsAllowInvalidCertificates=True)
-
-client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000, **extra_params)
-db = client[os.environ.get("DB_NAME", "familyhealth")]
+mongo_url = 'mongodb://localhost:27017'
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+db = client['familyhealth']
 
 # ========== AUTH ENDPOINTS ==========
 
