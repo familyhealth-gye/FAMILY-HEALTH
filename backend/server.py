@@ -53,11 +53,12 @@ from pdf_generator import generate_prescription_pdf
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection - FORZAR LOCAL PARA EMERGENT
+# MongoDB connection - 100% LOCAL
 load_dotenv()
-mongo_url = 'mongodb://localhost:27017'
-client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
-db = client['familyhealth']
+MONGO_URL = "mongodb://localhost:27017"
+DB_NAME = "medical_app"
+client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+db = client[DB_NAME]
 
 # ========== AUTH ENDPOINTS ==========
 
