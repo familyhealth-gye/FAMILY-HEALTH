@@ -13,7 +13,18 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 app = FastAPI()
-api_router = APIRouter()
+
+# CORS - DEBE IR PRIMERO
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["http://localhost:3000", "http://localhost:8001", "http://127.0.0.1:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# API Router con prefijo
+api_router = APIRouter(prefix="/api")
 
 @app.get("/")
 def read_root():
