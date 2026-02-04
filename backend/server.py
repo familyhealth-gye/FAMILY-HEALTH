@@ -48,7 +48,8 @@ from models import (
     DoctorPayment, DoctorPaymentCreate, DoctorPaymentUpdate,
     Proforma, ProformaCreate, ProformaUpdate, ProformaItem,
     Abono, AbonoCreate, AbonoUpdate,
-    Odontogram, OdontogramCreate, OdontogramUpdate, ToothState
+    Odontogram, OdontogramCreate, OdontogramUpdate, ToothState,
+    Especialidad, EspecialidadCreate
 )
 from medical_history_models import (
     MedicalHistoryGeneral, MedicalHistoryGeneralCreate,
