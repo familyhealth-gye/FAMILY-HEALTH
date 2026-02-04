@@ -400,6 +400,23 @@ class AbonoUpdate(BaseModel):
     observaciones: Optional[str] = None
 
 
+# ========== ESPECIALIDAD MODELS ==========
+class Especialidad(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nombre: str
+    descripcion: Optional[str] = ""
+    activa: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EspecialidadCreate(BaseModel):
+    nombre: str
+    descripcion: Optional[str] = ""
+    activa: bool = True
+
+
 # ========== ODONTOGRAM MODELS ==========
 class ToothState(BaseModel):
     tooth_number: int  # 1-32
