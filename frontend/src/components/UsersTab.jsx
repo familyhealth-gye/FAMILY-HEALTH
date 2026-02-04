@@ -229,56 +229,37 @@ export const UsersTab = ({ users, fetchData, token }) => {
                   </Select>
                 </div>
 
-                {/* Mostrar selectores solo si el rol es Doctor */}
+                {/* Mostrar selector de especialidad solo si el rol es Doctor */}
                 {form.role === "Doctor" && (
-                  <>
-                    <div className="form-field">
-                      <Label>Especialidad *</Label>
-                      <Select 
-                        value={form.especialidad} 
-                        onValueChange={(val) => setForm({...form, especialidad: val})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione especialidad" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {especialidades.length > 0 ? (
-                            especialidades.filter(esp => esp.activa).map((esp) => (
-                              <SelectItem key={esp.id} value={esp.nombre}>
-                                {esp.nombre}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <>
-                              <SelectItem value="Medicina General">Medicina General</SelectItem>
-                              <SelectItem value="Odontología">Odontología</SelectItem>
-                              <SelectItem value="Pediatría">Pediatría</SelectItem>
-                            </>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="form-field">
-                      <Label>Vincular con Doctor (Opcional)</Label>
-                      <Select 
-                        value={form.doctor_id || "none"} 
-                        onValueChange={(val) => setForm({...form, doctor_id: val === "none" ? "" : val})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sin vincular" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Sin vincular</SelectItem>
-                          {doctors.map((doc) => (
-                            <SelectItem key={doc.id} value={doc.id}>
-                              {doc.nombre} - {doc.especialidad}
+                  <div className="form-field">
+                    <Label>Especialidad *</Label>
+                    <Select 
+                      value={form.especialidad} 
+                      onValueChange={(val) => setForm({...form, especialidad: val})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione especialidad" />
+                      </SelectTrigger>
+                      <SelectContent style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        {especialidades.length > 0 ? (
+                          especialidades.filter(esp => esp.activa).map((esp) => (
+                            <SelectItem key={esp.id} value={esp.nombre}>
+                              {esp.nombre}
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </>
+                          ))
+                        ) : (
+                          <>
+                            <SelectItem value="Medicina General">Medicina General</SelectItem>
+                            <SelectItem value="Odontología">Odontología</SelectItem>
+                            <SelectItem value="Pediatría">Pediatría</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '4px' }}>
+                      Al guardar se creará automáticamente el doctor vinculado
+                    </p>
+                  </div>
                 )}
 
                 <div className="form-field full-width">
