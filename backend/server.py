@@ -267,6 +267,63 @@ async def create_users_from_doctors(
         "message": f"Se crearon {len(created_users)} usuarios. {len(skipped_doctors)} doctores ya tenían usuario."
     }
 
+# ========== ESPECIALIDADES ENDPOINTS ==========
+
+@api_router.get("/especialidades", response_model=List[Especialidad])
+async def get_especialidades():
+    """Obtener todas las especialidades (sin autenticación para facilitar)"""
+    especialidades = await db.especialidades.find({}, {"_id": 0}).to_list(1000)
+    for esp in especialidades:
+        if isinstance(esp['created_at'], str):
+            esp['created_at'] = datetime.fromisoformat(esp['created_at'])
+    return especialidades
+
+@api_router.post("/especialidades", response_model=Especialidad)
+async def create_especialidad(
+    input: EspecialidadCreate,
+    current_user: TokenData = Depends(require_role("Administrador"))
+):
+    """Crear especialidad (solo admin)"""
+    esp_obj = Especialidad(**input.model_dump())
+    doc = esp_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.especialidades.insert_one(doc)
+    return esp_obj
+
+@api_router.post("/especialidades/seed")
+async def seed_especialidades(
+    current_user: TokenData = Depends(require_role("Administrador"))
+):
+    """Crear especialidades iniciales"""
+    especialidades_base = [
+        {"nombre": "Medicina General", "descripcion": "Atención médica general"},
+        {"nombre": "Odontología", "descripcion": "Salud bucal y dental"},
+        {"nombre": "Endodoncia", "descripcion": "Tratamiento de conductos"},
+        {"nombre": "Ortodoncia", "descripcion": "Corrección de dientes y mandíbula"},
+        {"nombre": "Periodoncia", "descripcion": "Tratamiento de encías"},
+        {"nombre": "Pediatría", "descripcion": "Atención infantil"},
+        {"nombre": "Nutrición", "descripcion": "Asesoramiento nutricional"},
+        {"nombre": "Psicología", "descripción": "Salud mental"},
+        {"nombre": "Ecografía", "descripcion": "Diagnóstico por imagen"},
+        {"nombre": "Ginecología", "descripcion": "Salud femenina"},
+        {"nombre": "Obstetricia", "descripcion": "Embarazo y parto"},
+        {"nombre": "Laboratorio", "descripcion": "Análisis clínicos"}
+    ]
+    
+    # Limpiar existentes
+    await db.especialidades.delete_many({})
+    
+    created = []
+    for esp_data in especialidades_base:
+        esp_obj = Especialidad(**esp_data, activa=True)
+        doc = esp_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.especialidades.insert_one(doc)
+        created.append(esp_data['nombre'])
+    
+    return {"message": f"Creadas {len(created)} especialidades", "especialidades": created}
+
 # ========== MEDICAL HISTORY ENDPOINTS ==========
 
 @api_router.post("/medical-history", response_model=MedicalHistory)
