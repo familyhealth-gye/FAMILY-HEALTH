@@ -87,6 +87,23 @@ async def register(user_input: UserCreate):
     user_dict.pop('password')
     user_dict['hashed_password'] = hashed_password
     
+    # Si es Doctor y no tiene doctor_id, crear automáticamente el doctor
+    if user_dict.get('role') == 'Doctor' and not user_dict.get('doctor_id'):
+        doctor_id = str(uuid.uuid4())
+        doctor_dict = {
+            "id": doctor_id,
+            "nombre": user_dict['nombre_completo'],
+            "especialidad": user_dict.get('especialidad', 'General'),
+            "subespecialidad": "",
+            "porcentaje": 50.0,  # Por defecto 50%
+            "telefono": "",
+            "email": user_dict['email'],
+            "cedula": "",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.doctors.insert_one(doctor_dict)
+        user_dict['doctor_id'] = doctor_id
+    
     user_obj = User(**user_dict)
     doc = user_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
