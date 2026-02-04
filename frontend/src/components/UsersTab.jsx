@@ -242,18 +242,19 @@ export const UsersTab = ({ users, fetchData, token }) => {
                           <SelectValue placeholder="Seleccione especialidad" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Medicina General">Medicina General</SelectItem>
-                          <SelectItem value="Odontología">Odontología</SelectItem>
-                          <SelectItem value="Endodoncia">Endodoncia</SelectItem>
-                          <SelectItem value="Ortodoncia">Ortodoncia</SelectItem>
-                          <SelectItem value="Periodoncia">Periodoncia</SelectItem>
-                          <SelectItem value="Pediatría">Pediatría</SelectItem>
-                          <SelectItem value="Nutrición">Nutrición</SelectItem>
-                          <SelectItem value="Psicología">Psicología</SelectItem>
-                          <SelectItem value="Ecografía">Ecografía</SelectItem>
-                          <SelectItem value="Ginecología">Ginecología</SelectItem>
-                          <SelectItem value="Obstetricia">Obstetricia</SelectItem>
-                          <SelectItem value="Laboratorio">Laboratorio</SelectItem>
+                          {especialidades.length > 0 ? (
+                            especialidades.filter(esp => esp.activa).map((esp) => (
+                              <SelectItem key={esp.id} value={esp.nombre}>
+                                {esp.nombre}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <>
+                              <SelectItem value="Medicina General">Medicina General</SelectItem>
+                              <SelectItem value="Odontología">Odontología</SelectItem>
+                              <SelectItem value="Pediatría">Pediatría</SelectItem>
+                            </>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
