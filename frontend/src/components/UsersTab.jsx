@@ -30,6 +30,13 @@ export const UsersTab = ({ users, fetchData, token }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validación: si es Doctor, especialidad es requerida
+    if (form.role === "Doctor" && !form.especialidad) {
+      toast.error("Debe seleccionar una especialidad para el Doctor");
+      return;
+    }
+    
     setLoading(true);
 
     try {
