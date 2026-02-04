@@ -113,9 +113,20 @@ export const UsersTab = ({ users, fetchData, token }) => {
     }
   };
 
-  // useEffect para cargar doctores al montar
+  // Cargar especialidades desde BD
+  const fetchEspecialidades = async () => {
+    try {
+      const response = await axios.get(`${API}/especialidades`);
+      setEspecialidades(response.data);
+    } catch (error) {
+      console.error("Error loading especialidades:", error);
+    }
+  };
+
+  // useEffect para cargar datos al montar
   useEffect(() => {
     fetchDoctors();
+    fetchEspecialidades();
   }, []);
 
   return (
