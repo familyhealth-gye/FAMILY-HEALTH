@@ -31,6 +31,11 @@ export const UsersTab = ({ users, fetchData, token }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    console.log("=== SUBMIT INICIADO ===");
+    console.log("Form completo:", form);
+    console.log("Rol:", form.role);
+    console.log("Especialidad:", form.especialidad);
+    
     // Validación: si es Doctor, especialidad es requerida
     if (form.role === "Doctor" && !form.especialidad) {
       toast.error("Debe seleccionar una especialidad para el Doctor");
@@ -52,10 +57,33 @@ export const UsersTab = ({ users, fetchData, token }) => {
         });
         toast.success("Usuario actualizado exitosamente");
       } else {
-        // Create user
-        await axios.post(`${API}/auth/register`, form, {
+        // Create user - limpiar campos vacíos
+        const payload = {
+          username: form.username,
+          email: form.email,
+          nombre_completo: form.nombre_completo,
+          role: form.role,
+          password: form.password
+        };
+        
+        // Solo agregar especialidad si tiene valor (para Doctores)
+        if (form.especialidad) {
+          payload.especialidad = form.especialidad;
+        }
+        
+        // NO enviar doctor_id vacío - el backend lo auto-crea
+        
+        console.log("=== ENVIANDO PAYLOAD ===");
+        console.log("URL:", `${API}/auth/register`);
+        console.log("Payload:", payload);
+        
+        const response = await axios.post(`${API}/auth/register`, payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
+        console.log("=== RESPUESTA ===");
+        console.log("Response:", response.data);
+        
         toast.success("Usuario creado exitosamente");
       }
 
@@ -63,6 +91,9 @@ export const UsersTab = ({ users, fetchData, token }) => {
       resetForm();
       fetchData();
     } catch (error) {
+      console.log("=== ERROR ===");
+      console.log("Error completo:", error);
+      console.log("Response:", error.response);
       toast.error(error.response?.data?.detail || "Error al guardar usuario");
     }
     setLoading(false);
