@@ -26,6 +26,7 @@ export const UsersTab = ({ users, fetchData, token }) => {
   });
   const [loading, setLoading] = useState(false);
   const [doctors, setDoctors] = useState([]);
+  const [especialidades, setEspecialidades] = useState([]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
