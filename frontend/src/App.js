@@ -408,74 +408,15 @@ function App() {
             )}
           </TabsList>
 
-          {/* Doctors Tab - Admin Only */}
+          {/* Doctors Tab - Admin Only - Simplificado: Listado + Editar Porcentaje */}
           {user.role === "Administrador" && (
             <TabsContent value="doctors" className="tab-content">
               <div className="section-header">
                 <div>
                   <h2 className="section-title">Gestión de Doctores</h2>
-                  <p className="section-subtitle">Administra el personal médico del centro</p>
+                  <p className="section-subtitle">Listado y porcentajes de comisión</p>
                 </div>
-              <Dialog open={doctorDialog} onOpenChange={(open) => { setDoctorDialog(open); if (!open) resetDoctorForm(); }}>
-                <DialogTrigger asChild>
-                  <Button className="add-button" data-testid="add-doctor-button">
-                    <UserPlus className="button-icon" />
-                    Nuevo Doctor
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="dialog-content">
-                  <DialogHeader>
-                    <DialogTitle>{editingDoctor ? "Editar Doctor" : "Registrar Nuevo Doctor"}</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleDoctorSubmit}>
-                    <div className="form-grid">
-                      <div className="form-field">
-                        <Label>Nombre Completo</Label>
-                        <Input
-                          data-testid="doctor-name-input"
-                          value={doctorForm.nombre}
-                          onChange={(e) => setDoctorForm({...doctorForm, nombre: e.target.value})}
-                          required
-                        />
-                      </div>
-                      <div className="form-field">
-                        <Label>Especialidad</Label>
-                        <Select
-                          value={doctorForm.especialidad}
-                          onValueChange={(value) => setDoctorForm({...doctorForm, especialidad: value})}
-                        >
-                          <SelectTrigger data-testid="doctor-specialty-select">
-                            <SelectValue placeholder="Seleccione especialidad" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {specialties.map((spec) => (
-                              <SelectItem key={spec} value={spec}>{spec}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="form-field">
-                        <Label>Porcentaje de Comisión (%)</Label>
-                        <Input
-                          data-testid="doctor-percentage-input"
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={doctorForm.porcentaje}
-                          onChange={(e) => setDoctorForm({...doctorForm, porcentaje: parseFloat(e.target.value)})}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button type="submit" disabled={loading} data-testid="save-doctor-button">
-                        {loading ? "Guardando..." : "Guardar"}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
+              </div>
 
             <div className="search-box">
               <Input
@@ -492,6 +433,7 @@ function App() {
                   <tr>
                     <th>Nombre</th>
                     <th>Especialidad</th>
+                    <th>% Comisión</th>
                     <th className="actions-column">Acciones</th>
                   </tr>
                 </thead>
@@ -500,23 +442,24 @@ function App() {
                     <tr key={doctor.id} data-testid={`doctor-row-${doctor.id}`}>
                       <td>{doctor.nombre}</td>
                       <td><span className="badge">{doctor.especialidad}</span></td>
+                      <td>
+                        <span className="badge" style={{background: '#DBEAFE', color: '#1E40AF'}}>
+                          {doctor.porcentaje || 50}%
+                        </span>
+                      </td>
                       <td className="actions-cell">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditDoctor(doctor)}
-                          data-testid={`edit-doctor-${doctor.id}`}
-                        >
-                          <Edit className="action-icon" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteDoctor(doctor.id)}
-                          data-testid={`delete-doctor-${doctor.id}`}
-                        >
-                          <Trash2 className="action-icon delete-icon" />
-                        </Button>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditDoctor(doctor)}
+                              data-testid={`edit-doctor-${doctor.id}`}
+                            >
+                              <Edit className="action-icon" />
+                            </Button>
+                          </DialogTrigger>
+                        </Dialog>
                       </td>
                     </tr>
                   ))}
@@ -529,6 +472,40 @@ function App() {
                 </div>
               )}
             </div>
+            
+            {/* Dialog para editar porcentaje */}
+            <Dialog open={doctorDialog} onOpenChange={(open) => { setDoctorDialog(open); if (!open) resetDoctorForm(); }}>
+              <DialogContent className="dialog-content">
+                <DialogHeader>
+                  <DialogTitle>Editar Porcentaje de Comisión</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleDoctorSubmit}>
+                  <div className="form-grid">
+                    <div className="form-field full-width">
+                      <Label>Doctor: {editingDoctor?.nombre}</Label>
+                      <p style={{color: '#6B7280', fontSize: '0.875rem'}}>{editingDoctor?.especialidad}</p>
+                    </div>
+                    <div className="form-field full-width">
+                      <Label>Porcentaje de Comisión (%)</Label>
+                      <Input
+                        data-testid="doctor-percentage-input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={doctorForm.porcentaje}
+                        onChange={(e) => setDoctorForm({...doctorForm, porcentaje: parseFloat(e.target.value)})}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" disabled={loading} data-testid="save-doctor-button">
+                      {loading ? "Guardando..." : "Guardar"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
           )}
 
