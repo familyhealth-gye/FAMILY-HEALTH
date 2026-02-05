@@ -145,9 +145,11 @@ export const PacientesTab = ({ user, token }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // FILTRO CRÍTICO: Solo citas del paciente con este doctor Y de su especialidad
       const citasPaciente = appointmentsRes.data.filter(
         apt => apt.cedula === cedula && 
                apt.doctor_id === user.doctor_id &&
+               apt.especialidad === userEspecialidad &&
                apt.estado !== "Cancelada"
       );
       
