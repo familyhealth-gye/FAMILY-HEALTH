@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
-import { Users, Eye, ArrowLeft, Phone, Calendar, FileText, Download, Printer } from "lucide-react";
+import { Users, Eye, ArrowLeft, Phone, Calendar, FileText, Download, Printer, Play, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
+import { PediatriaForm } from "./PediatriaForm";
+import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -11,6 +15,7 @@ const API = `${BACKEND_URL}/api`;
 
 export const PacientesTab = ({ user, token }) => {
   const [pacientes, setPacientes] = useState([]);
+  const [consultasIncompletas, setConsultasIncompletas] = useState([]);
   const [selectedPaciente, setSelectedPaciente] = useState(null);
   const [consultas, setConsultas] = useState([]);
   const [recetas, setRecetas] = useState([]);
@@ -19,11 +24,16 @@ export const PacientesTab = ({ user, token }) => {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("consultas");
+  
+  // Estado para reanudar consulta
+  const [attentionDialog, setAttentionDialog] = useState(false);
+  const [appointmentToResume, setAppointmentToResume] = useState(null);
 
-  // Cargar pacientes del doctor
+  // Cargar pacientes y consultas incompletas del doctor
   useEffect(() => {
     if (user?.doctor_id) {
       fetchPacientes();
+      fetchConsultasIncompletas();
     }
   }, [user?.doctor_id]);
 
@@ -34,9 +44,10 @@ export const PacientesTab = ({ user, token }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // Incluir todas las citas del doctor (excepto canceladas)
       const misCitas = appointmentsRes.data.filter(
         apt => apt.doctor_id === user.doctor_id && 
-               (apt.estado === "Pendiente de Pago" || apt.estado === "Atendida" || apt.estado === "Pagada")
+               apt.estado !== "Cancelada"
       );
       
       const pacientesMap = {};
@@ -66,6 +77,61 @@ export const PacientesTab = ({ user, token }) => {
     setLoading(false);
   };
 
+  // Buscar consultas incompletas (En Atención o Pendiente de Pago sin historia)
+  const fetchConsultasIncompletas = async () => {
+    try {
+      const appointmentsRes = await axios.get(`${API}/appointments`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const citasDoctor = appointmentsRes.data.filter(
+        apt => apt.doctor_id === user.doctor_id && 
+               (apt.estado === "En Atención" || apt.estado === "Pendiente de Pago")
+      );
+      
+      // Verificar cuáles no tienen historia clínica completa
+      const incompletas = await Promise.all(
+        citasDoctor.map(async (cita) => {
+          let tieneHistoria = false;
+          
+          try {
+            const res = await axios.get(
+              `${API}/medical-history/general/appointment/${cita.id}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (res.data && res.data.diagnostico) tieneHistoria = true;
+          } catch (e) {}
+          
+          if (!tieneHistoria) {
+            try {
+              const res = await axios.get(
+                `${API}/medical-history/pediatric/appointment/${cita.id}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              if (res.data && res.data.diagnostico) tieneHistoria = true;
+            } catch (e) {}
+          }
+          
+          if (!tieneHistoria) {
+            try {
+              const res = await axios.get(
+                `${API}/medical-history/odontology/appointment/${cita.id}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              if (res.data && res.data.diagnostico) tieneHistoria = true;
+            } catch (e) {}
+          }
+          
+          return { ...cita, tieneHistoria, incompleta: !tieneHistoria };
+        })
+      );
+      
+      setConsultasIncompletas(incompletas.filter(c => c.incompleta));
+    } catch (error) {
+      console.error("Error fetching consultas incompletas:", error);
+    }
+  };
+
   const fetchConsultasPaciente = async (cedula) => {
     setLoading(true);
     try {
@@ -76,7 +142,7 @@ export const PacientesTab = ({ user, token }) => {
       const citasPaciente = appointmentsRes.data.filter(
         apt => apt.cedula === cedula && 
                apt.doctor_id === user.doctor_id &&
-               (apt.estado === "Pendiente de Pago" || apt.estado === "Atendida" || apt.estado === "Pagada")
+               apt.estado !== "Cancelada"
       );
       
       const consultasConHistoria = await Promise.all(
@@ -121,11 +187,15 @@ export const PacientesTab = ({ user, token }) => {
             } catch (e) {}
           }
           
+          const tieneHistoriaCompleta = historia && historia.diagnostico;
+          
           return {
             ...cita,
             historia,
             tipoHistoria,
-            tieneHistoria: !!historia
+            tieneHistoria: !!historia,
+            tieneHistoriaCompleta,
+            incompleta: !tieneHistoriaCompleta && (cita.estado === "En Atención" || cita.estado === "Pendiente de Pago")
           };
         })
       );
@@ -162,6 +232,38 @@ export const PacientesTab = ({ user, token }) => {
     if (consulta.historia) {
       setSelectedConsulta(consulta);
       setHistoriaDetalle(consulta.historia);
+    }
+  };
+
+  const handleReanudarConsulta = async (consulta) => {
+    try {
+      // Cambiar estado a "En Atención" si estaba en otro estado
+      if (consulta.estado !== "En Atención") {
+        await axios.put(
+          `${API}/appointments/${consulta.id}`,
+          { estado: "En Atención" },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+      
+      setAppointmentToResume(consulta);
+      setAttentionDialog(true);
+    } catch (error) {
+      toast.error("Error al reanudar consulta");
+    }
+  };
+
+  const handleAttentionSuccess = async () => {
+    setAttentionDialog(false);
+    setAppointmentToResume(null);
+    toast.success("Consulta completada exitosamente");
+    
+    // Refrescar datos
+    fetchPacientes();
+    fetchConsultasIncompletas();
+    if (selectedPaciente) {
+      fetchConsultasPaciente(selectedPaciente.cedula);
+      fetchRecetasPaciente(selectedPaciente.cedula);
     }
   };
 
@@ -231,6 +333,55 @@ export const PacientesTab = ({ user, token }) => {
     p.nombre.toLowerCase().includes(search.toLowerCase()) ||
     p.cedula.includes(search)
   );
+
+  // Renderizar formulario de atención según especialidad
+  const renderAttentionForm = () => {
+    if (!appointmentToResume) return null;
+    
+    const especialidad = appointmentToResume.especialidad;
+    
+    if (especialidad === "Medicina General") {
+      return (
+        <MedicinaGeneralForm
+          appointment={appointmentToResume}
+          token={token}
+          onClose={() => setAttentionDialog(false)}
+          onSuccess={handleAttentionSuccess}
+        />
+      );
+    }
+    
+    if (especialidad === "Pediatría") {
+      return (
+        <PediatriaForm
+          appointment={appointmentToResume}
+          token={token}
+          onClose={() => setAttentionDialog(false)}
+          onSuccess={handleAttentionSuccess}
+        />
+      );
+    }
+    
+    if (especialidad === "Odontología") {
+      return (
+        <OdontologiaFormSimple
+          appointment={appointmentToResume}
+          token={token}
+          onClose={() => setAttentionDialog(false)}
+          onSuccess={handleAttentionSuccess}
+        />
+      );
+    }
+    
+    return (
+      <div style={{padding: '2rem', textAlign: 'center'}}>
+        <p>Historia clínica de {especialidad} aún no implementada.</p>
+        <Button onClick={() => setAttentionDialog(false)} style={{marginTop: '1.5rem'}}>
+          Cerrar
+        </Button>
+      </div>
+    );
+  };
 
   // Vista de Historia Clínica (Solo Lectura)
   if (historiaDetalle && selectedConsulta) {
@@ -406,9 +557,9 @@ export const PacientesTab = ({ user, token }) => {
                   <tr>
                     <th>Fecha</th>
                     <th>Especialidad</th>
+                    <th>Estado</th>
                     <th>Motivo</th>
                     <th>Diagnóstico</th>
-                    <th>Estado</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>
@@ -424,6 +575,35 @@ export const PacientesTab = ({ user, token }) => {
                       <td>
                         <span className="badge">{consulta.especialidad}</span>
                       </td>
+                      <td>
+                        {consulta.incompleta ? (
+                          <span style={{
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            background: '#FEE2E2',
+                            color: '#DC2626',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}>
+                            <AlertTriangle size={12} />
+                            Incompleta
+                          </span>
+                        ) : (
+                          <span style={{
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            background: consulta.estado === "Pagada" ? '#D1FAE5' : '#DBEAFE',
+                            color: consulta.estado === "Pagada" ? '#065F46' : '#1E40AF'
+                          }}>
+                            {consulta.estado === "Pendiente de Pago" ? "Atendida" : consulta.estado}
+                          </span>
+                        )}
+                      </td>
                       <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {consulta.historia?.motivo_consulta || consulta.observaciones || "-"}
                       </td>
@@ -431,21 +611,16 @@ export const PacientesTab = ({ user, token }) => {
                         {consulta.historia?.diagnostico || "-"}
                       </td>
                       <td>
-                        <span style={{
-                          padding: '0.25rem 0.75rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.75rem',
-                          fontWeight: 500,
-                          background: consulta.estado === "Pagada" ? '#D1FAE5' : 
-                                      consulta.estado === "Pendiente de Pago" ? '#FEF3C7' : '#DBEAFE',
-                          color: consulta.estado === "Pagada" ? '#065F46' : 
-                                 consulta.estado === "Pendiente de Pago" ? '#92400E' : '#1E40AF'
-                        }}>
-                          {consulta.estado === "Pendiente de Pago" ? "Atendida" : consulta.estado}
-                        </span>
-                      </td>
-                      <td>
-                        {consulta.tieneHistoria ? (
+                        {consulta.incompleta ? (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => handleReanudarConsulta(consulta)}
+                            style={{ background: '#DC2626' }}
+                          >
+                            <Play className="button-icon" size={14} /> Reanudar
+                          </Button>
+                        ) : consulta.tieneHistoria ? (
                           <Button
                             size="sm"
                             variant="outline"
@@ -539,13 +714,80 @@ export const PacientesTab = ({ user, token }) => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Dialog para reanudar consulta */}
+        <Dialog open={attentionDialog} onOpenChange={setAttentionDialog}>
+          <DialogContent className="dialog-content dialog-wide dialog-scrollable">
+            <DialogHeader>
+              <DialogTitle>
+                Reanudar Consulta - {appointmentToResume?.especialidad}
+              </DialogTitle>
+              <div className="patient-info-header">
+                <p><strong>Paciente:</strong> {appointmentToResume?.nombre_completo}</p>
+                <p><strong>Edad:</strong> {appointmentToResume?.edad} años</p>
+                <p><strong>Cédula:</strong> {appointmentToResume?.cedula}</p>
+              </div>
+            </DialogHeader>
+            {renderAttentionForm()}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
 
-  // Vista Principal - Lista de Pacientes
+  // Vista Principal - Lista de Pacientes con alerta de consultas incompletas
   return (
     <div className="tab-content">
+      {/* Alerta de consultas incompletas */}
+      {consultasIncompletas.length > 0 && (
+        <div style={{
+          background: '#FEE2E2',
+          border: '2px solid #DC2626',
+          padding: '1rem 1.5rem',
+          borderRadius: '12px',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '1rem'
+        }}>
+          <AlertTriangle size={24} style={{ color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ flex: 1 }}>
+            <h3 style={{ color: '#DC2626', fontWeight: 600, marginBottom: '0.5rem' }}>
+              Consultas incompletas ({consultasIncompletas.length})
+            </h3>
+            <p style={{ color: '#991B1B', fontSize: '0.875rem', marginBottom: '1rem' }}>
+              Las siguientes consultas fueron interrumpidas y requieren atención:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {consultasIncompletas.map((consulta) => (
+                <div key={consulta.id} style={{
+                  background: 'white',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <strong>{consulta.nombre_completo}</strong>
+                    <span style={{ color: '#64748B', marginLeft: '1rem' }}>
+                      {consulta.especialidad} - {consulta.fecha}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleReanudarConsulta(consulta)}
+                    style={{ background: '#DC2626' }}
+                  >
+                    <Play className="button-icon" size={14} /> Reanudar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="section-header">
         <div>
           <h2 className="section-title">Mis Pacientes</h2>
@@ -615,6 +857,23 @@ export const PacientesTab = ({ user, token }) => {
           </div>
         )}
       </div>
+
+      {/* Dialog para reanudar consulta desde lista principal */}
+      <Dialog open={attentionDialog} onOpenChange={setAttentionDialog}>
+        <DialogContent className="dialog-content dialog-wide dialog-scrollable">
+          <DialogHeader>
+            <DialogTitle>
+              Reanudar Consulta - {appointmentToResume?.especialidad}
+            </DialogTitle>
+            <div className="patient-info-header">
+              <p><strong>Paciente:</strong> {appointmentToResume?.nombre_completo}</p>
+              <p><strong>Edad:</strong> {appointmentToResume?.edad} años</p>
+              <p><strong>Cédula:</strong> {appointmentToResume?.cedula}</p>
+            </div>
+          </DialogHeader>
+          {renderAttentionForm()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
