@@ -657,6 +657,25 @@ async def get_prescriptions(current_user: TokenData = Depends(get_current_user))
     
     return prescriptions
 
+@api_router.get("/prescriptions/patient/{cedula}", response_model=List[Prescription])
+async def get_prescriptions_by_patient(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener todas las recetas de un paciente por cédula"""
+    prescriptions = await db.prescriptions.find(
+        {"paciente_cedula": cedula}, 
+        {"_id": 0}
+    ).to_list(1000)
+    
+    for prescription in prescriptions:
+        if isinstance(prescription['created_at'], str):
+            prescription['created_at'] = datetime.fromisoformat(prescription['created_at'])
+    
+    # Ordenar por fecha descendente
+    prescriptions.sort(key=lambda x: x.get('fecha', ''), reverse=True)
+    return prescriptions
+
 @api_router.get("/prescriptions/{prescription_id}/pdf")
 async def download_prescription_pdf(
     prescription_id: str,
