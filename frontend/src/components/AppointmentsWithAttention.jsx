@@ -81,13 +81,21 @@ export const AppointmentsWithAttention = ({
     toast.success("Consulta terminada - Cita pendiente de pago");
   };
 
-  // Filter appointments by doctor AND especialidad if user is a doctor
-  let visibleAppointments = user?.role === "Doctor" && user?.doctor_id
-    ? filteredAppointments.filter(apt => 
-        apt.doctor_id === user.doctor_id && 
-        apt.especialidad === userEspecialidad
-      )
-    : filteredAppointments;
+  // Filter appointments by doctor if user is a doctor
+  // Solo filtrar por especialidad si el usuario tiene especialidad definida
+  let visibleAppointments = filteredAppointments;
+  
+  if (user?.role === "Doctor" && user?.doctor_id) {
+    visibleAppointments = filteredAppointments.filter(apt => {
+      // Siempre filtrar por doctor_id
+      if (apt.doctor_id !== user.doctor_id) return false;
+      
+      // Solo filtrar por especialidad si el usuario tiene una definida
+      if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
+      
+      return true;
+    });
+  }
 
   // Filter by date (only show appointments for selected date)
   visibleAppointments = visibleAppointments.filter(apt => apt.fecha === dateFilter);
