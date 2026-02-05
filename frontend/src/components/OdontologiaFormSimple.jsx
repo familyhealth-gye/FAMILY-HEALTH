@@ -66,6 +66,21 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validaciones frontend
+    if (!form.motivo_consulta.trim()) {
+      toast.error("El motivo de consulta es obligatorio");
+      return;
+    }
+    if (!form.diagnostico.trim()) {
+      toast.error("El diagnóstico es obligatorio");
+      return;
+    }
+    if (!form.tratamiento_realizado.trim()) {
+      toast.error("El tratamiento realizado es obligatorio");
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -91,8 +106,11 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
         dientes: dientesArray.length > 0 ? dientesArray : [{ tooth_number: 1, estado: 'Sano' }],
         diagnostico_general: form.diagnostico,
         tratamiento_recomendado: form.tratamiento_realizado,
-        observaciones: form.observaciones
+        observaciones: form.observaciones || ""
       };
+
+      console.log("=== ENVIANDO ODONTOGRAMA ===");
+      console.log("Payload:", odontogramData);
 
       await axios.post(`${API}/odontograms`, odontogramData, {
         headers: { Authorization: `Bearer ${token}` }
@@ -106,8 +124,8 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
         plan_tratamiento: form.tratamiento_realizado,
         medicamentos: form.medicamentos.filter(m => m.nombre).map(m => 
           `${m.nombre} ${m.dosis} ${m.via} - ${m.frecuencia} x ${m.duracion}. ${m.indicaciones}`
-        ).join('; '),
-        observaciones: form.observaciones,
+        ).join('; ') || "",
+        observaciones: form.observaciones || "",
         dolor_dental: false,
         diabetes: false,
         hipertension: false,
@@ -128,6 +146,9 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
           atm: ""
         }
       };
+
+      console.log("=== ENVIANDO HISTORIA ODONTOLÓGICA ===");
+      console.log("Payload:", historyData);
 
       await axios.post(`${API}/medical-history/odontology`, historyData, {
         headers: { Authorization: `Bearer ${token}` }
@@ -159,8 +180,14 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
       onSuccess();
       onClose();
     } catch (error) {
-      console.error(error);
-      toast.error(error.response?.data?.detail || "Error al guardar");
+      console.error("=== ERROR ===");
+      console.error("Error completo:", error);
+      console.error("Response:", error.response?.data);
+      
+      const errorMsg = error.response?.data?.detail || 
+                       (typeof error.response?.data === 'string' ? error.response.data : null) ||
+                       "Error al guardar la historia clínica";
+      toast.error(errorMsg);
     }
     setLoading(false);
   };
