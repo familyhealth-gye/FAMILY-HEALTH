@@ -123,11 +123,15 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
           const prescriptionData = {
             paciente_id: appointment.id,
             appointment_id: appointment.id,
+            especialidad: "Pediatría",
             doctor_id: appointment.doctor_id || "",
             fecha: new Date().toISOString().split('T')[0],
             diagnostico: form.diagnostico || "",
             cie10_codigo: form.cie10_codigo || "",
             cie10_descripcion: "",
+            // Campos específicos de Pediatría
+            peso: form.signos_vitales?.peso || 0,
+            talla: form.signos_vitales?.talla || 0,
             medicamentos: medicamentosFiltrados.map(m => ({
               nombre: m.nombre || "",
               dosis: m.dosis || "",
@@ -140,6 +144,7 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
             observaciones: ""
           };
 
+          console.log("=== GUARDANDO RECETA PEDIATRÍA ===");
           const prescriptionRes = await axios.post(
             `${API}/prescriptions`,
             prescriptionData,
