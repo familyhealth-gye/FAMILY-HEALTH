@@ -130,6 +130,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
           const prescriptionData = {
             paciente_id: appointment.id,
             appointment_id: appointment.id,
+            especialidad: "Medicina General",
             doctor_id: appointment.doctor_id || "",
             fecha: new Date().toISOString().split('T')[0],
             diagnostico: form.diagnostico || "",
@@ -147,7 +148,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
             observaciones: form.observaciones || ""
           };
 
-          console.log("=== GUARDANDO RECETA ===");
+          console.log("=== GUARDANDO RECETA MEDICINA GENERAL ===");
           const prescriptionRes = await axios.post(
             `${API}/prescriptions`,
             prescriptionData,
