@@ -31,6 +31,13 @@ export const PacientesTab = ({ user, token }) => {
 
   // Obtener la especialidad del usuario (del doctor vinculado)
   const userEspecialidad = user?.especialidad || null;
+  
+  // DEBUG
+  console.log("=== DEBUG PACIENTES TAB ===", { 
+    role: user?.role, 
+    especialidad: userEspecialidad, 
+    doctor_id: user?.doctor_id 
+  });
 
   // Cargar pacientes y consultas incompletas del doctor
   useEffect(() => {
@@ -47,12 +54,14 @@ export const PacientesTab = ({ user, token }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // FILTRO CRÍTICO: Solo citas del doctor Y de su especialidad
-      const misCitas = appointmentsRes.data.filter(
-        apt => apt.doctor_id === user.doctor_id && 
-               apt.especialidad === userEspecialidad &&
-               apt.estado !== "Cancelada"
-      );
+      // Filtrar citas del doctor - solo por especialidad si está definida
+      const misCitas = appointmentsRes.data.filter(apt => {
+        if (apt.doctor_id !== user.doctor_id) return false;
+        if (apt.estado === "Cancelada") return false;
+        // Solo filtrar por especialidad si el usuario tiene una definida
+        if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
+        return true;
+      });
       
       const pacientesMap = {};
       misCitas.forEach(cita => {
