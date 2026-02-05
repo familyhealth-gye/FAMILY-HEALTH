@@ -29,6 +29,9 @@ export const PacientesTab = ({ user, token }) => {
   const [attentionDialog, setAttentionDialog] = useState(false);
   const [appointmentToResume, setAppointmentToResume] = useState(null);
 
+  // Obtener la especialidad del usuario (del doctor vinculado)
+  const userEspecialidad = user?.especialidad || null;
+
   // Cargar pacientes y consultas incompletas del doctor
   useEffect(() => {
     if (user?.doctor_id) {
@@ -44,9 +47,10 @@ export const PacientesTab = ({ user, token }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Incluir todas las citas del doctor (excepto canceladas)
+      // FILTRO CRÍTICO: Solo citas del doctor Y de su especialidad
       const misCitas = appointmentsRes.data.filter(
         apt => apt.doctor_id === user.doctor_id && 
+               apt.especialidad === userEspecialidad &&
                apt.estado !== "Cancelada"
       );
       
@@ -77,15 +81,17 @@ export const PacientesTab = ({ user, token }) => {
     setLoading(false);
   };
 
-  // Buscar consultas incompletas (En Atención o Pendiente de Pago sin historia)
+  // Buscar consultas incompletas - SOLO de la especialidad del doctor
   const fetchConsultasIncompletas = async () => {
     try {
       const appointmentsRes = await axios.get(`${API}/appointments`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // FILTRO CRÍTICO: Solo citas del doctor Y de su especialidad
       const citasDoctor = appointmentsRes.data.filter(
         apt => apt.doctor_id === user.doctor_id && 
+               apt.especialidad === userEspecialidad &&
                (apt.estado === "En Atención" || apt.estado === "Pendiente de Pago")
       );
       
