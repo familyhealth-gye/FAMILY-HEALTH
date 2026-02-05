@@ -155,25 +155,39 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
       });
 
       // Crear receta si hay medicamentos
-      const medsFiltrados = form.medicamentos.filter(m => m.nombre);
+      const medsFiltrados = form.medicamentos.filter(m => m.nombre && m.nombre.trim());
       if (medsFiltrados.length > 0) {
-        const recetaData = {
-          appointment_id: appointment.id,
-          diagnostico: form.diagnostico,
-          cie10_codigo: "",
-          medications: medsFiltrados.map(m => ({
-            nombre: m.nombre,
-            dosis: m.dosis,
-            via: m.via,
-            frecuencia: m.frecuencia,
-            duracion: m.duracion
-          })),
-          indicaciones: medsFiltrados.map(m => m.indicaciones).join('. ')
-        };
+        try {
+          const recetaData = {
+            paciente_id: appointment.id,
+            appointment_id: appointment.id,
+            especialidad: "Odontología",
+            diagnostico: form.diagnostico || "",
+            procedimiento_realizado: form.tratamiento_realizado || "",
+            medicamentos: medsFiltrados.map(m => ({
+              nombre: m.nombre || "",
+              dosis: m.dosis || "",
+              via: m.via || "",
+              frecuencia: m.frecuencia || "",
+              duracion: m.duracion || "",
+              indicaciones: m.indicaciones || ""
+            })),
+            indicaciones_generales: medsFiltrados.map(m => m.indicaciones).filter(i => i).join('. ') || "",
+            observaciones: form.observaciones || ""
+          };
 
-        await axios.post(`${API}/prescriptions`, recetaData, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+          console.log("=== ENVIANDO RECETA ODONTOLOGÍA ===");
+          console.log("Payload:", recetaData);
+
+          await axios.post(`${API}/prescriptions`, recetaData, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          toast.success("Receta creada");
+        } catch (recetaError) {
+          console.error("Error al crear receta:", recetaError);
+          toast.warning("Historia guardada. Error al crear receta: " + (recetaError.response?.data?.detail || "Error desconocido"));
+        }
       }
 
       toast.success("Historia odontológica guardada exitosamente");
