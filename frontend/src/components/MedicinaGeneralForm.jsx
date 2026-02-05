@@ -82,7 +82,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validaciones frontend
+    // Validaciones frontend - solo campos esenciales
     if (!form.motivo_consulta.trim()) {
       toast.error("El motivo de consulta es obligatorio");
       return;
@@ -97,67 +97,97 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
     }
     
     setLoading(true);
+    let consultaCerrada = false;
 
     try {
-      // Save medical history
+      // 1. Guardar historia clínica (obligatorio)
       const historyData = { ...form, appointment_id: appointment.id };
       delete historyData.medicamentos;
       delete historyData.indicaciones_generales;
       
-      // Generar plan de tratamiento
       const planTratamiento = form.medicamentos
-        .filter(m => m.nombre.trim())
-        .map((m, i) => `${i + 1}. ${m.nombre} ${m.dosis} - ${m.frecuencia} por ${m.duracion}`)
+        .filter(m => m.nombre && m.nombre.trim())
+        .map((m, i) => `${i + 1}. ${m.nombre} ${m.dosis || ''} - ${m.frecuencia || ''} por ${m.duracion || ''}`)
         .join('\n');
       
       historyData.plan_tratamiento = planTratamiento || "Sin medicamentos prescritos";
 
-      console.log("=== ENVIANDO HISTORIA CLÍNICA ===");
-      console.log("Payload:", historyData);
-
+      console.log("=== GUARDANDO HISTORIA CLÍNICA ===");
       await axios.post(
         `${API}/medical-history/general`,
         historyData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
+      consultaCerrada = true;
+      toast.success("Historia clínica guardada");
 
-      // Create prescription
-      const prescriptionData = {
-        paciente_id: appointment.id,
-        doctor_id: appointment.doctor_id,
-        fecha: new Date().toISOString().split('T')[0],
-        diagnostico: form.diagnostico,
-        cie10_codigo: form.cie10_codigo || "",
-        cie10_descripcion: "",
-        medicamentos: form.medicamentos.filter(m => m.nombre.trim()),
-        indicaciones_generales: form.indicaciones_generales || ""
-      };
+      // 2. Crear receta SOLO si hay medicamentos (opcional)
+      const medicamentosFiltrados = form.medicamentos.filter(m => m.nombre && m.nombre.trim());
+      
+      if (medicamentosFiltrados.length > 0) {
+        try {
+          const prescriptionData = {
+            paciente_id: appointment.id,
+            appointment_id: appointment.id,
+            doctor_id: appointment.doctor_id || "",
+            fecha: new Date().toISOString().split('T')[0],
+            diagnostico: form.diagnostico || "",
+            cie10_codigo: form.cie10_codigo || "",
+            cie10_descripcion: "",
+            medicamentos: medicamentosFiltrados.map(m => ({
+              nombre: m.nombre || "",
+              dosis: m.dosis || "",
+              frecuencia: m.frecuencia || "",
+              duracion: m.duracion || "",
+              via: m.via || "",
+              indicaciones: m.indicaciones || ""
+            })),
+            indicaciones_generales: form.indicaciones_generales || "",
+            observaciones: form.observaciones || ""
+          };
 
-      console.log("=== ENVIANDO RECETA ===");
-      console.log("Payload:", prescriptionData);
+          console.log("=== GUARDANDO RECETA ===");
+          const prescriptionRes = await axios.post(
+            `${API}/prescriptions`,
+            prescriptionData,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
 
-      const prescriptionRes = await axios.post(
-        `${API}/prescriptions`,
-        prescriptionData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+          toast.success("Receta guardada");
 
-      // Download prescription PDF
-      const pdfRes = await axios.get(
-        `${API}/prescriptions/${prescriptionRes.data.id}/pdf`,
-        { 
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: 'blob'
+          // 3. Intentar descargar PDF (opcional, no bloquea cierre)
+          try {
+            const pdfRes = await axios.get(
+              `${API}/prescriptions/${prescriptionRes.data.id}/pdf`,
+              { 
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob'
+              }
+            );
+
+            const url = window.URL.createObjectURL(new Blob([pdfRes.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `receta_${appointment.cedula}_${new Date().toISOString().split('T')[0]}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+          } catch (pdfError) {
+            console.warn("No se pudo descargar el PDF, pero la receta está guardada:", pdfError);
+            toast.info("Receta guardada. Puede descargarla después desde el historial del paciente.");
+          }
+        } catch (recetaError) {
+          console.error("Error al guardar receta:", recetaError);
+          toast.warning("Historia guardada. Error al crear receta: " + (recetaError.response?.data?.detail || "Error desconocido"));
         }
-      );
+      }
 
-      const url = window.URL.createObjectURL(new Blob([pdfRes.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `receta_${appointment.cedula}_${new Date().toISOString().split('T')[0]}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      // Éxito final
+      toast.success("Consulta cerrada exitosamente");
+      onSuccess();
+      onClose();
 
       toast.success("Historia clínica y receta generadas exitosamente");
       onSuccess();
