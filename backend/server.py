@@ -630,12 +630,23 @@ async def get_odontology_history_by_appointment(
     return MedicalHistoryOdontology(**history)
 
 # ========== PRESCRIPTION ENDPOINTS ==========
+# Sistema TRANSVERSAL de recetas para todas las especialidades
 
 @api_router.post("/prescriptions", response_model=Prescription)
 async def create_prescription(
     input: PrescriptionCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
+    """
+    Crear receta médica - Funciona para TODAS las especialidades:
+    - Medicina General
+    - Odontología  
+    - Pediatría
+    - Ginecología
+    - Otras especialidades
+    
+    Solo valida campos mínimos obligatorios.
+    """
     # Get patient info - buscar por appointment_id o paciente_id
     appointment = None
     if input.appointment_id:
@@ -655,17 +666,24 @@ async def create_prescription(
         doctor = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
     
     prescription_dict = input.model_dump()
+    
+    # Datos del paciente (de la cita)
     prescription_dict['paciente_id'] = appointment['id']
     prescription_dict['paciente_nombre'] = appointment.get('nombre_completo', '')
     prescription_dict['paciente_cedula'] = appointment.get('cedula', '')
     prescription_dict['paciente_edad'] = appointment.get('edad', 0)
     prescription_dict['appointment_id'] = appointment['id']
     
+    # Especialidad de la consulta
+    prescription_dict['especialidad'] = input.especialidad or appointment.get('especialidad', '')
+    
+    # Datos del doctor
     if doctor:
         prescription_dict['doctor_id'] = doctor['id']
         prescription_dict['doctor_nombre'] = doctor.get('nombre', '')
         prescription_dict['doctor_especialidad'] = doctor.get('especialidad', '')
     else:
+        prescription_dict['doctor_id'] = doctor_id or ''
         prescription_dict['doctor_nombre'] = user.get('nombre_completo', '') if user else ''
         prescription_dict['doctor_especialidad'] = appointment.get('especialidad', '')
     
@@ -673,18 +691,26 @@ async def create_prescription(
     if not prescription_dict.get('fecha'):
         prescription_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
-    # Filtrar medicamentos vacíos
-    prescription_dict['medicamentos'] = [
-        m for m in prescription_dict.get('medicamentos', []) 
-        if m.get('nombre', '').strip()
-    ]
+    # Filtrar medicamentos vacíos (si hay medicamentos)
+    if prescription_dict.get('medicamentos'):
+        prescription_dict['medicamentos'] = [
+            m for m in prescription_dict.get('medicamentos', []) 
+            if m.get('nombre', '').strip()
+        ]
+    else:
+        prescription_dict['medicamentos'] = []
     
-    prescription_obj = Prescription(**prescription_dict)
-    doc = prescription_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
-    await db.prescriptions.insert_one(doc)
-    return prescription_obj
+    # Crear la receta
+    try:
+        prescription_obj = Prescription(**prescription_dict)
+        doc = prescription_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.prescriptions.insert_one(doc)
+        return prescription_obj
+    except Exception as e:
+        logging.error(f"Error creando receta: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al crear receta: {str(e)}")
 
 @api_router.get("/prescriptions", response_model=List[Prescription])
 async def get_prescriptions(current_user: TokenData = Depends(get_current_user)):
