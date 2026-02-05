@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { Users, Eye, ArrowLeft, Phone, Calendar, FileText, Stethoscope } from "lucide-react";
+import { Users, Eye, ArrowLeft, Phone, Calendar, FileText, Download, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -13,10 +13,12 @@ export const PacientesTab = ({ user, token }) => {
   const [pacientes, setPacientes] = useState([]);
   const [selectedPaciente, setSelectedPaciente] = useState(null);
   const [consultas, setConsultas] = useState([]);
+  const [recetas, setRecetas] = useState([]);
   const [selectedConsulta, setSelectedConsulta] = useState(null);
   const [historiaDetalle, setHistoriaDetalle] = useState(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("consultas");
 
   // Cargar pacientes del doctor
   useEffect(() => {
@@ -28,18 +30,15 @@ export const PacientesTab = ({ user, token }) => {
   const fetchPacientes = async () => {
     setLoading(true);
     try {
-      // Obtener todas las citas del doctor
       const appointmentsRes = await axios.get(`${API}/appointments`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Filtrar citas de este doctor que estén atendidas o con historia
       const misCitas = appointmentsRes.data.filter(
         apt => apt.doctor_id === user.doctor_id && 
                (apt.estado === "Pendiente de Pago" || apt.estado === "Atendida" || apt.estado === "Pagada")
       );
       
-      // Agrupar por paciente (cédula única)
       const pacientesMap = {};
       misCitas.forEach(cita => {
         if (!pacientesMap[cita.cedula]) {
@@ -53,7 +52,6 @@ export const PacientesTab = ({ user, token }) => {
           };
         } else {
           pacientesMap[cita.cedula].totalConsultas++;
-          // Actualizar última consulta si es más reciente
           if (new Date(cita.fecha) > new Date(pacientesMap[cita.cedula].ultimaConsulta)) {
             pacientesMap[cita.cedula].ultimaConsulta = cita.fecha;
           }
@@ -71,7 +69,6 @@ export const PacientesTab = ({ user, token }) => {
   const fetchConsultasPaciente = async (cedula) => {
     setLoading(true);
     try {
-      // Obtener citas del paciente con este doctor
       const appointmentsRes = await axios.get(`${API}/appointments`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -82,13 +79,11 @@ export const PacientesTab = ({ user, token }) => {
                (apt.estado === "Pendiente de Pago" || apt.estado === "Atendida" || apt.estado === "Pagada")
       );
       
-      // Para cada cita, buscar si tiene historia clínica
       const consultasConHistoria = await Promise.all(
         citasPaciente.map(async (cita) => {
           let historia = null;
           let tipoHistoria = null;
           
-          // Buscar en historias generales
           try {
             const generalRes = await axios.get(
               `${API}/medical-history/general/appointment/${cita.id}`,
@@ -98,9 +93,8 @@ export const PacientesTab = ({ user, token }) => {
               historia = generalRes.data;
               tipoHistoria = "general";
             }
-          } catch (e) { /* No tiene historia general */ }
+          } catch (e) {}
           
-          // Buscar en historias pediátricas
           if (!historia) {
             try {
               const pedRes = await axios.get(
@@ -111,10 +105,9 @@ export const PacientesTab = ({ user, token }) => {
                 historia = pedRes.data;
                 tipoHistoria = "pediatric";
               }
-            } catch (e) { /* No tiene historia pediátrica */ }
+            } catch (e) {}
           }
           
-          // Buscar en historias odontológicas
           if (!historia) {
             try {
               const odontoRes = await axios.get(
@@ -125,7 +118,7 @@ export const PacientesTab = ({ user, token }) => {
                 historia = odontoRes.data;
                 tipoHistoria = "odontology";
               }
-            } catch (e) { /* No tiene historia odontológica */ }
+            } catch (e) {}
           }
           
           return {
@@ -137,7 +130,6 @@ export const PacientesTab = ({ user, token }) => {
         })
       );
       
-      // Ordenar por fecha descendente
       consultasConHistoria.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       setConsultas(consultasConHistoria);
     } catch (error) {
@@ -147,15 +139,80 @@ export const PacientesTab = ({ user, token }) => {
     setLoading(false);
   };
 
+  const fetchRecetasPaciente = async (cedula) => {
+    try {
+      const response = await axios.get(`${API}/prescriptions/patient/${cedula}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRecetas(response.data);
+    } catch (error) {
+      console.error("Error fetching recetas:", error);
+      setRecetas([]);
+    }
+  };
+
   const handleVerPaciente = (paciente) => {
     setSelectedPaciente(paciente);
+    setActiveTab("consultas");
     fetchConsultasPaciente(paciente.cedula);
+    fetchRecetasPaciente(paciente.cedula);
   };
 
   const handleVerHistoria = (consulta) => {
     if (consulta.historia) {
       setSelectedConsulta(consulta);
       setHistoriaDetalle(consulta.historia);
+    }
+  };
+
+  const handleDescargarReceta = async (receta) => {
+    try {
+      const response = await axios.get(
+        `${API}/prescriptions/${receta.id}/pdf`,
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `receta_${receta.paciente_cedula}_${receta.fecha}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Receta descargada");
+    } catch (error) {
+      console.error("Error downloading receta:", error);
+      toast.error("Error al descargar la receta");
+    }
+  };
+
+  const handleImprimirReceta = async (receta) => {
+    try {
+      const response = await axios.get(
+        `${API}/prescriptions/${receta.id}/pdf`,
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+      
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      toast.success("Abriendo para imprimir...");
+    } catch (error) {
+      console.error("Error printing receta:", error);
+      toast.error("Error al imprimir la receta");
     }
   };
 
@@ -166,6 +223,7 @@ export const PacientesTab = ({ user, token }) => {
     } else if (selectedPaciente) {
       setSelectedPaciente(null);
       setConsultas([]);
+      setRecetas([]);
     }
   };
 
@@ -191,7 +249,6 @@ export const PacientesTab = ({ user, token }) => {
         </div>
 
         <div className="table-container" style={{ padding: '1.5rem' }}>
-          {/* Badge de solo lectura */}
           <div style={{ 
             background: '#FEF3C7', 
             color: '#92400E', 
@@ -206,7 +263,6 @@ export const PacientesTab = ({ user, token }) => {
             <span>Esta consulta está cerrada. Los datos son de solo lectura.</span>
           </div>
 
-          {/* Datos de la consulta */}
           <div style={{ display: 'grid', gap: '1.5rem' }}>
             <div className="form-section">
               <h3 style={{ color: '#0C4A6E', marginBottom: '1rem', fontWeight: 600 }}>Motivo de Consulta</h3>
@@ -247,7 +303,6 @@ export const PacientesTab = ({ user, token }) => {
               </div>
             )}
 
-            {/* Signos Vitales si existen */}
             {historiaDetalle.signos_vitales && (
               <div className="form-section">
                 <h3 style={{ color: '#0C4A6E', marginBottom: '1rem', fontWeight: 600 }}>Signos Vitales</h3>
@@ -286,7 +341,7 @@ export const PacientesTab = ({ user, token }) => {
     );
   }
 
-  // Vista de Consultas del Paciente
+  // Vista de Detalle del Paciente con tabs
   if (selectedPaciente) {
     return (
       <div className="tab-content">
@@ -296,7 +351,7 @@ export const PacientesTab = ({ user, token }) => {
               <ArrowLeft className="button-icon" /> Volver a pacientes
             </Button>
             <h2 className="section-title">{selectedPaciente.nombre}</h2>
-            <p className="section-subtitle">Historial de consultas</p>
+            <p className="section-subtitle">Historial completo del paciente</p>
           </div>
         </div>
 
@@ -330,80 +385,160 @@ export const PacientesTab = ({ user, token }) => {
           </div>
         </div>
 
-        {/* Lista de Consultas */}
-        <div className="table-container">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Especialidad</th>
-                <th>Motivo</th>
-                <th>Diagnóstico</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {consultas.map((consulta) => (
-                <tr key={consulta.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Calendar size={16} className="text-gray-400" />
-                      {consulta.fecha}
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge">{consulta.especialidad}</span>
-                  </td>
-                  <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {consulta.historia?.motivo_consulta || consulta.observaciones || "-"}
-                  </td>
-                  <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {consulta.historia?.diagnostico || "-"}
-                  </td>
-                  <td>
-                    <span style={{
-                      padding: '0.25rem 0.75rem',
-                      borderRadius: '9999px',
-                      fontSize: '0.75rem',
-                      fontWeight: 500,
-                      background: consulta.estado === "Pagada" ? '#D1FAE5' : 
-                                  consulta.estado === "Pendiente de Pago" ? '#FEF3C7' : '#DBEAFE',
-                      color: consulta.estado === "Pagada" ? '#065F46' : 
-                             consulta.estado === "Pendiente de Pago" ? '#92400E' : '#1E40AF'
-                    }}>
-                      {consulta.estado === "Pendiente de Pago" ? "Atendida" : consulta.estado}
-                    </span>
-                  </td>
-                  <td>
-                    {consulta.tieneHistoria ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleVerHistoria(consulta)}
-                      >
-                        <Eye className="button-icon" /> Ver
-                      </Button>
-                    ) : (
-                      <span style={{ color: '#94A3B8', fontSize: '0.875rem' }}>Sin historia</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {loading && (
-            <div className="empty-state">
-              <p>Cargando consultas...</p>
+        {/* Tabs de Consultas y Recetas */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList style={{ marginBottom: '1rem' }}>
+            <TabsTrigger value="consultas">
+              <FileText className="tab-icon" style={{ marginRight: '0.5rem' }} />
+              Consultas ({consultas.length})
+            </TabsTrigger>
+            <TabsTrigger value="recetas">
+              <Download className="tab-icon" style={{ marginRight: '0.5rem' }} />
+              Recetas ({recetas.length})
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab Consultas */}
+          <TabsContent value="consultas">
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Especialidad</th>
+                    <th>Motivo</th>
+                    <th>Diagnóstico</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consultas.map((consulta) => (
+                    <tr key={consulta.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Calendar size={16} className="text-gray-400" />
+                          {consulta.fecha}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="badge">{consulta.especialidad}</span>
+                      </td>
+                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {consulta.historia?.motivo_consulta || consulta.observaciones || "-"}
+                      </td>
+                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {consulta.historia?.diagnostico || "-"}
+                      </td>
+                      <td>
+                        <span style={{
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          background: consulta.estado === "Pagada" ? '#D1FAE5' : 
+                                      consulta.estado === "Pendiente de Pago" ? '#FEF3C7' : '#DBEAFE',
+                          color: consulta.estado === "Pagada" ? '#065F46' : 
+                                 consulta.estado === "Pendiente de Pago" ? '#92400E' : '#1E40AF'
+                        }}>
+                          {consulta.estado === "Pendiente de Pago" ? "Atendida" : consulta.estado}
+                        </span>
+                      </td>
+                      <td>
+                        {consulta.tieneHistoria ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleVerHistoria(consulta)}
+                          >
+                            <Eye className="button-icon" /> Ver
+                          </Button>
+                        ) : (
+                          <span style={{ color: '#94A3B8', fontSize: '0.875rem' }}>Sin historia</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {loading && (
+                <div className="empty-state">
+                  <p>Cargando consultas...</p>
+                </div>
+              )}
+              {!loading && consultas.length === 0 && (
+                <div className="empty-state">
+                  <FileText className="empty-icon" />
+                  <p>No hay consultas registradas</p>
+                </div>
+              )}
             </div>
-          )}
-          {!loading && consultas.length === 0 && (
-            <div className="empty-state">
-              <FileText className="empty-icon" />
-              <p>No hay consultas registradas</p>
+          </TabsContent>
+
+          {/* Tab Recetas */}
+          <TabsContent value="recetas">
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Diagnóstico</th>
+                    <th>Medicamentos</th>
+                    <th>Doctor</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recetas.map((receta) => (
+                    <tr key={receta.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Calendar size={16} className="text-gray-400" />
+                          {receta.fecha}
+                        </div>
+                      </td>
+                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {receta.diagnostico || "-"}
+                      </td>
+                      <td>
+                        <span className="badge" style={{ background: '#E0E7FF', color: '#3730A3' }}>
+                          {receta.medicamentos?.length || 0} medicamento(s)
+                        </span>
+                      </td>
+                      <td>{receta.doctor_nombre || "-"}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDescargarReceta(receta)}
+                            title="Descargar PDF"
+                          >
+                            <Download size={16} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleImprimirReceta(receta)}
+                            title="Imprimir"
+                          >
+                            <Printer size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {recetas.length === 0 && (
+                <div className="empty-state">
+                  <FileText className="empty-icon" />
+                  <p>No hay recetas registradas para este paciente</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
     );
   }
