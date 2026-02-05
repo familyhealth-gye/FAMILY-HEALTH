@@ -27,16 +27,32 @@ export const AppointmentsWithAttention = ({
 
   // Obtener la especialidad del usuario
   const userEspecialidad = user?.especialidad || null;
+  
+  // DEBUG: Mostrar info del usuario para verificar especialidad
+  console.log("=== DEBUG USER ===", { 
+    role: user?.role, 
+    especialidad: userEspecialidad, 
+    doctor_id: user?.doctor_id,
+    username: user?.username
+  });
 
   const handleStartAttention = async (appointment) => {
-    // VALIDACIÓN CRÍTICA: Verificar especialidad antes de permitir atención
-    if (user?.role === "Doctor" && appointment.especialidad !== userEspecialidad) {
+    console.log("=== DEBUG APPOINTMENT ===", {
+      id: appointment.id,
+      especialidad: appointment.especialidad,
+      doctor_id: appointment.doctor_id,
+      estado: appointment.estado
+    });
+    
+    // VALIDACIÓN: Solo validar si el usuario tiene especialidad definida
+    // Si no tiene especialidad (usuario legacy), permitir acceso
+    if (user?.role === "Doctor" && userEspecialidad && appointment.especialidad !== userEspecialidad) {
       toast.error(`No puede atender consultas de ${appointment.especialidad}. Su especialidad es ${userEspecialidad}.`);
       return;
     }
     
-    // VALIDACIÓN: Verificar que el doctor_id coincida
-    if (user?.role === "Doctor" && appointment.doctor_id !== user.doctor_id) {
+    // VALIDACIÓN: Verificar que el doctor_id coincida (si está definido)
+    if (user?.role === "Doctor" && user.doctor_id && appointment.doctor_id !== user.doctor_id) {
       toast.error("No tiene permisos para atender esta consulta.");
       return;
     }
@@ -53,7 +69,8 @@ export const AppointmentsWithAttention = ({
       setAttentionDialog(true);
       await fetchData();
     } catch (error) {
-      toast.error("Error al iniciar atención");
+      console.error("Error al iniciar atención:", error);
+      toast.error("Error al iniciar atención: " + (error.response?.data?.detail || error.message));
     }
   };
 
