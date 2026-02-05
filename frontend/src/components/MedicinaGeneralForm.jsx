@@ -188,10 +188,6 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
       toast.success("Consulta cerrada exitosamente");
       onSuccess();
       onClose();
-
-      toast.success("Historia clínica y receta generadas exitosamente");
-      onSuccess();
-      onClose();
     } catch (error) {
       console.error("=== ERROR ===");
       console.error("Error completo:", error);
