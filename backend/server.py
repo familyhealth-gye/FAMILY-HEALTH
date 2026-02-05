@@ -412,6 +412,22 @@ async def create_general_history(
     # Get current user data
     user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
     
+    # VALIDACIÓN CRÍTICA: Verificar que el doctor tenga permisos para esta especialidad
+    if user.get('role') == 'Doctor':
+        user_especialidad = user.get('especialidad', '')
+        appointment_especialidad = appointment.get('especialidad', '')
+        
+        # Medicina General puede atender consultas de Medicina General
+        if appointment_especialidad != 'Medicina General':
+            raise HTTPException(
+                status_code=403, 
+                detail=f"No tiene permisos para crear historias de {appointment_especialidad}. Este formulario es para Medicina General."
+            )
+        
+        # Verificar que sea el doctor asignado
+        if user.get('doctor_id') != appointment.get('doctor_id'):
+            raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+    
     history_dict = input.model_dump()
     history_dict['paciente_id'] = appointment['id']
     history_dict['paciente_nombre'] = appointment['nombre_completo']
