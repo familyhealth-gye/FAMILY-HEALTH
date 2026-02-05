@@ -87,9 +87,10 @@ class MedicalHistoryUpdate(BaseModel):
 # ========== PRESCRIPTION MODELS ==========
 class Medication(BaseModel):
     nombre: str
-    dosis: str
-    frecuencia: str
-    duracion: str
+    dosis: str = ""
+    frecuencia: str = ""
+    duracion: str = ""
+    via: str = ""
     indicaciones: str = ""
 
 
@@ -98,30 +99,34 @@ class Prescription(BaseModel):
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     paciente_id: str
-    paciente_nombre: str
-    paciente_cedula: str
-    paciente_edad: int
+    paciente_nombre: str = ""
+    paciente_cedula: str = ""
+    paciente_edad: int = 0
     doctor_id: str
-    doctor_nombre: str
-    doctor_especialidad: str
+    doctor_nombre: str = ""
+    doctor_especialidad: str = ""
     fecha: str
-    diagnostico: str
+    diagnostico: str = ""
     cie10_codigo: str = ""
     cie10_descripcion: str = ""
-    medicamentos: List[Medication]
+    medicamentos: List[Medication] = []
     indicaciones_generales: str = ""
+    observaciones: str = ""
+    appointment_id: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class PrescriptionCreate(BaseModel):
     paciente_id: str
-    doctor_id: str
-    fecha: str
-    diagnostico: str
+    doctor_id: str = ""
+    fecha: str = ""
+    diagnostico: str = ""
     cie10_codigo: str = ""
     cie10_descripcion: str = ""
-    medicamentos: List[Medication]
+    medicamentos: List[Medication] = []
     indicaciones_generales: str = ""
+    observaciones: str = ""
+    appointment_id: str = ""
 
 
 # ========== EXISTING MODELS (from previous phases) ==========
