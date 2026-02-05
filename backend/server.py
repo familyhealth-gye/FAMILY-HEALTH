@@ -570,6 +570,20 @@ async def create_odontology_history(
     # Get current user data
     user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
     
+    # VALIDACIÓN CRÍTICA: Verificar que el doctor tenga permisos para Odontología
+    if user.get('role') == 'Doctor':
+        appointment_especialidad = appointment.get('especialidad', '')
+        
+        if appointment_especialidad != 'Odontología':
+            raise HTTPException(
+                status_code=403, 
+                detail=f"No tiene permisos para crear historias de {appointment_especialidad}. Este formulario es para Odontología."
+            )
+        
+        # Verificar que sea el doctor asignado
+        if user.get('doctor_id') != appointment.get('doctor_id'):
+            raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+    
     history_dict = input.model_dump()
     history_dict['paciente_id'] = appointment['id']
     history_dict['paciente_nombre'] = appointment['nombre_completo']
