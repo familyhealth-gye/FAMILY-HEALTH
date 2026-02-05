@@ -77,6 +77,21 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validaciones frontend
+    if (!form.motivo_consulta.trim()) {
+      toast.error("El motivo de consulta es obligatorio");
+      return;
+    }
+    if (!form.enfermedad_actual.trim()) {
+      toast.error("La enfermedad actual es obligatoria");
+      return;
+    }
+    if (!form.diagnostico.trim()) {
+      toast.error("El diagnóstico es obligatorio");
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -84,9 +99,16 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
       const historyData = { ...form, appointment_id: appointment.id };
       delete historyData.medicamentos;
       
-      historyData.plan_tratamiento = form.medicamentos.map((m, i) => 
-        `${i + 1}. ${m.nombre} ${m.dosis} - ${m.frecuencia} por ${m.duracion}`
-      ).join('\n');
+      // Generar plan de tratamiento
+      const planTratamiento = form.medicamentos
+        .filter(m => m.nombre.trim())
+        .map((m, i) => `${i + 1}. ${m.nombre} ${m.dosis} - ${m.frecuencia} por ${m.duracion}`)
+        .join('\n');
+      
+      historyData.plan_tratamiento = planTratamiento || "Sin medicamentos prescritos";
+
+      console.log("=== ENVIANDO HISTORIA PEDIÁTRICA ===");
+      console.log("Payload:", historyData);
 
       await axios.post(
         `${API}/medical-history/pediatric`,
@@ -102,9 +124,12 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
         diagnostico: form.diagnostico,
         cie10_codigo: form.cie10_codigo || "",
         cie10_descripcion: "",
-        medicamentos: form.medicamentos,
+        medicamentos: form.medicamentos.filter(m => m.nombre.trim()),
         indicaciones_generales: form.indicaciones_padres || ""
       };
+
+      console.log("=== ENVIANDO RECETA ===");
+      console.log("Payload:", prescriptionData);
 
       const prescriptionRes = await axios.post(
         `${API}/prescriptions`,
@@ -133,8 +158,14 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (error) {
-      console.error(error);
-      toast.error(error.response?.data?.detail || "Error al guardar");
+      console.error("=== ERROR ===");
+      console.error("Error completo:", error);
+      console.error("Response:", error.response?.data);
+      
+      const errorMsg = error.response?.data?.detail || 
+                       (typeof error.response?.data === 'string' ? error.response.data : null) ||
+                       "Error al guardar la historia clínica";
+      toast.error(errorMsg);
     }
     setLoading(false);
   };
