@@ -597,22 +597,48 @@ async def create_prescription(
     input: PrescriptionCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    # Get patient info
-    appointment = await db.appointments.find_one({"id": input.paciente_id}, {"_id": 0})
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+    # Get patient info - buscar por appointment_id o paciente_id
+    appointment = None
+    if input.appointment_id:
+        appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
+    if not appointment and input.paciente_id:
+        appointment = await db.appointments.find_one({"id": input.paciente_id}, {"_id": 0})
     
-    # Get doctor info
-    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
-    if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor no encontrado")
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Cita/Paciente no encontrado")
+    
+    # Get doctor info - del usuario actual o del input
+    doctor = None
+    user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
+    
+    doctor_id = input.doctor_id or (user.get('doctor_id') if user else None) or appointment.get('doctor_id')
+    if doctor_id:
+        doctor = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
     
     prescription_dict = input.model_dump()
-    prescription_dict['paciente_nombre'] = appointment['nombre_completo']
-    prescription_dict['paciente_cedula'] = appointment['cedula']
-    prescription_dict['paciente_edad'] = appointment['edad']
-    prescription_dict['doctor_nombre'] = doctor['nombre']
-    prescription_dict['doctor_especialidad'] = doctor['especialidad']
+    prescription_dict['paciente_id'] = appointment['id']
+    prescription_dict['paciente_nombre'] = appointment.get('nombre_completo', '')
+    prescription_dict['paciente_cedula'] = appointment.get('cedula', '')
+    prescription_dict['paciente_edad'] = appointment.get('edad', 0)
+    prescription_dict['appointment_id'] = appointment['id']
+    
+    if doctor:
+        prescription_dict['doctor_id'] = doctor['id']
+        prescription_dict['doctor_nombre'] = doctor.get('nombre', '')
+        prescription_dict['doctor_especialidad'] = doctor.get('especialidad', '')
+    else:
+        prescription_dict['doctor_nombre'] = user.get('nombre_completo', '') if user else ''
+        prescription_dict['doctor_especialidad'] = appointment.get('especialidad', '')
+    
+    # Asegurar fecha
+    if not prescription_dict.get('fecha'):
+        prescription_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    
+    # Filtrar medicamentos vacíos
+    prescription_dict['medicamentos'] = [
+        m for m in prescription_dict.get('medicamentos', []) 
+        if m.get('nombre', '').strip()
+    ]
     
     prescription_obj = Prescription(**prescription_dict)
     doc = prescription_obj.model_dump()
