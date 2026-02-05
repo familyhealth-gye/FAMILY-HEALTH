@@ -25,7 +25,22 @@ export const AppointmentsWithAttention = ({
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]); // Fecha actual por defecto
 
+  // Obtener la especialidad del usuario
+  const userEspecialidad = user?.especialidad || null;
+
   const handleStartAttention = async (appointment) => {
+    // VALIDACIÓN CRÍTICA: Verificar especialidad antes de permitir atención
+    if (user?.role === "Doctor" && appointment.especialidad !== userEspecialidad) {
+      toast.error(`No puede atender consultas de ${appointment.especialidad}. Su especialidad es ${userEspecialidad}.`);
+      return;
+    }
+    
+    // VALIDACIÓN: Verificar que el doctor_id coincida
+    if (user?.role === "Doctor" && appointment.doctor_id !== user.doctor_id) {
+      toast.error("No tiene permisos para atender esta consulta.");
+      return;
+    }
+    
     try {
       // Update appointment status to "En Atención"
       await axios.put(
@@ -49,9 +64,12 @@ export const AppointmentsWithAttention = ({
     toast.success("Consulta terminada - Cita pendiente de pago");
   };
 
-  // Filter appointments by doctor if user is a doctor
+  // Filter appointments by doctor AND especialidad if user is a doctor
   let visibleAppointments = user?.role === "Doctor" && user?.doctor_id
-    ? filteredAppointments.filter(apt => apt.doctor_id === user.doctor_id)
+    ? filteredAppointments.filter(apt => 
+        apt.doctor_id === user.doctor_id && 
+        apt.especialidad === userEspecialidad
+      )
     : filteredAppointments;
 
   // Filter by date (only show appointments for selected date)
