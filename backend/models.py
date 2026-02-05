@@ -85,8 +85,10 @@ class MedicalHistoryUpdate(BaseModel):
 
 
 # ========== PRESCRIPTION MODELS ==========
+# Sistema de recetas TRANSVERSAL para todas las especialidades del centro médico
+
 class Medication(BaseModel):
-    nombre: str
+    nombre: str  # Único campo obligatorio
     dosis: str = ""
     frecuencia: str = ""
     duracion: str = ""
@@ -95,38 +97,89 @@ class Medication(BaseModel):
 
 
 class Prescription(BaseModel):
+    """
+    Receta médica universal - funciona para todas las especialidades:
+    - Medicina General
+    - Odontología
+    - Pediatría
+    - Ginecología
+    - Otras especialidades futuras
+    """
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Campos obligatorios del paciente
     paciente_id: str
     paciente_nombre: str = ""
     paciente_cedula: str = ""
     paciente_edad: int = 0
-    doctor_id: str
+    
+    # Campos del doctor
+    doctor_id: str = ""
     doctor_nombre: str = ""
-    doctor_especialidad: str = ""
-    fecha: str
+    doctor_especialidad: str = ""  # Especialidad que emite la receta
+    
+    # Campos comunes obligatorios
+    appointment_id: str = ""
+    especialidad: str = ""  # Especialidad de la consulta
+    fecha: str = ""
+    medicamentos: List[Medication] = []
+    indicaciones_generales: str = ""
+    
+    # Campos opcionales comunes
     diagnostico: str = ""
     cie10_codigo: str = ""
     cie10_descripcion: str = ""
-    medicamentos: List[Medication] = []
-    indicaciones_generales: str = ""
     observaciones: str = ""
-    appointment_id: str = ""
+    
+    # Campos opcionales por especialidad
+    # Medicina General / Pediatría
+    peso: float = 0
+    talla: float = 0
+    imc: float = 0
+    
+    # Ginecología
+    semanas_gestacion: int = 0
+    fecha_ultima_menstruacion: str = ""
+    
+    # Odontología
+    procedimiento_realizado: str = ""
+    piezas_dentales: str = ""
+    
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class PrescriptionCreate(BaseModel):
+    """
+    Crear receta - todos los campos opcionales excepto paciente_id
+    Permite crear recetas desde cualquier especialidad
+    """
+    # Obligatorio
     paciente_id: str
+    
+    # Campos comunes opcionales
     doctor_id: str = ""
+    appointment_id: str = ""
+    especialidad: str = ""
     fecha: str = ""
+    medicamentos: List[Medication] = []
+    indicaciones_generales: str = ""
+    
+    # Opcionales
     diagnostico: str = ""
     cie10_codigo: str = ""
     cie10_descripcion: str = ""
-    medicamentos: List[Medication] = []
-    indicaciones_generales: str = ""
     observaciones: str = ""
-    appointment_id: str = ""
+    
+    # Campos opcionales por especialidad
+    peso: float = 0
+    talla: float = 0
+    imc: float = 0
+    semanas_gestacion: int = 0
+    fecha_ultima_menstruacion: str = ""
+    procedimiento_realizado: str = ""
+    piezas_dentales: str = ""
 
 
 # ========== EXISTING MODELS (from previous phases) ==========
