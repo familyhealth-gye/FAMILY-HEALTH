@@ -489,17 +489,16 @@ async def create_pediatric_history(
     # Get current user data
     user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
     
-    # VALIDACIÓN CRÍTICA: Verificar que el doctor tenga permisos para Pediatría
-    if user.get('role') == 'Doctor':
-        appointment_especialidad = appointment.get('especialidad', '')
-        
-        if appointment_especialidad != 'Pediatría':
-            raise HTTPException(
-                status_code=403, 
-                detail=f"No tiene permisos para crear historias de {appointment_especialidad}. Este formulario es para Pediatría."
-            )
-        
-        # Verificar que sea el doctor asignado
+    # VALIDACIÓN: Solo para Pediatría
+    appointment_especialidad = appointment.get('especialidad', '')
+    if appointment_especialidad and appointment_especialidad != 'Pediatría':
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Este formulario es para Pediatría, no para {appointment_especialidad}."
+        )
+    
+    # Validar doctor si tiene doctor_id
+    if user.get('role') == 'Doctor' and user.get('doctor_id'):
         if user.get('doctor_id') != appointment.get('doctor_id'):
             raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
     
