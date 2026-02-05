@@ -365,10 +365,20 @@ function App() {
                 Doctores
               </TabsTrigger>
             )}
-            <TabsTrigger value="history" data-testid="history-tab">
-              <ClipboardList className="tab-icon" />
-              Historias
-            </TabsTrigger>
+            {/* Tab Pacientes solo para Doctores */}
+            {user.role === "Doctor" && (
+              <TabsTrigger value="pacientes" data-testid="pacientes-tab">
+                <Users className="tab-icon" />
+                Pacientes
+              </TabsTrigger>
+            )}
+            {/* Tab Historias para Admin y Recepción */}
+            {(user.role === "Administrador" || user.role === "Recepcion") && (
+              <TabsTrigger value="history" data-testid="history-tab">
+                <ClipboardList className="tab-icon" />
+                Historias
+              </TabsTrigger>
+            )}
             <TabsTrigger value="prescriptions" data-testid="prescriptions-tab">
               <FileText className="tab-icon" />
               Recetas
