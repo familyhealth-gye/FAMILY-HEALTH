@@ -104,6 +104,21 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validaciones frontend
+    if (!form.motivo_consulta.trim()) {
+      toast.error("El motivo de consulta es obligatorio");
+      return;
+    }
+    if (!form.diagnostico.trim()) {
+      toast.error("El diagnóstico es obligatorio");
+      return;
+    }
+    if (!form.plan_tratamiento.trim()) {
+      toast.error("El plan de tratamiento es obligatorio");
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -115,8 +130,11 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
         dientes: form.dientes,
         diagnostico_general: form.diagnostico,
         tratamiento_recomendado: form.plan_tratamiento,
-        observaciones: form.observaciones
+        observaciones: form.observaciones || ""
       };
+
+      console.log("=== ENVIANDO ODONTOGRAMA ===");
+      console.log("Payload:", odontogramData);
 
       const odontogramRes = await axios.post(
         `${API}/odontograms`,
@@ -132,6 +150,9 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
       };
       delete historyData.dientes; // No guardar dientes en historia, ya están en odontograma
 
+      console.log("=== ENVIANDO HISTORIA ODONTOLÓGICA ===");
+      console.log("Payload:", historyData);
+
       await axios.post(
         `${API}/medical-history/odontology`,
         historyData,
@@ -142,8 +163,14 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (error) {
-      console.error(error);
-      toast.error(error.response?.data?.detail || "Error al guardar");
+      console.error("=== ERROR ===");
+      console.error("Error completo:", error);
+      console.error("Response:", error.response?.data);
+      
+      const errorMsg = error.response?.data?.detail || 
+                       (typeof error.response?.data === 'string' ? error.response.data : null) ||
+                       "Error al guardar la historia clínica";
+      toast.error(errorMsg);
     }
     setLoading(false);
   };
