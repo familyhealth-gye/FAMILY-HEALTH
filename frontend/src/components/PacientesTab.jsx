@@ -90,19 +90,21 @@ export const PacientesTab = ({ user, token }) => {
     setLoading(false);
   };
 
-  // Buscar consultas incompletas - SOLO de la especialidad del doctor
+  // Buscar consultas incompletas - filtrar por especialidad solo si está definida
   const fetchConsultasIncompletas = async () => {
     try {
       const appointmentsRes = await axios.get(`${API}/appointments`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // FILTRO CRÍTICO: Solo citas del doctor Y de su especialidad
-      const citasDoctor = appointmentsRes.data.filter(
-        apt => apt.doctor_id === user.doctor_id && 
-               apt.especialidad === userEspecialidad &&
-               (apt.estado === "En Atención" || apt.estado === "Pendiente de Pago")
-      );
+      // Filtrar citas del doctor
+      const citasDoctor = appointmentsRes.data.filter(apt => {
+        if (apt.doctor_id !== user.doctor_id) return false;
+        if (apt.estado !== "En Atención" && apt.estado !== "Pendiente de Pago") return false;
+        // Solo filtrar por especialidad si el usuario tiene una definida
+        if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
+        return true;
+      });
       
       // Verificar cuáles no tienen historia clínica completa
       const incompletas = await Promise.all(
