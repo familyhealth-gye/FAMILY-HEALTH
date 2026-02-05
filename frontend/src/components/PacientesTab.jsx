@@ -156,13 +156,15 @@ export const PacientesTab = ({ user, token }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // FILTRO CRÍTICO: Solo citas del paciente con este doctor Y de su especialidad
-      const citasPaciente = appointmentsRes.data.filter(
-        apt => apt.cedula === cedula && 
-               apt.doctor_id === user.doctor_id &&
-               apt.especialidad === userEspecialidad &&
-               apt.estado !== "Cancelada"
-      );
+      // Filtrar citas del paciente con este doctor
+      const citasPaciente = appointmentsRes.data.filter(apt => {
+        if (apt.cedula !== cedula) return false;
+        if (apt.doctor_id !== user.doctor_id) return false;
+        if (apt.estado === "Cancelada") return false;
+        // Solo filtrar por especialidad si el usuario tiene una definida
+        if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
+        return true;
+      });
       
       const consultasConHistoria = await Promise.all(
         citasPaciente.map(async (cita) => {
