@@ -244,6 +244,18 @@ export const PacientesTab = ({ user, token }) => {
   };
 
   const handleReanudarConsulta = async (consulta) => {
+    // VALIDACIÓN CRÍTICA: Verificar que la consulta sea de la especialidad del doctor
+    if (consulta.especialidad !== userEspecialidad) {
+      toast.error(`No puede atender consultas de ${consulta.especialidad}. Su especialidad es ${userEspecialidad}.`);
+      return;
+    }
+    
+    // VALIDACIÓN: Verificar que el doctor_id coincida
+    if (consulta.doctor_id !== user.doctor_id) {
+      toast.error("No tiene permisos para atender esta consulta.");
+      return;
+    }
+    
     try {
       // Cambiar estado a "En Atención" si estaba en otro estado
       if (consulta.estado !== "En Atención") {
