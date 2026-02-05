@@ -257,14 +257,21 @@ export const PacientesTab = ({ user, token }) => {
   };
 
   const handleReanudarConsulta = async (consulta) => {
-    // VALIDACIÓN CRÍTICA: Verificar que la consulta sea de la especialidad del doctor
-    if (consulta.especialidad !== userEspecialidad) {
+    console.log("=== DEBUG REANUDAR ===", {
+      consulta_especialidad: consulta.especialidad,
+      user_especialidad: userEspecialidad,
+      consulta_doctor_id: consulta.doctor_id,
+      user_doctor_id: user.doctor_id
+    });
+    
+    // VALIDACIÓN: Solo validar especialidad si el usuario tiene una definida
+    if (userEspecialidad && consulta.especialidad !== userEspecialidad) {
       toast.error(`No puede atender consultas de ${consulta.especialidad}. Su especialidad es ${userEspecialidad}.`);
       return;
     }
     
     // VALIDACIÓN: Verificar que el doctor_id coincida
-    if (consulta.doctor_id !== user.doctor_id) {
+    if (user.doctor_id && consulta.doctor_id !== user.doctor_id) {
       toast.error("No tiene permisos para atender esta consulta.");
       return;
     }
@@ -282,7 +289,8 @@ export const PacientesTab = ({ user, token }) => {
       setAppointmentToResume(consulta);
       setAttentionDialog(true);
     } catch (error) {
-      toast.error("Error al reanudar consulta");
+      console.error("Error al reanudar consulta:", error);
+      toast.error("Error al reanudar consulta: " + (error.response?.data?.detail || error.message));
     }
   };
 
