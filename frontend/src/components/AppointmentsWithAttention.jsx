@@ -130,7 +130,7 @@ export const AppointmentsWithAttention = ({
               <td>{appointment.fecha}</td>
               <td>{appointment.hora}</td>
               <td className="actions-cell">
-                {/* Permitir iniciar o continuar atención */}
+                {/* Permitir iniciar, continuar o reanudar atención */}
                 {(appointment.estado === "Programada" || appointment.estado === "En Atención" || !appointment.estado) && user?.role === "Doctor" && (
                   <Button
                     size="sm"
@@ -141,6 +141,21 @@ export const AppointmentsWithAttention = ({
                   >
                     <Play className="button-icon" size={14} />
                     {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
+                  </Button>
+                )}
+                
+                {/* Permitir reanudar consulta "Pendiente de Pago" si el doctor necesita completarla */}
+                {appointment.estado === "Pendiente de Pago" && user?.role === "Doctor" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleStartAttention(appointment)}
+                    className="resume-button"
+                    data-testid={`resume-attention-${appointment.id}`}
+                    title="Reanudar para completar historia clínica"
+                  >
+                    <Play className="button-icon" size={14} />
+                    Reanudar
                   </Button>
                 )}
                 
