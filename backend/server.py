@@ -668,6 +668,45 @@ async def get_odontology_history_by_appointment(
     
     return MedicalHistoryOdontology(**history)
 
+@api_router.put("/medical-history/odontology/{history_id}", response_model=MedicalHistoryOdontology)
+async def update_odontology_history(
+    history_id: str,
+    input: MedicalHistoryOdontologyCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualizar historia clínica odontológica existente"""
+    existing = await db.medical_history_odontology.find_one({"id": history_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    
+    update_data = input.model_dump()
+    update_data['id'] = history_id
+    update_data['paciente_id'] = existing.get('paciente_id')
+    update_data['paciente_nombre'] = existing.get('paciente_nombre')
+    update_data['paciente_cedula'] = existing.get('paciente_cedula')
+    update_data['paciente_edad'] = existing.get('paciente_edad')
+    update_data['paciente_sexo'] = existing.get('paciente_sexo')
+    update_data['doctor_id'] = existing.get('doctor_id')
+    update_data['doctor_nombre'] = existing.get('doctor_nombre')
+    update_data['fecha'] = existing.get('fecha')
+    update_data['created_at'] = existing.get('created_at')
+    
+    await db.medical_history_odontology.update_one(
+        {"id": history_id},
+        {"$set": update_data}
+    )
+    
+    # Actualizar estado de la cita
+    await db.appointments.update_one(
+        {"id": input.appointment_id},
+        {"$set": {"estado": "Pendiente de Pago"}}
+    )
+    
+    if isinstance(update_data['created_at'], str):
+        update_data['created_at'] = datetime.fromisoformat(update_data['created_at'])
+    
+    return MedicalHistoryOdontology(**update_data)
+
 # ========== PRESCRIPTION ENDPOINTS ==========
 # Sistema TRANSVERSAL de recetas para todas las especialidades
 
