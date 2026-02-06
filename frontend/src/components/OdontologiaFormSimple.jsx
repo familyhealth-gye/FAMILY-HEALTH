@@ -188,12 +188,24 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
         }
       };
 
-      console.log("=== ENVIANDO HISTORIA ODONTOLÓGICA ===");
-      console.log("Payload:", historyData);
+      console.log("=== GUARDANDO HISTORIA ODONTOLÓGICA ===");
+      console.log("Historia existente:", existingHistory ? "Sí (actualizar)" : "No (crear nueva)");
 
-      await axios.post(`${API}/medical-history/odontology`, historyData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      if (existingHistory) {
+        // ACTUALIZAR historia existente
+        await axios.put(
+          `${API}/medical-history/odontology/${existingHistory.id}`,
+          historyData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Historia odontológica actualizada");
+      } else {
+        // CREAR nueva historia
+        await axios.post(`${API}/medical-history/odontology`, historyData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success("Historia odontológica guardada");
+      }
 
       // Crear receta si hay medicamentos
       const medsFiltrados = form.medicamentos.filter(m => m.nombre && m.nombre.trim());
