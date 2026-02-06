@@ -167,7 +167,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
     let consultaCerrada = false;
 
     try {
-      // 1. Guardar historia clínica (obligatorio)
+      // 1. Guardar o actualizar historia clínica
       const historyData = { ...form, appointment_id: appointment.id };
       delete historyData.medicamentos;
       delete historyData.indicaciones_generales;
@@ -180,11 +180,25 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
       historyData.plan_tratamiento = planTratamiento || "Sin medicamentos prescritos";
 
       console.log("=== GUARDANDO HISTORIA CLÍNICA ===");
-      await axios.post(
-        `${API}/medical-history/general`,
-        historyData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      console.log("Historia existente:", existingHistory ? "Sí (actualizar)" : "No (crear nueva)");
+      
+      if (existingHistory) {
+        // ACTUALIZAR historia existente
+        await axios.put(
+          `${API}/medical-history/general/${existingHistory.id}`,
+          historyData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Historia clínica actualizada");
+      } else {
+        // CREAR nueva historia
+        await axios.post(
+          `${API}/medical-history/general`,
+          historyData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Historia clínica guardada");
+      }
       
       consultaCerrada = true;
       toast.success("Historia clínica guardada");
