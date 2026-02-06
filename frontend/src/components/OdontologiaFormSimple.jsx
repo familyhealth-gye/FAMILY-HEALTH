@@ -153,13 +153,11 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
       };
 
       console.log("=== ENVIANDO ODONTOGRAMA ===");
-      console.log("Payload:", odontogramData);
-
       await axios.post(`${API}/odontograms`, odontogramData, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Guardar historia clínica simplificada
+      // Guardar o actualizar historia clínica
       const historyData = {
         appointment_id: appointment.id,
         motivo_consulta: form.motivo_consulta,
