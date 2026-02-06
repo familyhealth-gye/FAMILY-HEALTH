@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,8 @@ const ESTADOS = [
 
 export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  const [existingHistory, setExistingHistory] = useState(null);
   const [estadoSeleccionado, setEstadoSeleccionado] = useState('caries');
   
   // Inicializar dientes con estado sano
@@ -51,6 +53,47 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
     medicamentos: [{ nombre: "", dosis: "", via: "", frecuencia: "", duracion: "", indicaciones: "" }],
     observaciones: ""
   });
+
+  // Cargar historia odontológica existente al montar
+  useEffect(() => {
+    const loadExistingHistory = async () => {
+      if (!appointment?.id) {
+        setLoadingData(false);
+        return;
+      }
+      
+      try {
+        const response = await axios.get(
+          `${API}/medical-history/odontology/appointment/${appointment.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (response.data) {
+          console.log("=== HISTORIA ODONTOLÓGICA EXISTENTE ===", response.data);
+          setExistingHistory(response.data);
+          
+          // Cargar datos en el formulario
+          const history = response.data;
+          setForm(prevForm => ({
+            ...prevForm,
+            motivo_consulta: history.motivo_consulta || "",
+            diagnostico: history.diagnostico || "",
+            tratamiento_realizado: history.plan_tratamiento || "",
+            observaciones: history.observaciones || ""
+          }));
+          
+          toast.info("Historia odontológica cargada - puede continuar editando");
+        }
+      } catch (error) {
+        if (error.response?.status !== 404) {
+          console.error("Error cargando historia odontológica:", error);
+        }
+      }
+      setLoadingData(false);
+    };
+    
+    loadExistingHistory();
+  }, [appointment?.id, token]);
 
   const handleDienteClick = (numero) => {
     setDientes({
