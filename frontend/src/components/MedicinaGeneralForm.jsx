@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,8 @@ const API = `${BACKEND_URL}/api`;
 
 export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  const [existingHistory, setExistingHistory] = useState(null);
   const [form, setForm] = useState({
     motivo_consulta: "",
     enfermedad_actual: "",
@@ -78,6 +80,71 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
     indicaciones_generales: "",
     observaciones: ""
   });
+
+  // Cargar historia clínica existente al montar
+  useEffect(() => {
+    const loadExistingHistory = async () => {
+      if (!appointment?.id) {
+        setLoadingData(false);
+        return;
+      }
+      
+      try {
+        const response = await axios.get(
+          `${API}/medical-history/general/appointment/${appointment.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (response.data) {
+          console.log("=== HISTORIA EXISTENTE CARGADA ===", response.data);
+          setExistingHistory(response.data);
+          
+          // Cargar datos en el formulario
+          const history = response.data;
+          setForm(prevForm => ({
+            ...prevForm,
+            motivo_consulta: history.motivo_consulta || "",
+            enfermedad_actual: history.enfermedad_actual || "",
+            antecedentes_familiares: history.antecedentes_familiares || "",
+            alergias: history.alergias || "",
+            quirurgicos: history.quirurgicos || "",
+            traumatismos: history.traumatismos || "",
+            hospitalizaciones: history.hospitalizaciones || "",
+            tabaco: history.tabaco || "",
+            alcohol: history.alcohol || "",
+            drogas: history.drogas || "",
+            signos_vitales: history.signos_vitales || prevForm.signos_vitales,
+            impresion_general: history.impresion_general || "",
+            piel: history.piel || "",
+            cabeza: history.cabeza || "",
+            orl: history.orl || "",
+            cuello: history.cuello || "",
+            torax: history.torax || "",
+            cardiovascular: history.cardiovascular || "",
+            pulmonar: history.pulmonar || "",
+            abdomen: history.abdomen || "",
+            extremidades: history.extremidades || "",
+            neurologico: history.neurologico || "",
+            laboratorios: history.laboratorios || "",
+            diagnostico: history.diagnostico || "",
+            cie10_codigo: history.cie10_codigo || "",
+            plan_tratamiento: history.plan_tratamiento || "",
+            observaciones: history.observaciones || ""
+          }));
+          
+          toast.info("Historia clínica cargada - puede continuar editando");
+        }
+      } catch (error) {
+        // 404 significa que no existe historia, es normal
+        if (error.response?.status !== 404) {
+          console.error("Error cargando historia:", error);
+        }
+      }
+      setLoadingData(false);
+    };
+    
+    loadExistingHistory();
+  }, [appointment?.id, token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
