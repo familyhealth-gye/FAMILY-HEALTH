@@ -318,10 +318,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Proformas Tab - crear, listar, cambiar estados"
-    - "Abonos Tab - registrar, vincular con proformas, calcular saldos"
-    - "Odontograma Tab - interacción visual, selección de dientes, guardado"
-    - "Historia Clínica Odontología - flujo completo desde cita"
+    - "Endpoint crear consulta desde cita - POST /api/financial/consultas/desde-cita/{id}"
+    - "Endpoint convertir proforma - POST /api/financial/consultas/desde-proforma/{id}"
+    - "Endpoint registrar pago - POST /api/financial/consultas/{id}/pagos"
+    - "Verificar actualización automática de saldos"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
