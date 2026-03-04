@@ -13,7 +13,10 @@ import csv
 from collections import defaultdict
 from datetime import datetime, timezone
 
-app = FastAPI()
+# Importar módulo financiero
+from financial_routes import financial_router
+
+app = FastAPI(title="Family Health API", description="Sistema Clínico Multiespecialidad SaaS", version="2.0")
 
 # CORS - DEBE IR PRIMERO
 app.add_middleware(
