@@ -126,6 +126,42 @@ backend:
         agent: "testing"
         comment: "✅ TESTED: Todos los modelos funcionan correctamente. ProformaItem con cálculos, Abono con vinculación a proformas, Odontogram con 32 dientes y estados, ToothState con caras dentales. Validaciones Pydantic operativas."
   
+  - task: "Endpoints API Financiero - Consultas desde Cita"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Nuevo endpoint POST /api/financial/consultas/desde-cita/{appointment_id} para crear consulta financiera automáticamente al cerrar atención médica"
+
+  - task: "Endpoints API Financiero - Consultas desde Proforma"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Nuevo endpoint POST /api/financial/consultas/desde-proforma/{proforma_id} para convertir proforma aceptada en consulta financiera (Odontología)"
+
+  - task: "Endpoints API Financiero - Pagos con actualización automática"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Endpoint POST /api/financial/consultas/{id}/pagos registra pagos y actualiza automáticamente total_pagado, saldo, estado_pago. DELETE para eliminar pagos y recalcular."
+
   - task: "Endpoints API Proformas"
     implemented: true
     working: true
