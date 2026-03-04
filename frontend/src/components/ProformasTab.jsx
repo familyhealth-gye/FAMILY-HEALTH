@@ -164,6 +164,32 @@ export const ProformasTab = ({ token }) => {
     });
   };
 
+  // Convertir proforma aceptada en consulta financiera (iniciar tratamiento)
+  const handleConvertirATratamiento = async (proforma) => {
+    if (proforma.estado !== "Aceptada") {
+      toast.error("Solo se pueden convertir proformas con estado 'Aceptada'");
+      return;
+    }
+    
+    if (!window.confirm(`¿Iniciar tratamiento para ${proforma.paciente_nombre}?\n\nEsto creará una cuenta por cobrar de $${proforma.total.toFixed(2)} que podrá recibir pagos/abonos.`)) {
+      return;
+    }
+    
+    try {
+      await axios.post(
+        `${API}/financial/consultas/desde-proforma/${proforma.id}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success("Tratamiento iniciado - Cuenta creada en Pagos/Abonos");
+      fetchProformas();
+    } catch (error) {
+      console.error("Error al convertir proforma:", error);
+      toast.error(error.response?.data?.detail || "Error al iniciar tratamiento");
+    }
+  };
+
   const filteredProformas = proformas.filter((proforma) =>
     proforma.paciente_nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     proforma.paciente_cedula.includes(searchTerm) ||
