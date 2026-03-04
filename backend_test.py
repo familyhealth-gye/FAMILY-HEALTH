@@ -575,6 +575,197 @@ class BackendTester:
             
         return results
         
+    def test_financial_endpoints(self) -> Dict[str, bool]:
+        """Test Financial Cycle endpoints as requested"""
+        self.log("Testing Financial Cycle endpoints...")
+        results = {}
+        
+        # 1. Test crear consulta desde cita (Medicina General/Pediatría)
+        self.log("1. Testing crear consulta desde cita...")
+        
+        # First create a test appointment for Medicina General
+        mg_appointment_data = {
+            "nombre_completo": "Carlos Mendoza",
+            "cedula": "0987654321",
+            "edad": 45,
+            "telefono": "0999888777",
+            "especialidad": "Medicina General",
+            "doctor_id": self.test_data["doctor_id"],
+            "fecha": "2024-01-20",
+            "hora": "14:00",
+            "tipo_pago": "Efectivo",
+            "observaciones": "Consulta de control"
+        }
+        
+        try:
+            response = self.make_request("POST", "/appointments", mg_appointment_data)
+            if response.status_code == 200:
+                mg_appointment = response.json()
+                self.test_data["mg_appointment_id"] = mg_appointment["id"]
+                
+                # Now create consulta from appointment
+                servicios_data = [
+                    {
+                        "servicio": "Consulta General",
+                        "descripcion": "Consulta médica general",
+                        "precio_unitario": 25.0,
+                        "cantidad": 1
+                    },
+                    {
+                        "servicio": "Certificado Médico",
+                        "descripcion": "Certificado de salud",
+                        "precio_unitario": 20.0,
+                        "cantidad": 1
+                    }
+                ]
+                
+                response = self.make_request("POST", f"/financial/consultas/desde-cita/{mg_appointment['id']}", servicios_data)
+                if response.status_code == 200:
+                    consulta_result = response.json()
+                    self.test_data["consulta_id"] = consulta_result["consulta_id"]
+                    
+                    # Verify calculations
+                    expected_total = 45.0  # 25 + 20
+                    if consulta_result["total"] == expected_total and consulta_result["estado_pago"] == "pendiente":
+                        results["crear_consulta_desde_cita"] = True
+                        self.log("✅ POST /api/financial/consultas/desde-cita/{id} - SUCCESS")
+                    else:
+                        results["crear_consulta_desde_cita"] = False
+                        self.log(f"❌ POST /api/financial/consultas/desde-cita/{{id}} - FAILED (calculation error: total={consulta_result['total']})", "ERROR")
+                else:
+                    results["crear_consulta_desde_cita"] = False
+                    self.log(f"❌ POST /api/financial/consultas/desde-cita/{{id}} - FAILED: {response.status_code} - {response.text}", "ERROR")
+            else:
+                results["crear_consulta_desde_cita"] = False
+                self.log(f"❌ Failed to create MG appointment: {response.status_code} - {response.text}", "ERROR")
+        except Exception as e:
+            results["crear_consulta_desde_cita"] = False
+            self.log(f"❌ POST /api/financial/consultas/desde-cita/{{id}} - ERROR: {e}", "ERROR")
+        
+        # 2. Test registrar pago en consulta
+        self.log("2. Testing registrar pago en consulta...")
+        if "consulta_id" in self.test_data:
+            pago_data = {
+                "monto": 25.0,
+                "tipo_pago": "efectivo",
+                "referencia": "REC-001",
+                "notas": "Pago parcial"
+            }
+            
+            try:
+                response = self.make_request("POST", f"/financial/consultas/{self.test_data['consulta_id']}/pagos", pago_data)
+                if response.status_code == 200:
+                    consulta_updated = response.json()
+                    
+                    # Verify payment calculations
+                    if (consulta_updated["total_pagado"] == 25.0 and 
+                        consulta_updated["saldo"] == 20.0 and 
+                        consulta_updated["estado_pago"] == "parcial"):
+                        results["registrar_pago"] = True
+                        self.test_data["pago_id"] = consulta_updated["pagos"][0]["id"]
+                        self.log("✅ POST /api/financial/consultas/{id}/pagos - SUCCESS")
+                    else:
+                        results["registrar_pago"] = False
+                        self.log(f"❌ POST /api/financial/consultas/{{id}}/pagos - FAILED (calculation error)", "ERROR")
+                else:
+                    results["registrar_pago"] = False
+                    self.log(f"❌ POST /api/financial/consultas/{{id}}/pagos - FAILED: {response.status_code} - {response.text}", "ERROR")
+            except Exception as e:
+                results["registrar_pago"] = False
+                self.log(f"❌ POST /api/financial/consultas/{{id}}/pagos - ERROR: {e}", "ERROR")
+        else:
+            results["registrar_pago"] = False
+            self.log("❌ POST /api/financial/consultas/{id}/pagos - SKIPPED (no consulta_id)", "ERROR")
+        
+        # 3. Test crear consulta desde proforma (Odontología)
+        self.log("3. Testing crear consulta desde proforma...")
+        if "proforma_id" in self.test_data:
+            try:
+                response = self.make_request("POST", f"/financial/consultas/desde-proforma/{self.test_data['proforma_id']}")
+                if response.status_code == 200:
+                    proforma_consulta = response.json()
+                    self.test_data["proforma_consulta_id"] = proforma_consulta["consulta_id"]
+                    
+                    # Verify proforma was converted
+                    if proforma_consulta["total"] == 200.0:  # Expected total from proforma (210 - 10 discount)
+                        results["crear_consulta_desde_proforma"] = True
+                        self.log("✅ POST /api/financial/consultas/desde-proforma/{id} - SUCCESS")
+                        
+                        # Verify proforma status changed to "Facturada"
+                        proforma_check = self.make_request("GET", f"/proformas/{self.test_data['proforma_id']}")
+                        if proforma_check.status_code == 200:
+                            proforma_data = proforma_check.json()
+                            if proforma_data["estado"] == "Facturada":
+                                self.log("✅ Proforma status updated to 'Facturada'")
+                            else:
+                                self.log(f"⚠️ Proforma status not updated: {proforma_data['estado']}", "WARNING")
+                    else:
+                        results["crear_consulta_desde_proforma"] = False
+                        self.log(f"❌ POST /api/financial/consultas/desde-proforma/{{id}} - FAILED (total mismatch: {proforma_consulta['total']})", "ERROR")
+                else:
+                    results["crear_consulta_desde_proforma"] = False
+                    self.log(f"❌ POST /api/financial/consultas/desde-proforma/{{id}} - FAILED: {response.status_code} - {response.text}", "ERROR")
+            except Exception as e:
+                results["crear_consulta_desde_proforma"] = False
+                self.log(f"❌ POST /api/financial/consultas/desde-proforma/{{id}} - ERROR: {e}", "ERROR")
+        else:
+            results["crear_consulta_desde_proforma"] = False
+            self.log("❌ POST /api/financial/consultas/desde-proforma/{id} - SKIPPED (no proforma_id)", "ERROR")
+        
+        # 4. Test listar consultas pendientes
+        self.log("4. Testing listar consultas pendientes...")
+        try:
+            response = self.make_request("GET", "/financial/reportes/pendientes")
+            if response.status_code == 200:
+                pendientes = response.json()
+                if "cuentas" in pendientes and isinstance(pendientes["cuentas"], list):
+                    # Should have at least one pending account (our test consulta)
+                    pending_found = any(c.get("saldo", 0) > 0 for c in pendientes["cuentas"])
+                    if pending_found:
+                        results["listar_consultas_pendientes"] = True
+                        self.log("✅ GET /api/financial/reportes/pendientes - SUCCESS")
+                    else:
+                        results["listar_consultas_pendientes"] = False
+                        self.log("❌ GET /api/financial/reportes/pendientes - FAILED (no pending accounts found)", "ERROR")
+                else:
+                    results["listar_consultas_pendientes"] = False
+                    self.log("❌ GET /api/financial/reportes/pendientes - FAILED (invalid response format)", "ERROR")
+            else:
+                results["listar_consultas_pendientes"] = False
+                self.log(f"❌ GET /api/financial/reportes/pendientes - FAILED: {response.status_code} - {response.text}", "ERROR")
+        except Exception as e:
+            results["listar_consultas_pendientes"] = False
+            self.log(f"❌ GET /api/financial/reportes/pendientes - ERROR: {e}", "ERROR")
+        
+        # 5. Test eliminar pago
+        self.log("5. Testing eliminar pago...")
+        if "consulta_id" in self.test_data and "pago_id" in self.test_data:
+            try:
+                response = self.make_request("DELETE", f"/financial/consultas/{self.test_data['consulta_id']}/pagos/{self.test_data['pago_id']}")
+                if response.status_code == 200:
+                    delete_result = response.json()
+                    
+                    # Verify saldo was recalculated correctly
+                    if (delete_result["total_pagado"] == 0 and 
+                        delete_result["saldo"] == 45.0 and 
+                        delete_result["estado_pago"] == "pendiente"):
+                        results["eliminar_pago"] = True
+                        self.log("✅ DELETE /api/financial/consultas/{id}/pagos/{pago_id} - SUCCESS")
+                    else:
+                        results["eliminar_pago"] = False
+                        self.log(f"❌ DELETE /api/financial/consultas/{{id}}/pagos/{{pago_id}} - FAILED (calculation error)", "ERROR")
+                else:
+                    results["eliminar_pago"] = False
+                    self.log(f"❌ DELETE /api/financial/consultas/{{id}}/pagos/{{pago_id}} - FAILED: {response.status_code} - {response.text}", "ERROR")
+            except Exception as e:
+                results["eliminar_pago"] = False
+                self.log(f"❌ DELETE /api/financial/consultas/{{id}}/pagos/{{pago_id}} - ERROR: {e}", "ERROR")
+        else:
+            results["eliminar_pago"] = False
+            self.log("❌ DELETE /api/financial/consultas/{id}/pagos/{pago_id} - SKIPPED (missing IDs)", "ERROR")
+        
+        return results
+
     def run_all_tests(self) -> Dict[str, Dict[str, bool]]:
         """Run all backend tests"""
         self.log("=" * 60)
@@ -599,6 +790,7 @@ class BackendTester:
             all_results["abonos"] = self.test_abonos()
             all_results["odontograms"] = self.test_odontograms()
             all_results["medical_history_odontology"] = self.test_medical_history_odontology()
+            all_results["financial_endpoints"] = self.test_financial_endpoints()
         except Exception as e:
             self.log(f"Test execution error: {e}", "ERROR")
             
