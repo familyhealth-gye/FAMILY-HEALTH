@@ -128,39 +128,63 @@ backend:
   
   - task: "Endpoints API Financiero - Consultas desde Cita"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/financial_routes.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Nuevo endpoint POST /api/financial/consultas/desde-cita/{appointment_id} para crear consulta financiera automáticamente al cerrar atención médica"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/financial/consultas/desde-cita/{id} funciona correctamente. Crea consulta financiera con servicios, calcula totales automáticamente (total=45.0), establece estado_pago='pendiente'. Integración con appointments verificada."
 
   - task: "Endpoints API Financiero - Consultas desde Proforma"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/financial_routes.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Nuevo endpoint POST /api/financial/consultas/desde-proforma/{proforma_id} para convertir proforma aceptada en consulta financiera (Odontología)"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/financial/consultas/desde-proforma/{id} funciona correctamente. Convierte proforma 'Aceptada' en consulta financiera (total=200.0), actualiza estado proforma a 'Facturada'. Validación de estado y cálculos verificados."
 
   - task: "Endpoints API Financiero - Pagos con actualización automática"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/financial_routes.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoint POST /api/financial/consultas/{id}/pagos registra pagos y actualiza automáticamente total_pagado, saldo, estado_pago. DELETE para eliminar pagos y recalcular."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/financial/consultas/{id}/pagos funciona correctamente. Registra pago (monto=25.0), actualiza automáticamente total_pagado=25.0, saldo=20.0, estado_pago='parcial'. DELETE /pagos/{pago_id} recalcula correctamente saldo=45.0, estado_pago='pendiente'. Cálculos automáticos verificados."
+
+  - task: "Endpoints API Financiero - Reportes Pendientes"
+    implemented: true
+    working: true
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Endpoint GET /api/financial/reportes/pendientes lista consultas con saldo pendiente"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/financial/reportes/pendientes funciona correctamente. Lista consultas con saldo > 0, muestra total_cuentas, total_pendiente, detalles por cuenta. Filtrado por estado_pago verificado."
 
   - task: "Endpoints API Proformas"
     implemented: true
