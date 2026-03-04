@@ -181,6 +181,42 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
         }
       }
 
+      // 4. Crear consulta financiera automáticamente
+      try {
+        let precioConsulta = 30.00; // Precio por defecto Pediatría
+        try {
+          const catalogoRes = await axios.get(
+            `${API}/financial/catalogo?especialidad=Pediatría`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const servicioConsulta = catalogoRes.data?.find(s => 
+            s.nombre.toLowerCase().includes('consulta')
+          );
+          if (servicioConsulta) {
+            precioConsulta = servicioConsulta.precio_base;
+          }
+        } catch (catError) {
+          console.warn("No se pudo obtener precio del catálogo, usando precio por defecto");
+        }
+
+        await axios.post(
+          `${API}/financial/consultas/desde-cita/${appointment.id}`,
+          [{
+            servicio: "Consulta Pediátrica",
+            descripcion: form.diagnostico || "Consulta pediátrica",
+            precio_unitario: precioConsulta,
+            cantidad: 1
+          }],
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        console.log("✅ Consulta financiera creada");
+      } catch (finError) {
+        console.warn("No se pudo crear consulta financiera:", finError);
+        if (finError.response?.status !== 400) {
+          toast.warning("Historia guardada. Consulta financiera pendiente de crear manualmente.");
+        }
+      }
+
       toast.success("Consulta cerrada exitosamente");
       onSuccess();
       onClose();
