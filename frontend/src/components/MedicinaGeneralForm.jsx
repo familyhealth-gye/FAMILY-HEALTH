@@ -266,6 +266,44 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
         }
       }
 
+      // 4. Crear consulta financiera automáticamente
+      try {
+        // Obtener precio de consulta desde catálogo (si existe)
+        let precioConsulta = 25.00; // Precio por defecto Medicina General
+        try {
+          const catalogoRes = await axios.get(
+            `${API}/financial/catalogo?especialidad=Medicina General`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const servicioConsulta = catalogoRes.data?.find(s => 
+            s.nombre.toLowerCase().includes('consulta')
+          );
+          if (servicioConsulta) {
+            precioConsulta = servicioConsulta.precio_base;
+          }
+        } catch (catError) {
+          console.warn("No se pudo obtener precio del catálogo, usando precio por defecto");
+        }
+
+        await axios.post(
+          `${API}/financial/consultas/desde-cita/${appointment.id}`,
+          [{
+            servicio: "Consulta Medicina General",
+            descripcion: form.diagnostico || "Consulta médica",
+            precio_unitario: precioConsulta,
+            cantidad: 1
+          }],
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        console.log("✅ Consulta financiera creada");
+      } catch (finError) {
+        // No bloquear el cierre si falla la creación financiera
+        console.warn("No se pudo crear consulta financiera:", finError);
+        if (finError.response?.status !== 400) { // 400 = ya existe
+          toast.warning("Historia guardada. Consulta financiera pendiente de crear manualmente.");
+        }
+      }
+
       // Éxito final
       toast.success("Consulta cerrada exitosamente");
       onSuccess();
