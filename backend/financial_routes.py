@@ -449,6 +449,80 @@ async def seed_catalogo_servicios(
     return {"message": f"Creados {count} servicios en catálogo", "total": len(servicios_base)}
 
 
+# ========== CRUD COMPLETO CATÁLOGO ==========
+
+@financial_router.get("/catalogo/todos")
+async def get_todos_servicios(
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener TODOS los servicios (activos e inactivos) para administración"""
+    servicios = await db.catalogo_servicios.find({}, {"_id": 0}).to_list(500)
+    return servicios
+
+
+@financial_router.get("/catalogo/{servicio_id}")
+async def get_servicio_by_id(
+    servicio_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener servicio por ID"""
+    servicio = await db.catalogo_servicios.find_one({"id": servicio_id}, {"_id": 0})
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    return servicio
+
+
+@financial_router.put("/catalogo/{servicio_id}")
+async def update_catalogo_servicio(
+    servicio_id: str,
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualizar servicio del catálogo"""
+    existing = await db.catalogo_servicios.find_one({"id": servicio_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    # Campos permitidos para actualizar
+    allowed_fields = ['nombre', 'descripcion', 'especialidad', 'precio_base', 'activo', 'codigo']
+    update_data = {k: v for k, v in input.items() if k in allowed_fields and v is not None}
+    
+    if update_data:
+        await db.catalogo_servicios.update_one({"id": servicio_id}, {"$set": update_data})
+    
+    updated = await db.catalogo_servicios.find_one({"id": servicio_id}, {"_id": 0})
+    return updated
+
+
+@financial_router.delete("/catalogo/{servicio_id}")
+async def delete_catalogo_servicio(
+    servicio_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Eliminar servicio del catálogo (soft delete - marca como inactivo)"""
+    existing = await db.catalogo_servicios.find_one({"id": servicio_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    # Soft delete - marcar como inactivo
+    await db.catalogo_servicios.update_one({"id": servicio_id}, {"$set": {"activo": False}})
+    
+    return {"message": "Servicio desactivado exitosamente"}
+
+
+@financial_router.delete("/catalogo/{servicio_id}/permanente")
+async def delete_catalogo_servicio_permanente(
+    servicio_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Eliminar servicio permanentemente del catálogo"""
+    result = await db.catalogo_servicios.delete_one({"id": servicio_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    return {"message": "Servicio eliminado permanentemente"}
+
+
 # ========== REPORTES ==========
 
 @financial_router.get("/reportes/resumen-paciente/{paciente_id}", response_model=ResumenPaciente)
