@@ -23,9 +23,9 @@ from auth import TokenData, get_current_user
 # Router para endpoints financieros
 financial_router = APIRouter(prefix="/financial", tags=["Financial"])
 
-# Database connection
+# Database connection - Use same as main server
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-DB_NAME = os.environ.get('DB_NAME', 'family_health_db')
+DB_NAME = "medical_app"  # Same as server.py
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
