@@ -418,6 +418,12 @@ function App() {
                 </TabsTrigger>
               </>
             )}
+            {user.role === "Administrador" && (
+              <TabsTrigger value="catalogo" data-testid="catalogo-tab">
+                <ListChecks className="tab-icon" />
+                Catálogo
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Doctors Tab - Admin Only - Simplificado: Listado + Editar Porcentaje */}
