@@ -156,6 +156,13 @@ class BackendTester:
                         "username": "doctor_test",
                         "password": "doctor123"
                     }
+                elif register_response.status_code == 400:
+                    self.log("Doctor user already exists")
+                    # Store doctor credentials for later use
+                    self.test_data["doctor_user"] = {
+                        "username": "doctor_test",
+                        "password": "doctor123"
+                    }
                 else:
                     self.log(f"Failed to create doctor user: {register_response.status_code} - {register_response.text}", "WARNING")
                     
