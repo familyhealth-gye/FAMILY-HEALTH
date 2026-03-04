@@ -33,11 +33,13 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: str
     username: str
-    email: str
-    nombre_completo: str
+    email: Optional[str] = ""
+    nombre_completo: Optional[str] = ""
     role: str
     doctor_id: Optional[str] = None
-    is_active: bool
+    especialidad: Optional[str] = None
+    is_active: Optional[bool] = True
+    activo: Optional[bool] = True
 
 
 # ========== MEDICAL HISTORY MODELS ==========
