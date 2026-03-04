@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Phone, Edit, Trash2, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, AlertTriangle, MessageCircle, ClipboardList, LogOut, UserCog, Receipt, CreditCard, Activity } from "lucide-react";
+import { CalendarIcon, Phone, Edit, Trash2, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, AlertTriangle, MessageCircle, ClipboardList, LogOut, UserCog, Receipt, CreditCard, Activity, ListChecks } from "lucide-react";
 import { InvoicesTab } from "@/components/InvoicesTab";
 import { InventoryTab } from "@/components/InventoryTab";
 import { PaymentsTab } from "@/components/PaymentsTab";
@@ -22,6 +22,7 @@ import { AppointmentsWithAttention } from "@/components/AppointmentsWithAttentio
 import { ProformasTab } from "@/components/ProformasTab";
 import { AbonosTab } from "@/components/AbonosTab";
 import { PacientesTab } from "@/components/PacientesTab";
+import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
 import { Login } from "@/pages/Login";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
