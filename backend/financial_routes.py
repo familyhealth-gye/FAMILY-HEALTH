@@ -592,3 +592,269 @@ async def get_cuentas_pendientes(
             "estado_pago": c.get("estado_pago")
         } for c in consultas]
     }
+
+
+# ========== CREAR CONSULTA DESDE CIERRE DE ATENCIÓN MÉDICA ==========
+
+@financial_router.post("/consultas/desde-cita/{appointment_id}")
+async def crear_consulta_desde_cita(
+    appointment_id: str,
+    servicios: List[DetalleServicioCreate],
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Crea una consulta financiera automáticamente al cerrar una atención médica.
+    Usado para Medicina General, Pediatría, etc.
+    """
+    # Verificar que no exista ya una consulta para esta cita
+    existing = await db.consultas_financieras.find_one(
+        {"appointment_id": appointment_id}, {"_id": 0}
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400, 
+            detail="Ya existe una consulta financiera para esta cita"
+        )
+    
+    # Obtener datos de la cita
+    appointment = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    
+    # Obtener datos del doctor
+    doctor = await db.doctors.find_one({"id": appointment.get("doctor_id")}, {"_id": 0})
+    doctor_nombre = doctor.get("nombre", "") if doctor else appointment.get("doctor_nombre", "")
+    
+    # Crear servicios con subtotales
+    servicios_list = []
+    total = 0
+    for srv in servicios:
+        servicio = DetalleServicio(
+            consulta_id="",
+            servicio=srv.servicio,
+            descripcion=srv.descripcion,
+            precio_unitario=srv.precio_unitario,
+            cantidad=srv.cantidad,
+            subtotal=srv.precio_unitario * srv.cantidad
+        )
+        total += servicio.subtotal
+        servicios_list.append(servicio)
+    
+    # Crear consulta financiera
+    consulta = ConsultaFinanciera(
+        paciente_id=appointment_id,
+        paciente_cedula=appointment.get("cedula", ""),
+        paciente_nombre=appointment.get("nombre_completo", ""),
+        doctor_id=appointment.get("doctor_id", ""),
+        doctor_nombre=doctor_nombre,
+        appointment_id=appointment_id,
+        especialidad=appointment.get("especialidad", ""),
+        fecha=appointment.get("fecha", datetime.now(timezone.utc).strftime('%Y-%m-%d')),
+        motivo=appointment.get("observaciones", ""),
+        total=total,
+        total_pagado=0,
+        saldo=total,
+        estado_pago="pendiente" if total > 0 else "pagado",
+        servicios=[],
+        pagos=[],
+        created_by=current_user.username
+    )
+    
+    # Actualizar consulta_id en servicios
+    for srv in servicios_list:
+        srv.consulta_id = consulta.id
+    consulta.servicios = servicios_list
+    
+    # Guardar
+    doc = consulta.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    for srv in doc['servicios']:
+        srv['created_at'] = srv['created_at'].isoformat()
+    
+    await db.consultas_financieras.insert_one(doc)
+    
+    return {
+        "message": "Consulta financiera creada exitosamente",
+        "consulta_id": consulta.id,
+        "total": total,
+        "estado_pago": consulta.estado_pago
+    }
+
+
+# ========== CONVERTIR PROFORMA EN CONSULTA FINANCIERA (ODONTOLOGÍA) ==========
+
+@financial_router.post("/consultas/desde-proforma/{proforma_id}")
+async def crear_consulta_desde_proforma(
+    proforma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Convierte una proforma aprobada en una consulta financiera.
+    Usado para Odontología cuando se aprueba un tratamiento.
+    La proforma debe tener estado 'Aceptada'.
+    """
+    # Obtener proforma
+    proforma = await db.proformas.find_one({"id": proforma_id}, {"_id": 0})
+    if not proforma:
+        raise HTTPException(status_code=404, detail="Proforma no encontrada")
+    
+    if proforma.get("estado") != "Aceptada":
+        raise HTTPException(
+            status_code=400, 
+            detail="Solo se pueden convertir proformas con estado 'Aceptada'"
+        )
+    
+    # Verificar que no exista ya una consulta para esta proforma
+    existing = await db.consultas_financieras.find_one(
+        {"proforma_origen_id": proforma_id}, {"_id": 0}
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400, 
+            detail="Ya existe una consulta financiera para esta proforma"
+        )
+    
+    # Obtener datos del doctor
+    doctor = await db.doctors.find_one({"id": proforma.get("doctor_id")}, {"_id": 0})
+    doctor_nombre = doctor.get("nombre", "") if doctor else proforma.get("doctor_nombre", "")
+    
+    # Crear servicios desde items de proforma
+    servicios_list = []
+    total = 0
+    for item in proforma.get("items", []):
+        servicio = DetalleServicio(
+            consulta_id="",
+            servicio=item.get("tratamiento", ""),
+            descripcion=item.get("descripcion", ""),
+            precio_unitario=item.get("precio", 0),
+            cantidad=item.get("cantidad", 1),
+            subtotal=item.get("subtotal", item.get("precio", 0) * item.get("cantidad", 1))
+        )
+        total += servicio.subtotal
+        servicios_list.append(servicio)
+    
+    # Aplicar descuento si existe
+    descuento = proforma.get("descuento", 0)
+    total_con_descuento = total - descuento
+    
+    # Crear consulta financiera
+    consulta = ConsultaFinanciera(
+        paciente_id=proforma.get("paciente_id", ""),
+        paciente_cedula=proforma.get("paciente_cedula", ""),
+        paciente_nombre=proforma.get("paciente_nombre", ""),
+        doctor_id=proforma.get("doctor_id", ""),
+        doctor_nombre=doctor_nombre,
+        appointment_id="",  # Puede no tener cita asociada
+        especialidad="Odontología",
+        fecha=datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        motivo=f"Tratamiento desde Proforma {proforma.get('numero_proforma', '')}",
+        diagnostico=proforma.get("diagnostico", ""),
+        total=total_con_descuento,
+        total_pagado=0,
+        saldo=total_con_descuento,
+        estado_pago="pendiente" if total_con_descuento > 0 else "pagado",
+        servicios=[],
+        pagos=[],
+        created_by=current_user.username
+    )
+    
+    # Agregar campo especial para rastrear origen
+    consulta_dict = consulta.model_dump()
+    consulta_dict['proforma_origen_id'] = proforma_id
+    
+    # Actualizar consulta_id en servicios
+    for srv in servicios_list:
+        srv.consulta_id = consulta.id
+    consulta.servicios = servicios_list
+    consulta_dict['servicios'] = [srv.model_dump() for srv in servicios_list]
+    
+    # Guardar
+    consulta_dict['created_at'] = consulta_dict['created_at'].isoformat()
+    consulta_dict['updated_at'] = consulta_dict['updated_at'].isoformat()
+    for srv in consulta_dict['servicios']:
+        srv['created_at'] = srv['created_at'].isoformat()
+    
+    await db.consultas_financieras.insert_one(consulta_dict)
+    
+    # Actualizar estado de proforma a "Facturada"
+    await db.proformas.update_one(
+        {"id": proforma_id},
+        {"$set": {"estado": "Facturada", "consulta_financiera_id": consulta.id}}
+    )
+    
+    return {
+        "message": "Proforma convertida a consulta financiera exitosamente",
+        "consulta_id": consulta.id,
+        "total": total_con_descuento,
+        "estado_pago": consulta.estado_pago
+    }
+
+
+# ========== OBTENER CONSULTA POR APPOINTMENT ==========
+
+@financial_router.get("/consultas/por-cita/{appointment_id}")
+async def get_consulta_por_cita(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener consulta financiera por ID de cita"""
+    consulta = await db.consultas_financieras.find_one(
+        {"appointment_id": appointment_id}, {"_id": 0}
+    )
+    if not consulta:
+        return None
+    return consulta
+
+
+# ========== ELIMINAR PAGO DE CONSULTA ==========
+
+@financial_router.delete("/consultas/{consulta_id}/pagos/{pago_id}")
+async def eliminar_pago(
+    consulta_id: str,
+    pago_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Eliminar un pago de una consulta y recalcular saldos"""
+    consulta = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
+    if not consulta:
+        raise HTTPException(status_code=404, detail="Consulta no encontrada")
+    
+    # Filtrar el pago a eliminar
+    pagos = [p for p in consulta.get('pagos', []) if p.get('id') != pago_id]
+    
+    if len(pagos) == len(consulta.get('pagos', [])):
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    
+    # Recalcular totales
+    total = consulta.get('total', 0)
+    total_pagado = sum(p.get('monto', 0) for p in pagos)
+    saldo = total - total_pagado
+    
+    # Determinar estado de pago
+    if saldo <= 0:
+        estado_pago = "pagado"
+        saldo = 0
+    elif total_pagado > 0:
+        estado_pago = "parcial"
+    else:
+        estado_pago = "pendiente"
+    
+    # Actualizar
+    await db.consultas_financieras.update_one(
+        {"id": consulta_id},
+        {"$set": {
+            "pagos": pagos,
+            "total_pagado": total_pagado,
+            "saldo": saldo,
+            "estado_pago": estado_pago,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": "Pago eliminado exitosamente",
+        "total_pagado": total_pagado,
+        "saldo": saldo,
+        "estado_pago": estado_pago
+    }
