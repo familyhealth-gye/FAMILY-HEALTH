@@ -18,8 +18,7 @@ from financial_models import (
     CatalogoServicio, CatalogoServicioCreate,
     ReporteFinanciero, ResumenPaciente
 )
-from models import TokenData
-from auth import get_current_user
+from auth import TokenData, get_current_user
 
 # Router para endpoints financieros
 financial_router = APIRouter(prefix="/financial", tags=["Financial"])
