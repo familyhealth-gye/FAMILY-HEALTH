@@ -914,6 +914,13 @@ function App() {
             </TabsContent>
           )}
 
+          {/* Catálogo de Servicios Tab - Admin Only */}
+          {user.role === "Administrador" && (
+            <TabsContent value="catalogo">
+              <CatalogoServiciosTab token={token} />
+            </TabsContent>
+          )}
+
         </Tabs>
       </main>
     </div>
