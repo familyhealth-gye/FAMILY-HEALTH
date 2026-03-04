@@ -83,7 +83,6 @@ class Pago(BaseModel):
 
 
 class PagoCreate(BaseModel):
-    consulta_id: str
     fecha: str = ""
     monto: float
     tipo_pago: str = "efectivo"
