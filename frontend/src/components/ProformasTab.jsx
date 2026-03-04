@@ -476,7 +476,26 @@ export const ProformasTab = ({ token }) => {
                     </Select>
                   </td>
                   <td>
-                    <div className="actions-cell">
+                    <div className="actions-cell" style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                      {/* Botón Iniciar Tratamiento - solo para proformas Aceptadas */}
+                      {proforma.estado === "Aceptada" && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleConvertirATratamiento(proforma)}
+                          style={{ 
+                            background: '#059669',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                          title="Iniciar tratamiento y crear cuenta por cobrar"
+                        >
+                          <PlayCircle size={14} />
+                          Iniciar
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -501,10 +520,9 @@ export const ProformasTab = ({ token }) => {
                             toast.error("Error al descargar proforma");
                           }
                         }}
-                        style={{ marginRight: '0.5rem' }}
                       >
                         <FileText className="button-icon" />
-                        Ver PDF
+                        PDF
                       </Button>
                       <Button
                         variant="ghost"
