@@ -644,3 +644,22 @@ class Odontogram(BaseModel):
     tratamiento_recomendado: str = ""
     observaciones: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class OdontogramCreate(BaseModel):
+    """Modelo legacy para crear odontograma"""
+    paciente_id: str
+    doctor_id: str
+    fecha: str
+    dientes: List[ToothState] = []
+    diagnostico_general: str = ""
+    tratamiento_recomendado: str = ""
+    observaciones: str = ""
+
+
+class OdontogramUpdate(BaseModel):
+    """Modelo legacy para actualizar odontograma"""
+    dientes: Optional[List[ToothState]] = None
+    diagnostico_general: Optional[str] = None
+    tratamiento_recomendado: Optional[str] = None
+    observaciones: Optional[str] = None
