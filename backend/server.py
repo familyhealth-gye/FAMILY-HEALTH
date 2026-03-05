@@ -2010,4 +2010,7 @@ app.include_router(financial_router, prefix="/api")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
-    
+    import os
+import uvicorn
+port = int(os.environ.get("PORT", 10000))
+uvicorn.run(app, host="0.0.0.0", port=port)
