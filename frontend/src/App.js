@@ -932,7 +932,7 @@ function App() {
           {/* Odontograma Clínico Tab - Admin y Doctores de Odontología */}
           {(user.role === "Administrador" || user.especialidad === "Odontología") && (
             <TabsContent value="odontograma">
-              <OdontogramaClinicoStandalone token={token} user={user} />
+              <OdontogramaStandalone token={token} user={user} />
             </TabsContent>
           )}
 
