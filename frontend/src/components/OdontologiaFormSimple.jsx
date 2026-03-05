@@ -471,6 +471,8 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
             </div>
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* Diagnóstico y Tratamiento */}
