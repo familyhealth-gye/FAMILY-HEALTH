@@ -1570,6 +1570,414 @@ async def delete_odontogram(
     return {"message": "Odontograma eliminado exitosamente"}
 
 
+# ========== ODONTOGRAMA CLÍNICO FDI - NUEVOS ENDPOINTS ==========
+
+def generar_dientes_permanentes():
+    """Genera los 32 dientes permanentes con numeración FDI"""
+    dientes = []
+    
+    # Definir superficies estándar
+    superficies_posteriores = ["oclusal", "vestibular", "palatino", "mesial", "distal"]
+    superficies_anteriores = ["incisal", "vestibular", "palatino", "mesial", "distal"]
+    
+    # Cuadrante 1: Superior derecho (18-11)
+    for pos in range(8, 0, -1):
+        numero = f"1{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="permanente",
+            cuadrante=1,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies]
+        ))
+    
+    # Cuadrante 2: Superior izquierdo (21-28)
+    for pos in range(1, 9):
+        numero = f"2{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        # Cambiar palatino a lingual para consistencia
+        superficies_adj = [s.replace("palatino", "palatino") for s in superficies]
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="permanente",
+            cuadrante=2,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies_adj]
+        ))
+    
+    # Cuadrante 4: Inferior derecho (48-41)
+    for pos in range(8, 0, -1):
+        numero = f"4{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        # Inferior usa "lingual" en vez de "palatino"
+        superficies_inf = [s.replace("palatino", "lingual") for s in superficies]
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="permanente",
+            cuadrante=4,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies_inf]
+        ))
+    
+    # Cuadrante 3: Inferior izquierdo (31-38)
+    for pos in range(1, 9):
+        numero = f"3{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        superficies_inf = [s.replace("palatino", "lingual") for s in superficies]
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="permanente",
+            cuadrante=3,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies_inf]
+        ))
+    
+    return dientes
+
+
+def generar_dientes_temporales():
+    """Genera los 20 dientes temporales con numeración FDI"""
+    dientes = []
+    
+    superficies_posteriores = ["oclusal", "vestibular", "palatino", "mesial", "distal"]
+    superficies_anteriores = ["incisal", "vestibular", "palatino", "mesial", "distal"]
+    
+    # Cuadrante 5: Superior derecho temporal (55-51)
+    for pos in range(5, 0, -1):
+        numero = f"5{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="temporal",
+            cuadrante=5,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies]
+        ))
+    
+    # Cuadrante 6: Superior izquierdo temporal (61-65)
+    for pos in range(1, 6):
+        numero = f"6{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="temporal",
+            cuadrante=6,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies]
+        ))
+    
+    # Cuadrante 8: Inferior derecho temporal (85-81)
+    for pos in range(5, 0, -1):
+        numero = f"8{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        superficies_inf = [s.replace("palatino", "lingual") for s in superficies]
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="temporal",
+            cuadrante=8,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies_inf]
+        ))
+    
+    # Cuadrante 7: Inferior izquierdo temporal (71-75)
+    for pos in range(1, 6):
+        numero = f"7{pos}"
+        superficies = superficies_posteriores if pos > 3 else superficies_anteriores
+        superficies_inf = [s.replace("palatino", "lingual") for s in superficies]
+        dientes.append(DienteFDI(
+            numero_fdi=numero,
+            tipo="temporal",
+            cuadrante=7,
+            posicion=pos,
+            estado="presente",
+            superficies=[SuperficieDental(nombre=s) for s in superficies_inf]
+        ))
+    
+    return dientes
+
+
+@api_router.post("/odontograma-clinico")
+async def crear_odontograma_clinico(
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Crear nuevo odontograma clínico con soporte FDI.
+    Soporta dentición: permanente (32), temporal (20), mixta
+    """
+    tipo_denticion = input.get('tipo_denticion', 'permanente')
+    paciente_id = input.get('paciente_id')
+    doctor_id = input.get('doctor_id')
+    
+    if not paciente_id or not doctor_id:
+        raise HTTPException(status_code=400, detail="paciente_id y doctor_id son requeridos")
+    
+    # Obtener datos del paciente (puede ser de appointments o pacientes)
+    paciente = await db.appointments.find_one({"id": paciente_id}, {"_id": 0})
+    paciente_nombre = ""
+    paciente_cedula = ""
+    
+    if paciente:
+        paciente_nombre = paciente.get('nombre_completo', '')
+        paciente_cedula = paciente.get('cedula', '')
+    else:
+        # Buscar en colección de pacientes
+        paciente = await db.pacientes.find_one({"id": paciente_id}, {"_id": 0})
+        if paciente:
+            paciente_nombre = paciente.get('nombre_completo', '')
+            paciente_cedula = paciente.get('cedula', '')
+    
+    # Obtener datos del doctor
+    doctor = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
+    doctor_nombre = doctor.get('nombre', '') if doctor else ''
+    
+    # Generar dientes según tipo de dentición
+    if tipo_denticion == 'permanente':
+        dientes = generar_dientes_permanentes()
+    elif tipo_denticion == 'temporal':
+        dientes = generar_dientes_temporales()
+    else:  # mixta
+        dientes = generar_dientes_permanentes() + generar_dientes_temporales()
+    
+    # Crear odontograma
+    odontograma = OdontogramaClinico(
+        paciente_id=paciente_id,
+        paciente_nombre=input.get('paciente_nombre', paciente_nombre),
+        paciente_cedula=input.get('paciente_cedula', paciente_cedula),
+        doctor_id=doctor_id,
+        doctor_nombre=doctor_nombre,
+        tipo_denticion=tipo_denticion,
+        fecha=input.get('fecha', datetime.now(timezone.utc).strftime('%Y-%m-%d')),
+        dientes=dientes,
+        diagnostico_general=input.get('diagnostico_general', ''),
+        higiene_oral=input.get('higiene_oral', ''),
+        estado_encias=input.get('estado_encias', ''),
+        observaciones=input.get('observaciones', '')
+    )
+    
+    # Guardar
+    doc = odontograma.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.odontogramas_clinicos.insert_one(doc)
+    
+    return {
+        "message": "Odontograma clínico creado exitosamente",
+        "id": odontograma.id,
+        "tipo_denticion": tipo_denticion,
+        "total_dientes": len(dientes)
+    }
+
+
+@api_router.get("/odontograma-clinico")
+async def listar_odontogramas_clinicos(
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Listar todos los odontogramas clínicos"""
+    odontogramas = await db.odontogramas_clinicos.find({}, {"_id": 0}).sort("fecha", -1).to_list(500)
+    return odontogramas
+
+
+@api_router.get("/odontograma-clinico/{odontograma_id}")
+async def obtener_odontograma_clinico(
+    odontograma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener odontograma clínico por ID"""
+    odontograma = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not odontograma:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    return odontograma
+
+
+@api_router.get("/odontograma-clinico/paciente/{paciente_id}")
+async def obtener_odontogramas_paciente(
+    paciente_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener todos los odontogramas de un paciente"""
+    odontogramas = await db.odontogramas_clinicos.find(
+        {"paciente_id": paciente_id}, {"_id": 0}
+    ).sort("fecha", -1).to_list(100)
+    return odontogramas
+
+
+@api_router.put("/odontograma-clinico/{odontograma_id}")
+async def actualizar_odontograma_clinico(
+    odontograma_id: str,
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualizar odontograma clínico (dientes, diagnósticos, etc.)"""
+    existing = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    
+    # Campos permitidos para actualizar
+    allowed_fields = [
+        'dientes', 'diagnostico_general', 'higiene_oral', 
+        'estado_encias', 'oclusion', 'observaciones',
+        'indice_cpod', 'indice_ceod', 'tipo_denticion'
+    ]
+    
+    update_data = {k: v for k, v in input.items() if k in allowed_fields and v is not None}
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    update_data['fecha_actualizacion'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    
+    if update_data:
+        await db.odontogramas_clinicos.update_one({"id": odontograma_id}, {"$set": update_data})
+    
+    updated = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    return updated
+
+
+@api_router.put("/odontograma-clinico/{odontograma_id}/diente/{numero_fdi}")
+async def actualizar_diente(
+    odontograma_id: str,
+    numero_fdi: str,
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualizar un diente específico del odontograma"""
+    odontograma = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not odontograma:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    
+    dientes = odontograma.get('dientes', [])
+    diente_encontrado = False
+    
+    for i, diente in enumerate(dientes):
+        if diente.get('numero_fdi') == numero_fdi:
+            # Actualizar campos del diente
+            if 'estado' in input:
+                dientes[i]['estado'] = input['estado']
+            if 'superficies' in input:
+                dientes[i]['superficies'] = input['superficies']
+            if 'movilidad' in input:
+                dientes[i]['movilidad'] = input['movilidad']
+            if 'observaciones' in input:
+                dientes[i]['observaciones'] = input['observaciones']
+            diente_encontrado = True
+            break
+    
+    if not diente_encontrado:
+        raise HTTPException(status_code=404, detail=f"Diente {numero_fdi} no encontrado")
+    
+    await db.odontogramas_clinicos.update_one(
+        {"id": odontograma_id},
+        {"$set": {
+            "dientes": dientes,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "fecha_actualizacion": datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        }}
+    )
+    
+    return {"message": f"Diente {numero_fdi} actualizado", "diente": dientes[i]}
+
+
+@api_router.put("/odontograma-clinico/{odontograma_id}/diente/{numero_fdi}/superficie/{superficie}")
+async def actualizar_superficie_diente(
+    odontograma_id: str,
+    numero_fdi: str,
+    superficie: str,
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualizar una superficie específica de un diente"""
+    odontograma = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not odontograma:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    
+    dientes = odontograma.get('dientes', [])
+    actualizado = False
+    
+    for i, diente in enumerate(dientes):
+        if diente.get('numero_fdi') == numero_fdi:
+            superficies = diente.get('superficies', [])
+            for j, sup in enumerate(superficies):
+                if sup.get('nombre') == superficie:
+                    if 'diagnostico' in input:
+                        dientes[i]['superficies'][j]['diagnostico'] = input['diagnostico']
+                    if 'notas' in input:
+                        dientes[i]['superficies'][j]['notas'] = input['notas']
+                    actualizado = True
+                    break
+            break
+    
+    if not actualizado:
+        raise HTTPException(status_code=404, detail=f"Superficie {superficie} del diente {numero_fdi} no encontrada")
+    
+    await db.odontogramas_clinicos.update_one(
+        {"id": odontograma_id},
+        {"$set": {
+            "dientes": dientes,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": f"Superficie {superficie} del diente {numero_fdi} actualizada"}
+
+
+@api_router.delete("/odontograma-clinico/{odontograma_id}")
+async def eliminar_odontograma_clinico(
+    odontograma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Eliminar odontograma clínico"""
+    result = await db.odontogramas_clinicos.delete_one({"id": odontograma_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    return {"message": "Odontograma eliminado exitosamente"}
+
+
+@api_router.post("/odontograma-clinico/{odontograma_id}/cambiar-denticion")
+async def cambiar_tipo_denticion(
+    odontograma_id: str,
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Cambiar tipo de dentición del odontograma (regenera dientes)"""
+    odontograma = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not odontograma:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    
+    nuevo_tipo = input.get('tipo_denticion', 'permanente')
+    
+    # Generar nuevos dientes
+    if nuevo_tipo == 'permanente':
+        dientes = generar_dientes_permanentes()
+    elif nuevo_tipo == 'temporal':
+        dientes = generar_dientes_temporales()
+    else:
+        dientes = generar_dientes_permanentes() + generar_dientes_temporales()
+    
+    # Convertir a dict
+    dientes_dict = [d.model_dump() for d in dientes]
+    
+    await db.odontogramas_clinicos.update_one(
+        {"id": odontograma_id},
+        {"$set": {
+            "tipo_denticion": nuevo_tipo,
+            "dientes": dientes_dict,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": f"Dentición cambiada a {nuevo_tipo}",
+        "total_dientes": len(dientes)
+    }
+
+
 # Include router
 @api_router.get("/debug/db")
 async def debug_db():
