@@ -678,15 +678,16 @@ function App() {
                         />
                       </div>
                       <div className="form-field">
-                        <Label>Tipo de Pago</Label>
+                        <Label>Tipo de Pago (Opcional)</Label>
                         <Select
                           value={appointmentForm.tipo_pago}
                           onValueChange={(value) => setAppointmentForm({...appointmentForm, tipo_pago: value})}
                         >
                           <SelectTrigger data-testid="appointment-payment-select">
-                            <SelectValue placeholder="Seleccione tipo de pago" />
+                            <SelectValue placeholder="Se define al momento del cobro" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="">Sin definir</SelectItem>
                             <SelectItem value="Efectivo">Efectivo</SelectItem>
                             <SelectItem value="Transferencia">Transferencia</SelectItem>
                             <SelectItem value="Seguro">Seguro</SelectItem>
