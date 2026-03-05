@@ -23,6 +23,7 @@ import { ProformasTab } from "@/components/ProformasTab";
 import { AbonosTab } from "@/components/AbonosTab";
 import { PacientesTab } from "@/components/PacientesTab";
 import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
+import { OdontogramaClinicoTab } from "@/components/OdontogramaClinicoTab";
 import { Login } from "@/pages/Login";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
