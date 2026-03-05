@@ -478,10 +478,149 @@ class EspecialidadCreate(BaseModel):
 
 
 # ========== ODONTOGRAM MODELS ==========
+# ========== ODONTOGRAMA CLÍNICO - MODELOS FDI ==========
+
+# Diagnósticos clínicos posibles por superficie
+DIAGNOSTICOS_SUPERFICIE = [
+    "sano",
+    "caries", 
+    "restauracion",
+    "endodoncia",
+    "corona",
+    "sellante",
+    "fractura"
+]
+
+# Estados del diente completo
+ESTADOS_DIENTE = [
+    "presente",      # Diente normal presente
+    "ausente",       # Diente extraído o nunca existió
+    "extraccion",    # Marcado para extracción
+    "no_erupcionado", # No ha erupcionado todavía
+    "exfoliado",     # Temporal que se cayó naturalmente
+    "implante",      # Tiene implante
+    "protesis"       # Tiene prótesis fija
+]
+
+
+class SuperficieDental(BaseModel):
+    """Estado de una superficie específica del diente"""
+    nombre: str  # oclusal/incisal, vestibular, palatino/lingual, mesial, distal
+    diagnostico: str = "sano"  # sano, caries, restauracion, etc.
+    color: str = ""  # Color para visualización (se calcula en frontend)
+    notas: str = ""
+
+
+class DienteFDI(BaseModel):
+    """
+    Modelo de diente con numeración FDI internacional.
+    
+    Permanentes: 11-18, 21-28, 31-38, 41-48
+    Temporales: 51-55, 61-65, 71-75, 81-85
+    """
+    numero_fdi: str  # "18", "11", "55", etc.
+    tipo: str = "permanente"  # permanente | temporal
+    cuadrante: int  # 1, 2, 3, 4 (permanentes) o 5, 6, 7, 8 (temporales)
+    posicion: int   # Posición dentro del cuadrante (1-8 permanentes, 1-5 temporales)
+    
+    # Estado general del diente
+    estado: str = "presente"  # presente, ausente, extraccion, no_erupcionado, exfoliado, implante
+    
+    # Superficies del diente
+    superficies: List[SuperficieDental] = []
+    
+    # En dentición mixta, puede haber temporal y permanente en misma posición
+    tiene_temporal: bool = False
+    tiene_permanente: bool = True
+    
+    # Observaciones clínicas
+    movilidad: str = ""  # Grado de movilidad: "", "I", "II", "III"
+    observaciones: str = ""
+
+
+class OdontogramaClinico(BaseModel):
+    """
+    Odontograma clínico completo con soporte para:
+    - Dentición permanente (32 dientes)
+    - Dentición temporal (20 dientes)
+    - Dentición mixta
+    """
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Datos del paciente
+    paciente_id: str
+    paciente_nombre: str
+    paciente_cedula: str
+    
+    # Datos del doctor
+    doctor_id: str
+    doctor_nombre: str
+    
+    # Tipo de dentición
+    tipo_denticion: str = "permanente"  # permanente | temporal | mixta
+    
+    # Fecha del registro
+    fecha: str
+    fecha_actualizacion: str = ""
+    
+    # Dientes - Lista de DienteFDI
+    dientes: List[DienteFDI] = []
+    
+    # Diagnóstico general
+    diagnostico_general: str = ""
+    indice_cpod: float = 0  # Índice de caries (dientes Cariados, Perdidos, Obturados)
+    indice_ceod: float = 0  # Para dentición temporal
+    
+    # Observaciones clínicas generales
+    higiene_oral: str = ""  # buena, regular, mala
+    estado_encias: str = ""  # sano, gingivitis, periodontitis
+    oclusion: str = ""
+    observaciones: str = ""
+    
+    # Preparación para futuras integraciones (NO IMPLEMENTAR AÚN)
+    # procedimientos: List = []  # Para vincular con catálogo de servicios
+    # proforma_id: str = ""
+    # consulta_financiera_id: str = ""
+    
+    # Auditoría
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class OdontogramaCreate(BaseModel):
+    paciente_id: str
+    paciente_nombre: str = ""
+    paciente_cedula: str = ""
+    doctor_id: str
+    tipo_denticion: str = "permanente"
+    fecha: str = ""
+    dientes: List[DienteFDI] = []
+    diagnostico_general: str = ""
+    higiene_oral: str = ""
+    estado_encias: str = ""
+    oclusion: str = ""
+    observaciones: str = ""
+
+
+class OdontogramaUpdate(BaseModel):
+    tipo_denticion: Optional[str] = None
+    dientes: Optional[List[DienteFDI]] = None
+    diagnostico_general: Optional[str] = None
+    higiene_oral: Optional[str] = None
+    estado_encias: Optional[str] = None
+    oclusion: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+# ========== COMPATIBILIDAD CON MODELO ANTERIOR ==========
+# Mantener ToothState y Odontogram como alias para no romper código existente
 class ToothState(BaseModel):
-    tooth_number: int  # 1-32
-    estado: str = "Sano"  # Sano, Caries, Obturación, Extracción, Corona, Endodoncia, Implante
-    cara_oclusal: str = ""  # Estado de cara oclusal
+    """Modelo legacy - usar DienteFDI en nuevo código"""
+    tooth_number: int
+    estado: str = "Sano"
+    cara_oclusal: str = ""
     cara_vestibular: str = ""
     cara_palatina: str = ""
     cara_mesial: str = ""
@@ -490,6 +629,7 @@ class ToothState(BaseModel):
 
 
 class Odontogram(BaseModel):
+    """Modelo legacy - usar OdontogramaClinico en nuevo código"""
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -499,25 +639,8 @@ class Odontogram(BaseModel):
     doctor_id: str
     doctor_nombre: str
     fecha: str
-    dientes: List[ToothState]  # 32 dientes
+    dientes: List[ToothState] = []
     diagnostico_general: str = ""
     tratamiento_recomendado: str = ""
     observaciones: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class OdontogramCreate(BaseModel):
-    paciente_id: str
-    doctor_id: str
-    fecha: str
-    dientes: List[ToothState]
-    diagnostico_general: str = ""
-    tratamiento_recomendado: str = ""
-    observaciones: str = ""
-
-
-class OdontogramUpdate(BaseModel):
-    dientes: Optional[List[ToothState]] = None
-    diagnostico_general: Optional[str] = None
-    tratamiento_recomendado: Optional[str] = None
-    observaciones: Optional[str] = None
