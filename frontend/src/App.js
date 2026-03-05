@@ -425,6 +425,12 @@ function App() {
                 Catálogo
               </TabsTrigger>
             )}
+            {(user.role === "Administrador" || user.especialidad === "Odontología") && (
+              <TabsTrigger value="odontograma" data-testid="odontograma-tab">
+                <Smile className="tab-icon" />
+                Odontograma
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Doctors Tab - Admin Only - Simplificado: Listado + Editar Porcentaje */}
