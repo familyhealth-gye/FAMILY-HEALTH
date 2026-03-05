@@ -282,43 +282,67 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
 
       {/* Odontograma Visual Simplificado */}
       <div className="form-section">
-        <h3 className="section-title-small">Odontograma - Click en cada diente</h3>
-        
-        {/* Selector de estado */}
-        <div style={{ marginBottom: '1rem', padding: '1rem', background: '#F0F9FF', borderRadius: '8px' }}>
-          <Label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-            Estado a marcar (click en diente):
-          </Label>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {ESTADOS.filter(e => e.value !== 'sano').map(estado => (
-              <button
-                key={estado.value}
-                type="button"
-                onClick={() => setEstadoSeleccionado(estado.value)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  border: estadoSeleccionado === estado.value ? '2px solid #00a8cc' : '1px solid #CBD5E1',
-                  borderRadius: '6px',
-                  background: estadoSeleccionado === estado.value ? '#E0F2FE' : '#ffffff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontWeight: estadoSeleccionado === estado.value ? 600 : 400
-                }}
-              >
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  background: estado.color,
-                  border: '1px solid #334155',
-                  borderRadius: '3px'
-                }} />
-                <span>{estado.label}</span>
-              </button>
-            ))}
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 className="section-title-small" style={{ margin: 0 }}>Odontograma</h3>
+          <Button
+            type="button"
+            variant={mostrarOdontogramaAvanzado ? "default" : "outline"}
+            size="sm"
+            onClick={() => setMostrarOdontogramaAvanzado(!mostrarOdontogramaAvanzado)}
+          >
+            {mostrarOdontogramaAvanzado ? "Vista Simple" : "Vista Avanzada (FDI)"}
+          </Button>
         </div>
+        
+        {mostrarOdontogramaAvanzado ? (
+          /* ODONTOGRAMA CLÍNICO AVANZADO FDI */
+          <div style={{ border: '2px solid #BFDBFE', borderRadius: '12px', overflow: 'hidden' }}>
+            <OdontogramaClinicoTab
+              token={token}
+              pacienteId={appointment?.id}
+              pacienteNombre={appointment?.nombre_completo}
+              pacienteCedula={appointment?.cedula}
+              doctorId={appointment?.doctor_id}
+            />
+          </div>
+        ) : (
+          /* ODONTOGRAMA SIMPLIFICADO ORIGINAL */
+          <>
+            {/* Selector de estado */}
+            <div style={{ marginBottom: '1rem', padding: '1rem', background: '#F0F9FF', borderRadius: '8px' }}>
+              <Label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
+                Estado a marcar (click en diente):
+              </Label>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {ESTADOS.filter(e => e.value !== 'sano').map(estado => (
+                  <button
+                    key={estado.value}
+                    type="button"
+                    onClick={() => setEstadoSeleccionado(estado.value)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      border: estadoSeleccionado === estado.value ? '2px solid #00a8cc' : '1px solid #CBD5E1',
+                      borderRadius: '6px',
+                      background: estadoSeleccionado === estado.value ? '#E0F2FE' : '#ffffff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      fontWeight: estadoSeleccionado === estado.value ? 600 : 400
+                    }}
+                  >
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      background: estado.color,
+                      border: '1px solid #334155',
+                      borderRadius: '3px'
+                    }} />
+                    <span>{estado.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
         {/* Odontograma con todos los dientes */}
         <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '2px solid #BFDBFE' }}>
