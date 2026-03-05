@@ -405,12 +405,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Componente ProformasTab"
-    - "Componente AbonosTab" 
-    - "Componente OdontogramaTab"
-    - "Componente OdontologiaForm"
-    - "Integración tabs en App.js"
-    - "Integración OdontologiaForm en AppointmentsWithAttention"
+    - "Odontograma Clínico FDI - Endpoints backend"
+    - "Componente OdontogramaClinicoTab"
+    - "Componente OdontogramaStandalone"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
