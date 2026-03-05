@@ -1,0 +1,351 @@
+/* ========== ODONTOGRAMA CLÍNICO STYLES ========== */
+
+.odontograma-clinico {
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 8px;
+}
+
+/* Header */
+.odontograma-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.odontograma-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1F2937;
+  margin: 0;
+}
+
+.odontograma-header .paciente-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  color: #6B7280;
+}
+
+.odontograma-header .cedula {
+  color: #9CA3AF;
+  font-size: 0.875rem;
+}
+
+.header-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* Barra de herramientas */
+.herramientas-diagnostico {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1rem;
+  background: #F9FAFB;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+
+.modo-edicion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.modo-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.diagnosticos-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.diagnostico-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.diag-btn {
+  padding: 0.5rem 1rem;
+  border: 2px solid;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.diag-btn:hover {
+  transform: scale(1.05);
+}
+
+.diag-btn.active {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+/* Odontograma Visual */
+.odontograma-visual {
+  padding: 1.5rem;
+  background: #FAFAFA;
+  border-radius: 12px;
+  border: 1px solid #E5E7EB;
+}
+
+.denticion-section {
+  margin-bottom: 2rem;
+}
+
+.denticion-section h4 {
+  text-align: center;
+  color: #4B5563;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.denticion-section.temporal {
+  background: #FEF3C7;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1.5rem;
+}
+
+/* Arcadas */
+.arcada {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.arcada.superior {
+  margin-bottom: 0.5rem;
+}
+
+.arcada.inferior {
+  margin-top: 0.5rem;
+}
+
+.cuadrante-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #9CA3AF;
+  min-width: 30px;
+  text-align: center;
+}
+
+.dientes-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+/* Línea media */
+.linea-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+}
+
+.linea-media span {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #9CA3AF;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.linea-media .linea {
+  flex: 1;
+  max-width: 400px;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #D1D5DB, transparent);
+}
+
+/* Diente Container */
+.diente-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.diente-container:hover {
+  background: #E5E7EB;
+}
+
+.diente-container.selected {
+  background: #DBEAFE;
+  box-shadow: 0 0 0 2px #3B82F6;
+}
+
+.diente-container.temporal {
+  opacity: 0.9;
+}
+
+.diente-numero {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #4B5563;
+  cursor: pointer;
+}
+
+/* Diente SVG */
+.diente-svg {
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+}
+
+@media (min-width: 768px) {
+  .diente-svg {
+    width: 45px;
+    height: 45px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .diente-svg {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+.diente-svg .superficie {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.diente-svg .superficie:hover {
+  stroke: #3B82F6;
+  stroke-width: 2;
+  filter: brightness(0.95);
+}
+
+/* Diente ausente */
+.diente-container.ausente .diente-grafico {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F3F4F6;
+  border-radius: 8px;
+  color: #9CA3AF;
+}
+
+/* Diente implante */
+.diente-container.implante .diente-grafico {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ECFEFF;
+  border-radius: 8px;
+  color: #06B6D4;
+}
+
+/* Leyenda */
+.leyenda-odontograma {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #F9FAFB;
+  border-radius: 8px;
+}
+
+.leyenda-odontograma h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4B5563;
+  margin-bottom: 0.75rem;
+}
+
+.leyenda-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.leyenda-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #6B7280;
+}
+
+.leyenda-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* Panel de diagnóstico general */
+.diagnostico-general-panel {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #F0F9FF;
+  border-radius: 8px;
+  border: 1px solid #BAE6FD;
+}
+
+.diagnostico-general-panel h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0C4A6E;
+  margin-bottom: 1rem;
+}
+
+.diagnostico-general-panel .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.diagnostico-general-panel .form-field.full-width {
+  grid-column: span 2;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .herramientas-diagnostico {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .dientes-row {
+    flex-wrap: wrap;
+  }
+  
+  .diente-svg {
+    width: 35px;
+    height: 35px;
+  }
+  
+  .diagnostico-general-panel .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .diagnostico-general-panel .form-field.full-width {
+    grid-column: span 1;
+  }
+}
