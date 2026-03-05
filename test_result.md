@@ -261,7 +261,70 @@ backend:
         agent: "testing"
         comment: "✅ TESTED: POST /api/medical-history/odontology (requiere usuario Doctor con doctor_id), GET /api/medical-history/odontology (listado), GET /api/medical-history/odontology/appointment/{appointment_id} (búsqueda por cita). Autenticación de rol Doctor verificada."
 
+  - task: "Odontograma Clínico FDI - Modelos y Endpoints"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py, /app/backend/models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          NUEVO SISTEMA DE ODONTOGRAMA CLÍNICO FDI:
+          - Modelos: DienteFDI, SuperficieDental, OdontogramaClinico
+          - Soporta 3 tipos de dentición: permanente (32), temporal (20), mixta
+          - Numeración FDI internacional
+          - 5 superficies por diente: oclusal/incisal, vestibular, palatino/lingual, mesial, distal
+          - Diagnósticos por superficie: sano, caries, restauracion, endodoncia, corona, sellante, fractura
+          - Estados de diente: presente, ausente, extraccion, no_erupcionado, exfoliado, implante, protesis
+          
+          ENDPOINTS:
+          - POST /api/odontograma-clinico - Crear odontograma
+          - GET /api/odontograma-clinico - Listar todos
+          - GET /api/odontograma-clinico/{id} - Obtener por ID
+          - GET /api/odontograma-clinico/paciente/{paciente_id} - Por paciente
+          - PUT /api/odontograma-clinico/{id} - Actualizar general
+          - PUT /api/odontograma-clinico/{id}/diente/{numero_fdi} - Actualizar diente
+          - PUT /api/odontograma-clinico/{id}/diente/{numero_fdi}/superficie/{superficie} - Actualizar superficie
+          - POST /api/odontograma-clinico/{id}/cambiar-denticion - Cambiar tipo dentición
+          - DELETE /api/odontograma-clinico/{id} - Eliminar
+
 frontend:
+  - task: "Componente OdontogramaClinicoTab"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/OdontogramaClinicoTab.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          NUEVO COMPONENTE DE ODONTOGRAMA CLÍNICO:
+          - Visualización gráfica de dientes con SVG
+          - Superficies clickeables con colores por diagnóstico
+          - Selector de tipo de dentición (permanente/temporal/mixta)
+          - Barra de herramientas de diagnóstico
+          - Modo edición: superficie o diente completo
+          - Leyenda de diagnósticos con colores
+          - Panel de diagnóstico general (higiene oral, estado encías)
+          - Dialog para editar diente individual
+
+  - task: "Componente OdontogramaStandalone"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/OdontogramaStandalone.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Wrapper para usar odontograma desde tab independiente. Permite buscar/seleccionar paciente antes de mostrar odontograma. Lista odontogramas recientes."
+
   - task: "Componente ProformasTab"
     implemented: true
     working: "NA"
