@@ -773,6 +773,305 @@ class BackendTester:
         
         return results
 
+    def test_odontograma_clinico_fdi(self) -> Dict[str, bool]:
+        """Test Odontograma Clínico FDI endpoints as requested"""
+        self.log("Testing Odontograma Clínico FDI endpoints...")
+        results = {}
+        
+        # 1. Test crear odontograma permanente (32 dientes)
+        self.log("1. Testing crear odontograma permanente (32 dientes)...")
+        
+        odontograma_permanente_data = {
+            "paciente_id": self.test_data["paciente_id"],
+            "paciente_nombre": self.test_data["paciente_nombre"],
+            "paciente_cedula": self.test_data["paciente_cedula"],
+            "doctor_id": self.test_data["doctor_id"],
+            "tipo_denticion": "permanente",
+            "fecha": "2024-01-15",
+            "diagnostico_general": "Evaluación odontológica completa",
+            "higiene_oral": "regular",
+            "estado_encias": "gingivitis leve",
+            "observaciones": "Paciente requiere limpieza dental"
+        }
+        
+        try:
+            response = self.make_request("POST", "/odontograma-clinico", odontograma_permanente_data)
+            if response.status_code == 200:
+                result = response.json()
+                self.test_data["odontograma_permanente_id"] = result["id"]
+                
+                # Verify 32 teeth created with FDI numbering
+                if (result["tipo_denticion"] == "permanente" and 
+                    result["total_dientes"] == 32):
+                    results["crear_odontograma_permanente"] = True
+                    self.log("✅ POST /api/odontograma-clinico (permanente) - SUCCESS (32 dientes FDI)")
+                    
+                    # Verify the actual odontogram structure
+                    get_response = self.make_request("GET", f"/odontograma-clinico/{result['id']}")
+                    if get_response.status_code == 200:
+                        odontograma = get_response.json()
+                        dientes = odontograma.get("dientes", [])
+                        
+                        # Check FDI numbering for permanent teeth (18-11, 21-28, 48-41, 31-38)
+                        expected_fdi_numbers = []
+                        # Cuadrante 1: 18-11
+                        for i in range(8, 0, -1):
+                            expected_fdi_numbers.append(f"1{i}")
+                        # Cuadrante 2: 21-28
+                        for i in range(1, 9):
+                            expected_fdi_numbers.append(f"2{i}")
+                        # Cuadrante 3: 31-38
+                        for i in range(1, 9):
+                            expected_fdi_numbers.append(f"3{i}")
+                        # Cuadrante 4: 48-41
+                        for i in range(8, 0, -1):
+                            expected_fdi_numbers.append(f"4{i}")
+                        
+                        actual_fdi_numbers = [d.get("numero_fdi") for d in dientes]
+                        
+                        if len(dientes) == 32 and all(num in actual_fdi_numbers for num in expected_fdi_numbers):
+                            # Check that each tooth has 5 surfaces
+                            all_have_5_surfaces = all(len(d.get("superficies", [])) == 5 for d in dientes)
+                            if all_have_5_surfaces:
+                                self.log("✅ FDI numbering and 5 surfaces per tooth verified")
+                            else:
+                                self.log("⚠️ Not all teeth have 5 surfaces", "WARNING")
+                        else:
+                            self.log(f"❌ FDI numbering incorrect. Expected 32, got {len(dientes)}", "ERROR")
+                    else:
+                        self.log("⚠️ Could not verify odontogram structure", "WARNING")
+                else:
+                    results["crear_odontograma_permanente"] = False
+                    self.log(f"❌ POST /api/odontograma-clinico (permanente) - FAILED (wrong count: {result.get('total_dientes')})", "ERROR")
+            else:
+                results["crear_odontograma_permanente"] = False
+                self.log(f"❌ POST /api/odontograma-clinico (permanente) - FAILED: {response.status_code} - {response.text}", "ERROR")
+        except Exception as e:
+            results["crear_odontograma_permanente"] = False
+            self.log(f"❌ POST /api/odontograma-clinico (permanente) - ERROR: {e}", "ERROR")
+        
+        # 2. Test crear odontograma temporal (20 dientes)
+        self.log("2. Testing crear odontograma temporal (20 dientes)...")
+        
+        odontograma_temporal_data = {
+            "paciente_id": self.test_data["paciente_id"],
+            "paciente_nombre": "Niño Pérez",
+            "paciente_cedula": "1234567891",
+            "doctor_id": self.test_data["doctor_id"],
+            "tipo_denticion": "temporal",
+            "fecha": "2024-01-15",
+            "diagnostico_general": "Dentición temporal completa",
+            "observaciones": "Paciente pediátrico"
+        }
+        
+        try:
+            response = self.make_request("POST", "/odontograma-clinico", odontograma_temporal_data)
+            if response.status_code == 200:
+                result = response.json()
+                self.test_data["odontograma_temporal_id"] = result["id"]
+                
+                # Verify 20 teeth created with FDI temporal numbering
+                if (result["tipo_denticion"] == "temporal" and 
+                    result["total_dientes"] == 20):
+                    results["crear_odontograma_temporal"] = True
+                    self.log("✅ POST /api/odontograma-clinico (temporal) - SUCCESS (20 dientes FDI)")
+                    
+                    # Verify FDI temporal numbering (55-51, 61-65, 85-81, 71-75)
+                    get_response = self.make_request("GET", f"/odontograma-clinico/{result['id']}")
+                    if get_response.status_code == 200:
+                        odontograma = get_response.json()
+                        dientes = odontograma.get("dientes", [])
+                        
+                        expected_temporal_fdi = []
+                        # Cuadrante 5: 55-51
+                        for i in range(5, 0, -1):
+                            expected_temporal_fdi.append(f"5{i}")
+                        # Cuadrante 6: 61-65
+                        for i in range(1, 6):
+                            expected_temporal_fdi.append(f"6{i}")
+                        # Cuadrante 7: 71-75
+                        for i in range(1, 6):
+                            expected_temporal_fdi.append(f"7{i}")
+                        # Cuadrante 8: 85-81
+                        for i in range(5, 0, -1):
+                            expected_temporal_fdi.append(f"8{i}")
+                        
+                        actual_fdi_numbers = [d.get("numero_fdi") for d in dientes]
+                        
+                        if len(dientes) == 20 and all(num in actual_fdi_numbers for num in expected_temporal_fdi):
+                            self.log("✅ FDI temporal numbering verified")
+                        else:
+                            self.log(f"❌ FDI temporal numbering incorrect. Expected 20, got {len(dientes)}", "ERROR")
+                else:
+                    results["crear_odontograma_temporal"] = False
+                    self.log(f"❌ POST /api/odontograma-clinico (temporal) - FAILED (wrong count: {result.get('total_dientes')})", "ERROR")
+            else:
+                results["crear_odontograma_temporal"] = False
+                self.log(f"❌ POST /api/odontograma-clinico (temporal) - FAILED: {response.status_code} - {response.text}", "ERROR")
+        except Exception as e:
+            results["crear_odontograma_temporal"] = False
+            self.log(f"❌ POST /api/odontograma-clinico (temporal) - ERROR: {e}", "ERROR")
+        
+        # 3. Test actualizar superficie de diente
+        self.log("3. Testing actualizar superficie de diente...")
+        
+        if "odontograma_permanente_id" in self.test_data:
+            superficie_data = {
+                "diagnostico": "caries",
+                "notas": "Caries profunda requiere tratamiento"
+            }
+            
+            try:
+                response = self.make_request(
+                    "PUT", 
+                    f"/odontograma-clinico/{self.test_data['odontograma_permanente_id']}/diente/16/superficie/oclusal",
+                    superficie_data
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    if "actualizada" in result.get("message", "").lower():
+                        results["actualizar_superficie_diente"] = True
+                        self.log("✅ PUT /api/odontograma-clinico/{id}/diente/16/superficie/oclusal - SUCCESS")
+                        
+                        # Verify the change persisted
+                        get_response = self.make_request("GET", f"/odontograma-clinico/{self.test_data['odontograma_permanente_id']}")
+                        if get_response.status_code == 200:
+                            odontograma = get_response.json()
+                            dientes = odontograma.get("dientes", [])
+                            diente_16 = next((d for d in dientes if d.get("numero_fdi") == "16"), None)
+                            if diente_16:
+                                superficie_oclusal = next((s for s in diente_16.get("superficies", []) if s.get("nombre") == "oclusal"), None)
+                                if superficie_oclusal and superficie_oclusal.get("diagnostico") == "caries":
+                                    self.log("✅ Surface update persisted correctly")
+                                else:
+                                    self.log("⚠️ Surface update not persisted correctly", "WARNING")
+                    else:
+                        results["actualizar_superficie_diente"] = False
+                        self.log("❌ PUT /api/odontograma-clinico/{id}/diente/{numero_fdi}/superficie/{superficie} - FAILED (no update message)", "ERROR")
+                else:
+                    results["actualizar_superficie_diente"] = False
+                    self.log(f"❌ PUT /api/odontograma-clinico/{{id}}/diente/16/superficie/oclusal - FAILED: {response.status_code} - {response.text}", "ERROR")
+            except Exception as e:
+                results["actualizar_superficie_diente"] = False
+                self.log(f"❌ PUT /api/odontograma-clinico/{{id}}/diente/16/superficie/oclusal - ERROR: {e}", "ERROR")
+        else:
+            results["actualizar_superficie_diente"] = False
+            self.log("❌ PUT /api/odontograma-clinico/{id}/diente/{numero_fdi}/superficie/{superficie} - SKIPPED (no odontograma_id)", "ERROR")
+        
+        # 4. Test actualizar estado de diente
+        self.log("4. Testing actualizar estado de diente...")
+        
+        if "odontograma_permanente_id" in self.test_data:
+            diente_data = {
+                "estado": "ausente",
+                "observaciones": "Diente extraído previamente"
+            }
+            
+            try:
+                response = self.make_request(
+                    "PUT",
+                    f"/odontograma-clinico/{self.test_data['odontograma_permanente_id']}/diente/48",
+                    diente_data
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    if "actualizado" in result.get("message", "").lower():
+                        results["actualizar_estado_diente"] = True
+                        self.log("✅ PUT /api/odontograma-clinico/{id}/diente/48 - SUCCESS")
+                        
+                        # Verify the change persisted
+                        get_response = self.make_request("GET", f"/odontograma-clinico/{self.test_data['odontograma_permanente_id']}")
+                        if get_response.status_code == 200:
+                            odontograma = get_response.json()
+                            dientes = odontograma.get("dientes", [])
+                            diente_48 = next((d for d in dientes if d.get("numero_fdi") == "48"), None)
+                            if diente_48 and diente_48.get("estado") == "ausente":
+                                self.log("✅ Tooth state update persisted correctly")
+                            else:
+                                self.log("⚠️ Tooth state update not persisted correctly", "WARNING")
+                    else:
+                        results["actualizar_estado_diente"] = False
+                        self.log("❌ PUT /api/odontograma-clinico/{id}/diente/{numero_fdi} - FAILED (no update message)", "ERROR")
+                else:
+                    results["actualizar_estado_diente"] = False
+                    self.log(f"❌ PUT /api/odontograma-clinico/{{id}}/diente/48 - FAILED: {response.status_code} - {response.text}", "ERROR")
+            except Exception as e:
+                results["actualizar_estado_diente"] = False
+                self.log(f"❌ PUT /api/odontograma-clinico/{{id}}/diente/48 - ERROR: {e}", "ERROR")
+        else:
+            results["actualizar_estado_diente"] = False
+            self.log("❌ PUT /api/odontograma-clinico/{id}/diente/{numero_fdi} - SKIPPED (no odontograma_id)", "ERROR")
+        
+        # 5. Test cambiar tipo de dentición
+        self.log("5. Testing cambiar tipo de dentición...")
+        
+        if "odontograma_permanente_id" in self.test_data:
+            cambio_data = {
+                "tipo_denticion": "temporal"
+            }
+            
+            try:
+                response = self.make_request(
+                    "POST",
+                    f"/odontograma-clinico/{self.test_data['odontograma_permanente_id']}/cambiar-denticion",
+                    cambio_data
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("total_dientes") == 20:  # Should now have 20 temporal teeth
+                        results["cambiar_tipo_denticion"] = True
+                        self.log("✅ POST /api/odontograma-clinico/{id}/cambiar-denticion - SUCCESS (regenerated 20 temporal teeth)")
+                        
+                        # Verify the change persisted
+                        get_response = self.make_request("GET", f"/odontograma-clinico/{self.test_data['odontograma_permanente_id']}")
+                        if get_response.status_code == 200:
+                            odontograma = get_response.json()
+                            if (odontograma.get("tipo_denticion") == "temporal" and 
+                                len(odontograma.get("dientes", [])) == 20):
+                                self.log("✅ Dentition change persisted correctly")
+                            else:
+                                self.log("⚠️ Dentition change not persisted correctly", "WARNING")
+                    else:
+                        results["cambiar_tipo_denticion"] = False
+                        self.log(f"❌ POST /api/odontograma-clinico/{{id}}/cambiar-denticion - FAILED (wrong teeth count: {result.get('total_dientes')})", "ERROR")
+                else:
+                    results["cambiar_tipo_denticion"] = False
+                    self.log(f"❌ POST /api/odontograma-clinico/{{id}}/cambiar-denticion - FAILED: {response.status_code} - {response.text}", "ERROR")
+            except Exception as e:
+                results["cambiar_tipo_denticion"] = False
+                self.log(f"❌ POST /api/odontograma-clinico/{{id}}/cambiar-denticion - ERROR: {e}", "ERROR")
+        else:
+            results["cambiar_tipo_denticion"] = False
+            self.log("❌ POST /api/odontograma-clinico/{id}/cambiar-denticion - SKIPPED (no odontograma_id)", "ERROR")
+        
+        # 6. Test obtener odontogramas por paciente
+        self.log("6. Testing obtener odontogramas por paciente...")
+        
+        try:
+            response = self.make_request("GET", f"/odontograma-clinico/paciente/{self.test_data['paciente_id']}")
+            if response.status_code == 200:
+                odontogramas = response.json()
+                if isinstance(odontogramas, list) and len(odontogramas) > 0:
+                    # Should have at least the odontograms we created
+                    patient_odontograms = [o for o in odontogramas if o.get("paciente_id") == self.test_data["paciente_id"]]
+                    if len(patient_odontograms) >= 1:  # At least one odontogram for this patient
+                        results["obtener_odontogramas_paciente"] = True
+                        self.log("✅ GET /api/odontograma-clinico/paciente/{paciente_id} - SUCCESS")
+                    else:
+                        results["obtener_odontogramas_paciente"] = False
+                        self.log("❌ GET /api/odontograma-clinico/paciente/{paciente_id} - FAILED (no odontograms for patient)", "ERROR")
+                else:
+                    results["obtener_odontogramas_paciente"] = False
+                    self.log("❌ GET /api/odontograma-clinico/paciente/{paciente_id} - FAILED (empty list)", "ERROR")
+            else:
+                results["obtener_odontogramas_paciente"] = False
+                self.log(f"❌ GET /api/odontograma-clinico/paciente/{{paciente_id}} - FAILED: {response.status_code} - {response.text}", "ERROR")
+        except Exception as e:
+            results["obtener_odontogramas_paciente"] = False
+            self.log(f"❌ GET /api/odontograma-clinico/paciente/{{paciente_id}} - ERROR: {e}", "ERROR")
+        
+        return results
+
     def run_all_tests(self) -> Dict[str, Dict[str, bool]]:
         """Run all backend tests"""
         self.log("=" * 60)
@@ -798,6 +1097,7 @@ class BackendTester:
             all_results["odontograms"] = self.test_odontograms()
             all_results["medical_history_odontology"] = self.test_medical_history_odontology()
             all_results["financial_endpoints"] = self.test_financial_endpoints()
+            all_results["odontograma_clinico_fdi"] = self.test_odontograma_clinico_fdi()
         except Exception as e:
             self.log(f"Test execution error: {e}", "ERROR")
             
