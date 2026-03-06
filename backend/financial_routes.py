@@ -24,7 +24,7 @@ from auth import TokenData, get_current_user
 financial_router = APIRouter(prefix="/financial", tags=["Financial"])
 
 # MongoDB Atlas Connection (same as server.py)
-MONGO_URL = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017')
+MONGO_URL = os.getenv("MONGO_URL")
 DB_NAME = os.environ.get('DB_NAME', 'family_health_db')
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]

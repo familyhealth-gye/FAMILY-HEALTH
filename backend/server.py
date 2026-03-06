@@ -73,7 +73,7 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection - 100% LOCAL
 load_dotenv()
 # MongoDB Atlas Connection
-MONGO_URL = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017')
+MONGO_URL = os.getenv("MONGO_URL")
 DB_NAME = os.environ.get('DB_NAME', 'family_health_db')
 client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
 db = client[DB_NAME]
