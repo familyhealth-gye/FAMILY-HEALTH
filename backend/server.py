@@ -20,10 +20,13 @@ app = FastAPI(title="Family Health API", description="Sistema Clínico Multiespe
 
 # CORS - DEBE IR PRIMERO
 from fastapi.middleware.cors import CORSMiddleware
+
+origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=origins,
     allow_credentials=True,
-    allow_origins=["http://localhost:3000", "https://family-health.onrender.com", "http://localhost:8001", "http://127.0.0.1:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
