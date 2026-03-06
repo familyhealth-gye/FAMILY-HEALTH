@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["http://localhost:3000", "https://ce-family-health.onrender.com", "http://localhost:8001", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "https://family-health.onrender.com", "http://localhost:8001", "http://127.0.0.1:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
