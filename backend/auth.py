@@ -16,7 +16,11 @@ SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "family-health-secret-key-2025")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    bcrypt__rounds=12,
+    deprecated="auto"
+)
 security = HTTPBearer()
 
 
