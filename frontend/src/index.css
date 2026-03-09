@@ -67,3 +67,85 @@
     @apply bg-background text-foreground;
   }
 }
+/* ========== VISTA ATENCIÓN COMPLETA ========== */
+.vista-atencion-completa {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #F8FAFC;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.panel-cerrar-consulta {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #E5E7EB;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 101;
+  box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.1);
+}
+
+.panel-cerrar-consulta .panel-info {
+  display: flex;
+  gap: 2rem;
+  color: #4B5563;
+}
+
+.btn-cerrar-consulta {
+  background: #059669 !important;
+  color: white;
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-cerrar-consulta:hover {
+  background: #047857 !important;
+}
+
+/* Vista formulario tradicional */
+.vista-atencion-formulario {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #F8FAFC;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.atencion-header {
+  background: linear-gradient(135deg, #0C4A6E 0%, #0284C7 100%);
+  padding: 1rem 2rem;
+  color: white;
+}
+
+.atencion-header .atencion-titulo h2 {
+  margin: 0.5rem 0;
+  font-size: 1.5rem;
+}
+
+.patient-info-inline {
+  display: flex;
+  gap: 2rem;
+  opacity: 0.9;
+  font-size: 0.9rem;
+}
+
+.atencion-contenido {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-bottom: 100px;
+}
