@@ -59,10 +59,20 @@ export const PacientesTab = ({ user, token }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Filtrar citas del doctor - solo por especialidad si está definida
+      // Filtrar citas según el rol del usuario
       const misCitas = appointmentsRes.data.filter(apt => {
-        if (apt.doctor_id !== user.doctor_id) return false;
+        // Si es Administrador, mostrar todos los pacientes
+        if (user.role === "Administrador") {
+          return apt.estado !== "Cancelada";
+        }
+        
+        // Si es Doctor, filtrar por su doctor_id
+        if (user.doctor_id) {
+          if (apt.doctor_id !== user.doctor_id) return false;
+        }
+        
         if (apt.estado === "Cancelada") return false;
+        
         // Solo filtrar por especialidad si el usuario tiene una definida
         if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
         return true;
@@ -72,12 +82,15 @@ export const PacientesTab = ({ user, token }) => {
       misCitas.forEach(cita => {
         if (!pacientesMap[cita.cedula]) {
           pacientesMap[cita.cedula] = {
+            id: cita.id,
             cedula: cita.cedula,
             nombre: cita.nombre_completo,
+            nombre_completo: cita.nombre_completo,
             edad: cita.edad,
             telefono: cita.telefono,
             ultimaConsulta: cita.fecha,
-            totalConsultas: 1
+            totalConsultas: 1,
+            especialidad: cita.especialidad
           };
         } else {
           pacientesMap[cita.cedula].totalConsultas++;
