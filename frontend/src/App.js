@@ -65,7 +65,7 @@ function App() {
     doctor_id: "",
     fecha: null,
     hora: "",
-    tipo_pago: "",
+    tipo_pago: "none",
     observaciones: ""
   });
   
@@ -276,7 +276,7 @@ function App() {
       doctor_id: "",
       fecha: null,
       hora: "",
-      tipo_pago: "",
+      tipo_pago: "none",
       observaciones: ""
     });
     setEditingAppointment(null);
