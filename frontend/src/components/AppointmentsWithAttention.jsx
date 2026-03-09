@@ -115,7 +115,8 @@ export const AppointmentsWithAttention = ({
     return priority[a.estado || "Programada"] - priority[b.estado || "Programada"];
   });
 
-  return (
+  // Contenido de la lista de citas (se usa en el return condicional)
+  const appointmentsContent = (
     <>
       {/* Filtro de fecha */}
       <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', background: '#F0F9FF', padding: '1rem', borderRadius: '8px' }}>
