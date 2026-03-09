@@ -433,7 +433,23 @@ export const PacientesTab = ({ user, token }) => {
     );
   };
 
-  // Vista de Historia Clínica (Solo Lectura)
+  // Vista de Historia Clínica Completa (nueva vista amplia con odontograma FDI)
+  if (vistaHistoriaCompleta && pacienteHistoria) {
+    return (
+      <HistoriaClinicaCompleta
+        paciente={pacienteHistoria}
+        token={token}
+        user={user}
+        onBack={() => {
+          setVistaHistoriaCompleta(false);
+          setPacienteHistoria(null);
+        }}
+        especialidad={userEspecialidad}
+      />
+    );
+  }
+
+  // Vista de Historia Clínica (Solo Lectura) - Vista antigua
   if (historiaDetalle && selectedConsulta) {
     return (
       <div className="tab-content">
