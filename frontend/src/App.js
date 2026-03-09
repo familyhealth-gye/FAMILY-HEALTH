@@ -93,10 +93,10 @@ function App() {
   }, [token]);
   
   useEffect(() => {
-  // Despierta el backend cuando se abre la app
-  fetch("https://family-health.onrender.com/healthz")
+  // Health check del backend (solo para verificar conexión)
+  fetch(`${BACKEND_URL}/healthz`)
     .then(() => console.log("Backend activo"))
-    .catch(() => console.log("Despertando backend..."));
+    .catch(() => console.log("Backend no disponible - verificar conexión"));
 }, []);
 
   const fetchData = async () => {
