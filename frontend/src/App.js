@@ -644,7 +644,7 @@ function App() {
                             {doctors
                               .filter(d => !appointmentForm.especialidad || d.especialidad === appointmentForm.especialidad)
                               .map((doctor) => (
-                                <SelectItem key={doctor.id} value={doctor.id.toString}>
+                                <SelectItem key={doctor.id} value={doctor.id}>
                                   {doctor.nombre} - {doctor.especialidad}
                                 </SelectItem>
                               ))}
