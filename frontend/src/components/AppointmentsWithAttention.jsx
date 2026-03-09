@@ -67,7 +67,15 @@ export const AppointmentsWithAttention = ({
       );
 
       setSelectedAppointment(appointment);
-      setAttentionDialog(true);
+      
+      // Para Odontología, abrir vista completa de historia clínica
+      if (appointment.especialidad === "Odontología") {
+        setModoAtencion("historia");
+      } else {
+        setModoAtencion("formulario");
+      }
+      
+      setVistaAtencion(true);
       await fetchData();
     } catch (error) {
       console.error("Error al iniciar atención:", error);
@@ -76,7 +84,7 @@ export const AppointmentsWithAttention = ({
   };
 
   const handleAttentionSuccess = async () => {
-    setAttentionDialog(false);
+    setVistaAtencion(false);
     setSelectedAppointment(null);
     await fetchData();
     toast.success("Consulta terminada - Cita pendiente de pago");
