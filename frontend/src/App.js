@@ -91,6 +91,13 @@ function App() {
       fetchData();
     }
   }, [token]);
+  
+  useEffect(() => {
+  // Despierta el backend cuando se abre la app
+  fetch("https://family-health.onrender.com/healthz")
+    .then(() => console.log("Backend activo"))
+    .catch(() => console.log("Despertando backend..."));
+}, []);
 
   const fetchData = async () => {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -637,7 +644,7 @@ function App() {
                             {doctors
                               .filter(d => !appointmentForm.especialidad || d.especialidad === appointmentForm.especialidad)
                               .map((doctor) => (
-                                <SelectItem key={doctor.id} value={doctor.id}>
+                                <SelectItem key={doctor.id} value={doctor.id.toString}>
                                   {doctor.nombre} - {doctor.especialidad}
                                 </SelectItem>
                               ))}
@@ -687,7 +694,7 @@ function App() {
                             <SelectValue placeholder="Se define al momento del cobro" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Sin definir</SelectItem>
+                            <SelectItem value="none">Sin definir</SelectItem>
                             <SelectItem value="Efectivo">Efectivo</SelectItem>
                             <SelectItem value="Transferencia">Transferencia</SelectItem>
                             <SelectItem value="Seguro">Seguro</SelectItem>
