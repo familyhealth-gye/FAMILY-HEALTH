@@ -66,18 +66,6 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
     loadExistingHistory();
   }, [appointment?.id, token]);
 
-  const handleDienteClick = (numero) => {
-    setDientes({
-      ...dientes,
-      [numero]: dientes[numero] === estadoSeleccionado ? 'sano' : estadoSeleccionado
-    });
-  };
-
-  const getColorDiente = (numero) => {
-    const estado = dientes[numero];
-    return ESTADOS.find(e => e.value === estado)?.color || '#ffffff';
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
