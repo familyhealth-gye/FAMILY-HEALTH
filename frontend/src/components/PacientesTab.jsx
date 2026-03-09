@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
+import { HistoriaClinicaCompleta } from "./HistoriaClinicaCompleta";
 import axios from "axios";
 import { toast } from "sonner";
 
