@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Phone, Edit, Trash2, Play, Check } from "lucide-react";
+import { Phone, Edit, Trash2, Play, Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
+import { HistoriaClinicaCompleta } from "./HistoriaClinicaCompleta";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
