@@ -29,6 +29,10 @@ export const PacientesTab = ({ user, token }) => {
   // Estado para reanudar consulta
   const [attentionDialog, setAttentionDialog] = useState(false);
   const [appointmentToResume, setAppointmentToResume] = useState(null);
+  
+  // Estado para vista de historia clínica completa
+  const [vistaHistoriaCompleta, setVistaHistoriaCompleta] = useState(false);
+  const [pacienteHistoria, setPacienteHistoria] = useState(null);
 
   // Obtener la especialidad del usuario (del doctor vinculado)
   const userEspecialidad = user?.especialidad || null;
