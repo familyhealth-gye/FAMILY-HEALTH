@@ -266,68 +266,126 @@ export const AppointmentsWithAttention = ({
           <p>No hay citas {user?.role === "Doctor" ? "asignadas" : "registradas"}</p>
         </div>
       )}
+    </>
+  );
 
-      {/* Attention Dialog */}
-      <Dialog open={attentionDialog} onOpenChange={setAttentionDialog}>
-        <DialogContent className="dialog-content dialog-wide dialog-scrollable">
-          <DialogHeader>
-            <DialogTitle>
-              Atención Médica - {selectedAppointment?.especialidad}
-            </DialogTitle>
-            <div className="patient-info-header">
-              <p><strong>Paciente:</strong> {selectedAppointment?.nombre_completo}</p>
-              <p><strong>Edad:</strong> {selectedAppointment?.edad} años</p>
-              <p><strong>Cédula:</strong> {selectedAppointment?.cedula}</p>
-            </div>
-          </DialogHeader>
+  // Si está en modo atención, mostrar la vista correspondiente
+  if (vistaAtencion && selectedAppointment) {
+    // Para Odontología: Vista completa de Historia Clínica con Odontograma FDI
+    if (modoAtencion === "historia" || selectedAppointment.especialidad === "Odontología") {
+      return (
+        <div className="vista-atencion-completa">
+          <HistoriaClinicaCompleta
+            paciente={{
+              id: selectedAppointment.id,
+              cedula: selectedAppointment.cedula,
+              nombre_completo: selectedAppointment.nombre_completo,
+              nombre: selectedAppointment.nombre_completo,
+              edad: selectedAppointment.edad,
+              telefono: selectedAppointment.telefono
+            }}
+            token={token}
+            user={user}
+            onBack={() => {
+              setVistaAtencion(false);
+              setSelectedAppointment(null);
+            }}
+            especialidad={selectedAppointment.especialidad}
+          />
           
-          {selectedAppointment && (
-            <>
-              {(selectedAppointment.especialidad === "Medicina General") && (
-                <MedicinaGeneralForm
-                  appointment={selectedAppointment}
-                  token={token}
-                  onClose={() => setAttentionDialog(false)}
-                  onSuccess={handleAttentionSuccess}
-                />
-              )}
-              
-              {selectedAppointment.especialidad === "Pediatría" && (
-                <PediatriaForm
-                  appointment={selectedAppointment}
-                  token={token}
-                  onClose={() => setAttentionDialog(false)}
-                  onSuccess={handleAttentionSuccess}
-                />
-              )}
-              
-              {selectedAppointment.especialidad === "Odontología" && (
-                <OdontologiaFormSimple
-                  appointment={selectedAppointment}
-                  token={token}
-                  onClose={() => setAttentionDialog(false)}
-                  onSuccess={handleAttentionSuccess}
-                />
-              )}
-              
-              {!["Medicina General", "Pediatría", "Odontología"].includes(selectedAppointment.especialidad) && (
-                <div style={{padding: '2rem', textAlign: 'center'}}>
-                  <p>Historia clínica de {selectedAppointment.especialidad} aún no implementada.</p>
-                  <p style={{marginTop: '1rem', color: '#64748B'}}>
-                    Por ahora están disponibles Medicina General, Pediatría y Odontología.
-                  </p>
-                  <Button 
-                    onClick={() => setAttentionDialog(false)} 
-                    style={{marginTop: '1.5rem'}}
-                  >
-                    Cerrar
-                  </Button>
-                </div>
-              )}
-            </>
+          {/* Panel flotante para cerrar consulta */}
+          <div className="panel-cerrar-consulta">
+            <div className="panel-info">
+              <span>Paciente: <strong>{selectedAppointment.nombre_completo}</strong></span>
+              <span>Especialidad: <strong>{selectedAppointment.especialidad}</strong></span>
+            </div>
+            <Button 
+              onClick={handleAttentionSuccess}
+              className="btn-cerrar-consulta"
+            >
+              <Check size={16} />
+              Cerrar Consulta
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    
+    // Para otras especialidades: Formulario tradicional en vista amplia
+    return (
+      <div className="vista-atencion-formulario">
+        <div className="atencion-header">
+          <Button 
+            variant="ghost" 
+            onClick={() => {
+              setVistaAtencion(false);
+              setSelectedAppointment(null);
+            }}
+          >
+            <ArrowLeft size={20} />
+            Volver a Citas
+          </Button>
+          <div className="atencion-titulo">
+            <h2>Atención Médica - {selectedAppointment.especialidad}</h2>
+            <div className="patient-info-inline">
+              <span><strong>Paciente:</strong> {selectedAppointment.nombre_completo}</span>
+              <span><strong>Edad:</strong> {selectedAppointment.edad} años</span>
+              <span><strong>Cédula:</strong> {selectedAppointment.cedula}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="atencion-contenido">
+          {selectedAppointment.especialidad === "Medicina General" && (
+            <MedicinaGeneralForm
+              appointment={selectedAppointment}
+              token={token}
+              onClose={() => {
+                setVistaAtencion(false);
+                setSelectedAppointment(null);
+              }}
+              onSuccess={handleAttentionSuccess}
+            />
           )}
-        </DialogContent>
-      </Dialog>
+          
+          {selectedAppointment.especialidad === "Pediatría" && (
+            <PediatriaForm
+              appointment={selectedAppointment}
+              token={token}
+              onClose={() => {
+                setVistaAtencion(false);
+                setSelectedAppointment(null);
+              }}
+              onSuccess={handleAttentionSuccess}
+            />
+          )}
+          
+          {!["Medicina General", "Pediatría", "Odontología"].includes(selectedAppointment.especialidad) && (
+            <div style={{padding: '2rem', textAlign: 'center'}}>
+              <p>Historia clínica de {selectedAppointment.especialidad} aún no implementada.</p>
+              <p style={{marginTop: '1rem', color: '#64748B'}}>
+                Por ahora están disponibles Medicina General, Pediatría y Odontología.
+              </p>
+              <Button 
+                onClick={() => {
+                  setVistaAtencion(false);
+                  setSelectedAppointment(null);
+                }}
+                style={{marginTop: '1.5rem'}}
+              >
+                Volver
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Vista normal de lista de citas
+  return (
+    <>
+      {appointmentsContent}
     </>
   );
 };
