@@ -10,28 +10,7 @@ import { OdontogramaClinicoTab } from "./OdontogramaClinicoTab";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Odontograma simplificado - 32 dientes
-const DIENTES_ADULTO = [
-  // Superior derecha
-  18, 17, 16, 15, 14, 13, 12, 11,
-  // Superior izquierda  
-  21, 22, 23, 24, 25, 26, 27, 28,
-  // Inferior izquierda
-  38, 37, 36, 35, 34, 33, 32, 31,
-  // Inferior derecha
-  41, 42, 43, 44, 45, 46, 47, 48
-];
-
-const ESTADOS = [
-  { value: 'sano', label: 'Sano', color: '#ffffff' },
-  { value: 'caries', label: 'Caries', color: '#DC2626' },
-  { value: 'obturacion', label: 'Obturación', color: '#3B82F6' },
-  { value: 'corona', label: 'Corona', color: '#F59E0B' },
-  { value: 'endodoncia', label: 'Endodoncia', color: '#8B5CF6' },
-  { value: 'extraccion', label: 'Extracción', color: '#000000' },
-  { value: 'implante', label: 'Implante', color: '#10B981' },
-  { value: 'protesis', label: 'Prótesis', color: '#EC4899' }
-];
+// Constants removed - using advanced odontogram only
 
 export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
