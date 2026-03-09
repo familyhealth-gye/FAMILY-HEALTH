@@ -39,7 +39,7 @@ def read_root():
     return {"message": "API Family Health funcionando correctamente 🚀"}
 
 # Ruta para el health check
-@app.get("/healthz")
+@app.api_route("/healthz", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "ok"}
 
