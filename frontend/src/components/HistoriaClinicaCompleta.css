@@ -1,0 +1,426 @@
+/* ========== HISTORIA CLÍNICA COMPLETA STYLES ========== */
+
+.historia-clinica-completa {
+  min-height: 100vh;
+  background: #F8FAFC;
+}
+
+/* Header */
+.historia-header {
+  background: linear-gradient(135deg, #0C4A6E 0%, #0284C7 100%);
+  padding: 1.5rem 2rem;
+  color: white;
+}
+
+.back-button {
+  color: white;
+  margin-bottom: 1rem;
+}
+
+.back-button:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.paciente-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background: rgba(255,255,255,0.1);
+  padding: 1.5rem;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.paciente-avatar {
+  width: 80px;
+  height: 80px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.paciente-info-main {
+  flex: 1;
+}
+
+.paciente-nombre {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+}
+
+.paciente-datos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.paciente-datos .dato {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.paciente-stats {
+  display: flex;
+  gap: 2rem;
+}
+
+.paciente-stats .stat {
+  text-align: center;
+}
+
+.paciente-stats .stat-value {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.paciente-stats .stat-label {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Tabs */
+.historia-tabs {
+  padding: 0;
+}
+
+.historia-tabs-list {
+  background: white;
+  padding: 0.5rem 2rem;
+  border-bottom: 1px solid #E5E7EB;
+  gap: 0.5rem;
+  justify-content: flex-start;
+  height: auto;
+}
+
+.historia-tabs-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+}
+
+.historia-tabs-list button[data-state="active"] {
+  background: #0284C7;
+  color: white;
+}
+
+.tab-content-full {
+  padding: 2rem;
+  min-height: calc(100vh - 300px);
+}
+
+/* Estados vacíos y carga */
+.loading-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  color: #9CA3AF;
+  gap: 1rem;
+}
+
+.empty-state p {
+  font-size: 1rem;
+}
+
+/* Grid de consultas */
+.consultas-grid {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 2rem;
+  height: calc(100vh - 350px);
+}
+
+/* Lista de consultas */
+.consultas-lista {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow-y: auto;
+}
+
+.consultas-lista h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.consulta-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 0.5rem;
+  border: 1px solid #E5E7EB;
+}
+
+.consulta-item:hover {
+  background: #F0F9FF;
+  border-color: #BAE6FD;
+}
+
+.consulta-item.selected {
+  background: #DBEAFE;
+  border-color: #3B82F6;
+}
+
+.consulta-fecha {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #6B7280;
+  white-space: nowrap;
+}
+
+.consulta-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.consulta-especialidad {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1F2937;
+}
+
+.consulta-doctor {
+  font-size: 0.75rem;
+  color: #6B7280;
+}
+
+.consulta-estado {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.consulta-has-historia {
+  color: #059669;
+}
+
+/* Detalle de consulta */
+.consulta-detalle {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow-y: auto;
+}
+
+.detalle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.detalle-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1F2937;
+  margin: 0;
+}
+
+.detalle-fecha {
+  font-size: 0.875rem;
+  color: #6B7280;
+}
+
+.detalle-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #F9FAFB;
+  border-radius: 8px;
+}
+
+.info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-row .label {
+  font-size: 0.75rem;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-row .value {
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.info-row .value.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  width: fit-content;
+}
+
+/* Historia clínica */
+.detalle-historia {
+  margin-top: 1rem;
+}
+
+.detalle-historia h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1F2937;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.historia-campo {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #F9FAFB;
+  border-radius: 8px;
+  border-left: 3px solid #0284C7;
+}
+
+.historia-campo .campo-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.historia-campo p {
+  margin: 0;
+  color: #1F2937;
+  line-height: 1.6;
+}
+
+.sin-historia,
+.seleccionar-consulta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: #9CA3AF;
+  gap: 1rem;
+  height: 100%;
+}
+
+/* Odontograma container */
+.odontograma-container-full {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+/* Recetas */
+.recetas-lista {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.recetas-lista h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 1rem 0;
+}
+
+.recetas-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.recetas-table th,
+.recetas-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.recetas-table th {
+  font-weight: 600;
+  color: #6B7280;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.medicamento-item {
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .consultas-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .paciente-card {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .paciente-datos {
+    justify-content: center;
+  }
+  
+  .paciente-stats {
+    justify-content: center;
+  }
+  
+  .detalle-info {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .historia-header {
+    padding: 1rem;
+  }
+  
+  .tab-content-full {
+    padding: 1rem;
+  }
+  
+  .historia-tabs-list {
+    padding: 0.5rem 1rem;
+    flex-wrap: wrap;
+  }
+}
