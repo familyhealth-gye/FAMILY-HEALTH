@@ -21,9 +21,10 @@ export const AppointmentsWithAttention = ({
   openWhatsApp,
   fetchData 
 }) => {
-  const [attentionDialog, setAttentionDialog] = useState(false);
+  const [vistaAtencion, setVistaAtencion] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]); // Fecha actual por defecto
+  const [modoAtencion, setModoAtencion] = useState("historia"); // "historia" o "formulario"
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
 
   // Obtener la especialidad del usuario
   const userEspecialidad = user?.especialidad || null;
