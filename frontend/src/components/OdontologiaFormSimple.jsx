@@ -86,36 +86,6 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
     setLoading(true);
 
     try {
-      // Preparar datos del odontograma
-      const dientesArray = Object.entries(dientes)
-        .filter(([_, estado]) => estado !== 'sano')
-        .map(([numero, estado]) => ({
-          tooth_number: parseInt(numero),
-          estado: ESTADOS.find(e => e.value === estado)?.label || 'Sano',
-          cara_oclusal: "",
-          cara_vestibular: "",
-          cara_palatina: "",
-          cara_mesial: "",
-          cara_distal: "",
-          observaciones: ""
-        }));
-
-      // Guardar odontograma
-      const odontogramData = {
-        paciente_id: appointment.id,
-        doctor_id: appointment.doctor_id,
-        fecha: new Date().toISOString().split('T')[0],
-        dientes: dientesArray.length > 0 ? dientesArray : [{ tooth_number: 1, estado: 'Sano' }],
-        diagnostico_general: form.diagnostico,
-        tratamiento_recomendado: form.tratamiento_realizado,
-        observaciones: form.observaciones || ""
-      };
-
-      console.log("=== ENVIANDO ODONTOGRAMA ===");
-      await axios.post(`${API}/odontograms`, odontogramData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
       // Guardar o actualizar historia clínica
       const historyData = {
         appointment_id: appointment.id,
