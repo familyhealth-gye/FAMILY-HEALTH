@@ -247,11 +247,15 @@ export const PacientesTab = ({ user, token }) => {
     }
   };
 
+  // Abrir vista de Historia Clínica Completa (nueva vista amplia)
+  const handleAbrirHistoriaCompleta = (paciente) => {
+    setPacienteHistoria(paciente);
+    setVistaHistoriaCompleta(true);
+  };
+
   const handleVerPaciente = (paciente) => {
-    setSelectedPaciente(paciente);
-    setActiveTab("consultas");
-    fetchConsultasPaciente(paciente.cedula);
-    fetchRecetasPaciente(paciente.cedula);
+    // Abrir directamente la vista de historia clínica completa
+    handleAbrirHistoriaCompleta(paciente);
   };
 
   const handleVerHistoria = (consulta) => {
