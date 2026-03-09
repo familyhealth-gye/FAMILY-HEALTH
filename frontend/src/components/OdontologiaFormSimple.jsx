@@ -16,16 +16,6 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [existingHistory, setExistingHistory] = useState(null);
-  const [estadoSeleccionado, setEstadoSeleccionado] = useState('caries');
-  const [mostrarOdontogramaAvanzado, setMostrarOdontogramaAvanzado] = useState(false);
-  
-  // Inicializar dientes con estado sano
-  const [dientes, setDientes] = useState(
-    DIENTES_ADULTO.reduce((acc, num) => {
-      acc[num] = 'sano';
-      return acc;
-    }, {})
-  );
 
   const [form, setForm] = useState({
     motivo_consulta: "",
