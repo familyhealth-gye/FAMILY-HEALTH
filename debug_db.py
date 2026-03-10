@@ -6,7 +6,7 @@ Debug script to check database contents
 import requests
 import json
 
-BACKEND_URL = "https://clinic-finance-10.preview.emergentagent.com/api"
+BACKEND_URL = "https://clinic-tooth-render.preview.emergentagent.com/api"
 
 # Get auth token
 login_data = {"username": "admin_test", "password": "admin123"}
