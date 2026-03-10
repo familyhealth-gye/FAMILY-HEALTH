@@ -198,20 +198,37 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
   const [observaciones, setObservaciones] = useState("");
 
   useEffect(() => {
-    if (pacienteId) {
+    if (pacienteId || pacienteCedula) {
       buscarOdontogramaExistente();
     }
-  }, [pacienteId]);
+  }, [pacienteId, pacienteCedula]);
 
   const buscarOdontogramaExistente = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(
-        `${API}/odontograma-clinico/paciente/${pacienteId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      let response = null;
       
-      if (response.data && response.data.length > 0) {
+      // Primero intentar buscar por cédula (más confiable)
+      if (pacienteCedula) {
+        try {
+          response = await axios.get(
+            `${API}/odontograma-clinico/cedula/${pacienteCedula}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch (e) {
+          console.log("No se encontró odontograma por cédula, intentando por ID");
+        }
+      }
+      
+      // Si no encontró por cédula, buscar por pacienteId
+      if ((!response || !response.data || response.data.length === 0) && pacienteId) {
+        response = await axios.get(
+          `${API}/odontograma-clinico/paciente/${pacienteId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+      
+      if (response?.data && response.data.length > 0) {
         // Usar el odontograma más reciente
         const ultimoOdontograma = response.data[0];
         setOdontograma(ultimoOdontograma);
