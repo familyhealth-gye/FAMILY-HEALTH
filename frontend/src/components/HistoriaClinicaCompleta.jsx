@@ -26,6 +26,7 @@ export const HistoriaClinicaCompleta = ({
   const [recetas, setRecetas] = useState([]);
   const [selectedConsulta, setSelectedConsulta] = useState(null);
   const [activeTab, setActiveTab] = useState("consultas");
+  const [odontogramaId, setOdontogramaId] = useState(null);
 
   // Determinar si mostrar odontograma
   const esOdontologia = especialidad === "Odontología" || 
@@ -35,8 +36,25 @@ export const HistoriaClinicaCompleta = ({
   useEffect(() => {
     if (paciente?.cedula) {
       fetchHistorialPaciente();
+      if (esOdontologia) {
+        fetchOdontogramaId();
+      }
     }
-  }, [paciente]);
+  }, [paciente, esOdontologia]);
+
+  const fetchOdontogramaId = async () => {
+    try {
+      const response = await axios.get(
+        `${API}/odontograma-clinico/cedula/${paciente.cedula}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data && response.data.length > 0) {
+        setOdontogramaId(response.data[0].id);
+      }
+    } catch (error) {
+      console.log("No se encontró odontograma");
+    }
+  };
 
   const fetchHistorialPaciente = async () => {
     setLoading(true);
