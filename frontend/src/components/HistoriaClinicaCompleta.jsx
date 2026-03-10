@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import axios from "axios";
 import { 
   ArrowLeft, User, Calendar, FileText, Phone, Mail, 
-  Stethoscope, Pill, Clock, Download, Smile
+  Stethoscope, Pill, Clock, Download, Smile, ClipboardList
 } from "lucide-react";
 import { OdontogramaClinicoTab } from "./OdontogramaClinicoTab";
+import { PlanTratamientoTab } from "./PlanTratamientoTab";
 import "./HistoriaClinicaCompleta.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
