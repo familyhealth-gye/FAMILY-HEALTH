@@ -58,7 +58,9 @@ from models import (
     Abono, AbonoCreate, AbonoUpdate,
     Odontogram, OdontogramCreate, OdontogramUpdate, ToothState,
     OdontogramaClinico, DienteFDI, SuperficieDental,
-    Especialidad, EspecialidadCreate
+    Especialidad, EspecialidadCreate,
+    PlanTratamiento, PlanTratamientoCreate, ProcedimientoDental, 
+    ProcedimientoCreate, ProcedimientoUpdate, FaseTratamiento
 )
 from medical_history_models import (
     MedicalHistoryGeneral, MedicalHistoryGeneralCreate,
