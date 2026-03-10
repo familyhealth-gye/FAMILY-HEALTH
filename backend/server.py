@@ -1787,9 +1787,9 @@ async def crear_odontograma_clinico(
     # Crear odontograma
     odontograma = OdontogramaClinico(
         paciente_id=paciente_id,
-        paciente_nombre=input.get('paciente_nombre', paciente_nombre),
-        paciente_cedula=input.get('paciente_cedula', paciente_cedula),
-        doctor_id=doctor_id,
+        paciente_nombre=paciente_nombre or input.get('paciente_nombre', ''),
+        paciente_cedula=paciente_cedula or input.get('paciente_cedula', ''),
+        doctor_id=doctor_id or '',
         doctor_nombre=doctor_nombre,
         tipo_denticion=tipo_denticion,
         fecha=input.get('fecha', datetime.now(timezone.utc).strftime('%Y-%m-%d')),
