@@ -232,6 +232,12 @@ export const HistoriaClinicaCompleta = ({
               Odontograma
             </TabsTrigger>
           )}
+          {esOdontologia && (
+            <TabsTrigger value="plan-tratamiento">
+              <ClipboardList size={16} />
+              Plan de Tratamiento
+            </TabsTrigger>
+          )}
           <TabsTrigger value="recetas">
             <Pill size={16} />
             Recetas
