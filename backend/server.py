@@ -2042,6 +2042,362 @@ async def debug_db():
 async def debug_db_name():
     return {"db_name_connected": db.name}
 
+
+# ========== PLAN DE TRATAMIENTO ENDPOINTS ==========
+
+def clasificar_procedimiento_por_superficies(superficies_afectadas: List[dict]) -> str:
+    """
+    Clasifica el procedimiento dental según número de superficies afectadas.
+    Reglas:
+    - 1 superficie → Resina simple
+    - 2 superficies → Resina compuesta
+    - 3 superficies → Resina compleja
+    - 4+ superficies o daño estructural → Corona
+    """
+    # Contar superficies con diagnóstico diferente de "sano"
+    superficies_con_problema = [s for s in superficies_afectadas if s.get('diagnostico', 'sano') != 'sano']
+    num_superficies = len(superficies_con_problema)
+    
+    if num_superficies == 0:
+        return None  # No requiere tratamiento
+    elif num_superficies == 1:
+        return "Resina simple"
+    elif num_superficies == 2:
+        return "Resina compuesta"
+    elif num_superficies == 3:
+        return "Resina compleja"
+    else:
+        return "Corona"
+
+
+def generar_procedimientos_desde_odontograma(odontograma: dict) -> List[dict]:
+    """
+    Analiza el odontograma y genera procedimientos sugeridos por diente.
+    """
+    procedimientos = []
+    dientes = odontograma.get('dientes', [])
+    
+    for diente in dientes:
+        numero_fdi = diente.get('numero_fdi', '')
+        estado = diente.get('estado', 'presente')
+        superficies = diente.get('superficies', [])
+        
+        # Si el diente está ausente, no generar procedimiento
+        if estado in ['ausente', 'exfoliado']:
+            continue
+        
+        # Si está marcado para extracción
+        if estado == 'extraccion':
+            procedimientos.append({
+                'diente_numero': numero_fdi,
+                'procedimiento': 'Extracción',
+                'descripcion': f'Extracción indicada - diente {numero_fdi}',
+                'superficies_afectadas': [],
+                'fase': 1
+            })
+            continue
+        
+        # Analizar superficies para determinar procedimiento
+        superficies_afectadas = []
+        tiene_endodoncia = False
+        tiene_corona = False
+        
+        for sup in superficies:
+            diagnostico = sup.get('diagnostico', 'sano')
+            if diagnostico != 'sano':
+                superficies_afectadas.append({
+                    'nombre': sup.get('nombre', ''),
+                    'diagnostico': diagnostico
+                })
+                if diagnostico == 'endodoncia':
+                    tiene_endodoncia = True
+                if diagnostico == 'corona':
+                    tiene_corona = True
+        
+        # Determinar procedimiento
+        if tiene_endodoncia:
+            procedimientos.append({
+                'diente_numero': numero_fdi,
+                'procedimiento': 'Endodoncia',
+                'descripcion': f'Tratamiento de conducto - diente {numero_fdi}',
+                'superficies_afectadas': [s['nombre'] for s in superficies_afectadas],
+                'fase': 1
+            })
+        elif tiene_corona:
+            procedimientos.append({
+                'diente_numero': numero_fdi,
+                'procedimiento': 'Corona',
+                'descripcion': f'Corona dental - diente {numero_fdi}',
+                'superficies_afectadas': [s['nombre'] for s in superficies_afectadas],
+                'fase': 2
+            })
+        elif len(superficies_afectadas) > 0:
+            procedimiento = clasificar_procedimiento_por_superficies(superficies_afectadas)
+            if procedimiento:
+                nombres_superficies = [s['nombre'] for s in superficies_afectadas]
+                procedimientos.append({
+                    'diente_numero': numero_fdi,
+                    'procedimiento': procedimiento,
+                    'descripcion': f'{procedimiento} - diente {numero_fdi} ({", ".join(nombres_superficies)})',
+                    'superficies_afectadas': nombres_superficies,
+                    'fase': 1
+                })
+    
+    return procedimientos
+
+
+@api_router.post("/plan-tratamiento")
+async def crear_plan_tratamiento(
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Crear nuevo plan de tratamiento para un paciente"""
+    paciente_cedula = input.get('paciente_cedula')
+    paciente_id = input.get('paciente_id', '')
+    paciente_nombre = input.get('paciente_nombre', '')
+    doctor_id = input.get('doctor_id', '')
+    doctor_nombre = input.get('doctor_nombre', '')
+    odontograma_id = input.get('odontograma_id', '')
+    
+    if not paciente_cedula:
+        raise HTTPException(status_code=400, detail="paciente_cedula es requerido")
+    
+    # Crear plan
+    plan = PlanTratamiento(
+        paciente_id=paciente_id,
+        paciente_cedula=paciente_cedula,
+        paciente_nombre=paciente_nombre,
+        doctor_id=doctor_id,
+        doctor_nombre=doctor_nombre,
+        odontograma_id=odontograma_id
+    )
+    
+    doc = plan.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.planes_tratamiento.insert_one(doc)
+    
+    return {"message": "Plan de tratamiento creado", "id": plan.id}
+
+
+@api_router.get("/plan-tratamiento/paciente/{cedula}")
+async def obtener_plan_por_cedula(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener plan de tratamiento activo de un paciente por cédula"""
+    plan = await db.planes_tratamiento.find_one(
+        {"paciente_cedula": cedula, "estado": "activo"}, 
+        {"_id": 0}
+    )
+    return plan
+
+
+@api_router.get("/plan-tratamiento/{plan_id}")
+async def obtener_plan_por_id(
+    plan_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener plan de tratamiento por ID"""
+    plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    return plan
+
+
+@api_router.post("/plan-tratamiento/{plan_id}/generar-desde-odontograma/{odontograma_id}")
+async def generar_procedimientos_automaticos(
+    plan_id: str,
+    odontograma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Genera procedimientos automáticamente desde el odontograma.
+    Analiza las superficies afectadas y sugiere tratamientos por diente.
+    """
+    # Obtener plan
+    plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    
+    # Obtener odontograma
+    odontograma = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not odontograma:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+    
+    # Generar procedimientos
+    procedimientos_sugeridos = generar_procedimientos_desde_odontograma(odontograma)
+    
+    # Convertir a objetos ProcedimientoDental
+    nuevos_procedimientos = []
+    for proc_data in procedimientos_sugeridos:
+        proc = ProcedimientoDental(
+            diente_numero=proc_data['diente_numero'],
+            procedimiento=proc_data['procedimiento'],
+            descripcion=proc_data['descripcion'],
+            fase=proc_data['fase'],
+            superficies_afectadas=proc_data['superficies_afectadas']
+        )
+        nuevos_procedimientos.append(proc.model_dump())
+    
+    # Actualizar plan
+    await db.planes_tratamiento.update_one(
+        {"id": plan_id},
+        {
+            "$set": {
+                "procedimientos": nuevos_procedimientos,
+                "odontograma_id": odontograma_id,
+                "fecha_actualizacion": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {
+        "message": "Procedimientos generados",
+        "total": len(nuevos_procedimientos),
+        "procedimientos": nuevos_procedimientos
+    }
+
+
+@api_router.post("/plan-tratamiento/{plan_id}/procedimiento")
+async def agregar_procedimiento(
+    plan_id: str,
+    proc_input: ProcedimientoCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Agregar procedimiento manualmente al plan"""
+    plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    
+    nuevo_proc = ProcedimientoDental(
+        diente_numero=proc_input.diente_numero,
+        procedimiento=proc_input.procedimiento,
+        descripcion=proc_input.descripcion,
+        fase=proc_input.fase,
+        precio=proc_input.precio,
+        superficies_afectadas=proc_input.superficies_afectadas,
+        notas=proc_input.notas
+    )
+    
+    await db.planes_tratamiento.update_one(
+        {"id": plan_id},
+        {
+            "$push": {"procedimientos": nuevo_proc.model_dump()},
+            "$set": {
+                "fecha_actualizacion": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {"message": "Procedimiento agregado", "procedimiento": nuevo_proc.model_dump()}
+
+
+@api_router.put("/plan-tratamiento/{plan_id}/procedimiento/{procedimiento_id}")
+async def actualizar_procedimiento(
+    plan_id: str,
+    procedimiento_id: str,
+    proc_update: ProcedimientoUpdate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualizar un procedimiento del plan"""
+    plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    
+    procedimientos = plan.get('procedimientos', [])
+    actualizado = False
+    
+    for i, proc in enumerate(procedimientos):
+        if proc.get('id') == procedimiento_id:
+            for key, value in proc_update.model_dump(exclude_unset=True).items():
+                if value is not None:
+                    procedimientos[i][key] = value
+            if proc_update.estado == 'realizado':
+                procedimientos[i]['fecha_realizado'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            actualizado = True
+            break
+    
+    if not actualizado:
+        raise HTTPException(status_code=404, detail="Procedimiento no encontrado")
+    
+    await db.planes_tratamiento.update_one(
+        {"id": plan_id},
+        {
+            "$set": {
+                "procedimientos": procedimientos,
+                "fecha_actualizacion": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {"message": "Procedimiento actualizado"}
+
+
+@api_router.delete("/plan-tratamiento/{plan_id}/procedimiento/{procedimiento_id}")
+async def eliminar_procedimiento(
+    plan_id: str,
+    procedimiento_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Eliminar un procedimiento del plan"""
+    result = await db.planes_tratamiento.update_one(
+        {"id": plan_id},
+        {
+            "$pull": {"procedimientos": {"id": procedimiento_id}},
+            "$set": {
+                "fecha_actualizacion": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Procedimiento no encontrado")
+    
+    return {"message": "Procedimiento eliminado"}
+
+
+@api_router.put("/plan-tratamiento/{plan_id}/organizar-fases")
+async def organizar_fases(
+    plan_id: str,
+    fases_input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Reorganizar procedimientos en fases.
+    Input: { "procedimiento_id": fase_numero, ... }
+    """
+    plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    
+    cambios_fase = fases_input.get('cambios', {})
+    procedimientos = plan.get('procedimientos', [])
+    
+    for i, proc in enumerate(procedimientos):
+        proc_id = proc.get('id')
+        if proc_id in cambios_fase:
+            procedimientos[i]['fase'] = cambios_fase[proc_id]
+    
+    await db.planes_tratamiento.update_one(
+        {"id": plan_id},
+        {
+            "$set": {
+                "procedimientos": procedimientos,
+                "fecha_actualizacion": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {"message": "Fases reorganizadas"}
+
+
 # Include API router
 app.include_router(api_router)
 
