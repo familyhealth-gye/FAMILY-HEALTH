@@ -1816,6 +1816,18 @@ async def obtener_odontogramas_paciente(
     return odontogramas
 
 
+@api_router.get("/odontograma-clinico/cedula/{cedula}")
+async def obtener_odontogramas_por_cedula(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener todos los odontogramas de un paciente por cédula"""
+    odontogramas = await db.odontogramas_clinicos.find(
+        {"paciente_cedula": cedula}, {"_id": 0}
+    ).sort("fecha", -1).to_list(100)
+    return odontogramas
+
+
 @api_router.put("/odontograma-clinico/{odontograma_id}")
 async def actualizar_odontograma_clinico(
     odontograma_id: str,
