@@ -438,10 +438,26 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
 
   const denticionOrganizada = organizarDientes();
 
+  // Debug para verificar datos
+  console.log("Odontograma:", odontograma?.id, "Dientes:", odontograma?.dientes?.length);
+  console.log("Denticion organizada:", denticionOrganizada);
+
   if (loading && !odontograma) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <p>Cargando odontograma...</p>
+      </div>
+    );
+  }
+
+  // Mostrar mensaje si no hay dientes cargados
+  if (!odontograma?.dientes || odontograma.dientes.length === 0) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Inicializando odontograma...</p>
+        <Button onClick={crearNuevoOdontograma} style={{ marginTop: '1rem' }}>
+          Crear Odontograma
+        </Button>
       </div>
     );
   }
