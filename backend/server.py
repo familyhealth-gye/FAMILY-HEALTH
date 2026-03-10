@@ -1732,19 +1732,45 @@ async def crear_odontograma_clinico(
         raise HTTPException(status_code=400, detail="paciente_id o paciente_cedula son requeridos")
     
     # Obtener datos del paciente (puede ser de appointments o pacientes)
+    # Mantener los valores pasados si existen
+    paciente_nombre_input = paciente_nombre
+    paciente_cedula_input = paciente_cedula
+    
     paciente = await db.appointments.find_one({"id": paciente_id}, {"_id": 0})
-    paciente_nombre = ""
-    paciente_cedula = ""
     
     if paciente:
-        paciente_nombre = paciente.get('nombre_completo', '')
-        paciente_cedula = paciente.get('cedula', '')
+        if not paciente_nombre_input:
+            paciente_nombre = paciente.get('nombre_completo', '')
+        else:
+            paciente_nombre = paciente_nombre_input
+        if not paciente_cedula_input:
+            paciente_cedula = paciente.get('cedula', '')
+        else:
+            paciente_cedula = paciente_cedula_input
     else:
         # Buscar en colección de pacientes
         paciente = await db.pacientes.find_one({"id": paciente_id}, {"_id": 0})
         if paciente:
-            paciente_nombre = paciente.get('nombre_completo', '')
-            paciente_cedula = paciente.get('cedula', '')
+            if not paciente_nombre_input:
+                paciente_nombre = paciente.get('nombre_completo', '')
+            else:
+                paciente_nombre = paciente_nombre_input
+            if not paciente_cedula_input:
+                paciente_cedula = paciente.get('cedula', '')
+            else:
+                paciente_cedula = paciente_cedula_input
+        else:
+            # Usar los valores del input si no se encuentra el paciente
+            paciente_nombre = paciente_nombre_input
+            paciente_cedula = paciente_cedula_input
+    
+    # Si aún no tenemos cédula, buscar por cédula en appointments
+    if not paciente_cedula and paciente_cedula_input:
+        paciente_cedula = paciente_cedula_input
+        # Buscar appointment por cédula
+        apt = await db.appointments.find_one({"cedula": paciente_cedula}, {"_id": 0})
+        if apt and not paciente_nombre:
+            paciente_nombre = apt.get('nombre_completo', '')
     
     # Obtener datos del doctor
     doctor = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
