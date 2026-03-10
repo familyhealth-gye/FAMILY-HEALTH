@@ -663,3 +663,107 @@ class OdontogramUpdate(BaseModel):
     diagnostico_general: Optional[str] = None
     tratamiento_recomendado: Optional[str] = None
     observaciones: Optional[str] = None
+
+
+# ========== PLAN DE TRATAMIENTO MODELS ==========
+class ProcedimientoDental(BaseModel):
+    """
+    Procedimiento dental individual dentro de un plan de tratamiento.
+    Los procedimientos se generan por diente, no por superficie.
+    """
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    diente_numero: str  # Número FDI del diente (ej: "16", "26")
+    procedimiento: str  # Nombre del procedimiento (ej: "Resina simple", "Extracción")
+    descripcion: str = ""  # Descripción adicional
+    fase: int = 1  # Número de fase del tratamiento
+    estado: str = "pendiente"  # pendiente | realizado | cancelado
+    precio: float = 0.0  # Precio estimado (para futura proforma)
+    superficies_afectadas: List[str] = []  # Superficies que motivaron el procedimiento
+    fecha_programada: str = ""
+    fecha_realizado: str = ""
+    notas: str = ""
+
+
+class FaseTratamiento(BaseModel):
+    """Fase de tratamiento agrupando procedimientos"""
+    numero: int
+    nombre: str = ""  # Ej: "Fase de urgencia", "Fase restauradora"
+    descripcion: str = ""
+    procedimientos: List[str] = []  # IDs de procedimientos en esta fase
+
+
+class PlanTratamiento(BaseModel):
+    """
+    Plan de tratamiento dental completo.
+    Conecta hallazgos del odontograma con procedimientos organizados en fases.
+    """
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Datos del paciente
+    paciente_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    
+    # Datos del doctor
+    doctor_id: str = ""
+    doctor_nombre: str = ""
+    
+    # Referencia al odontograma
+    odontograma_id: str = ""
+    
+    # Procedimientos y fases
+    procedimientos: List[ProcedimientoDental] = []
+    fases: List[FaseTratamiento] = []
+    
+    # Estado general
+    estado: str = "activo"  # activo | completado | cancelado
+    
+    # Totales
+    total_estimado: float = 0.0
+    total_realizado: float = 0.0
+    
+    # Diagnóstico y observaciones
+    diagnostico_general: str = ""
+    observaciones: str = ""
+    
+    # Auditoría
+    fecha_creacion: str = Field(default_factory=lambda: datetime.now(timezone.utc).strftime('%Y-%m-%d'))
+    fecha_actualizacion: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanTratamientoCreate(BaseModel):
+    """Modelo para crear plan de tratamiento"""
+    paciente_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    doctor_id: str = ""
+    doctor_nombre: str = ""
+    odontograma_id: str = ""
+
+
+class ProcedimientoCreate(BaseModel):
+    """Modelo para agregar procedimiento a plan"""
+    diente_numero: str
+    procedimiento: str
+    descripcion: str = ""
+    fase: int = 1
+    precio: float = 0.0
+    superficies_afectadas: List[str] = []
+    notas: str = ""
+
+
+class ProcedimientoUpdate(BaseModel):
+    """Modelo para actualizar procedimiento"""
+    procedimiento: Optional[str] = None
+    descripcion: Optional[str] = None
+    fase: Optional[int] = None
+    estado: Optional[str] = None
+    precio: Optional[float] = None
+    fecha_programada: Optional[str] = None
+    fecha_realizado: Optional[str] = None
+    notas: Optional[str] = None
+
