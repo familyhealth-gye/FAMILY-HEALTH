@@ -237,6 +237,10 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
         setHigieneOral(ultimoOdontograma.higiene_oral || "");
         setEstadoEncias(ultimoOdontograma.estado_encias || "");
         setObservaciones(ultimoOdontograma.observaciones || "");
+        // Notificar al padre que se cargó el odontograma
+        if (onOdontogramaLoaded) {
+          onOdontogramaLoaded(ultimoOdontograma.id);
+        }
       } else {
         // Crear nuevo odontograma
         await crearNuevoOdontograma();
@@ -269,6 +273,10 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
       );
       
       setOdontograma(nuevoOdontograma.data);
+      // Notificar al padre que se creó el odontograma
+      if (onOdontogramaLoaded) {
+        onOdontogramaLoaded(nuevoOdontograma.data.id);
+      }
       toast.success("Odontograma creado");
     } catch (error) {
       console.error("Error al crear odontograma:", error);
