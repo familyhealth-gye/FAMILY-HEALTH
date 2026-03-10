@@ -70,7 +70,7 @@ def decode_token(token: str) -> TokenData:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expirado"
         )
-    except jwt.PyJWTError:
+    except jwt.JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido"
