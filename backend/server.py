@@ -1720,10 +1720,16 @@ async def crear_odontograma_clinico(
     """
     tipo_denticion = input.get('tipo_denticion', 'permanente')
     paciente_id = input.get('paciente_id')
-    doctor_id = input.get('doctor_id')
+    paciente_cedula = input.get('paciente_cedula', '')
+    paciente_nombre = input.get('paciente_nombre', '')
+    doctor_id = input.get('doctor_id', '')
     
-    if not paciente_id or not doctor_id:
-        raise HTTPException(status_code=400, detail="paciente_id y doctor_id son requeridos")
+    # Si no hay paciente_id pero hay cédula, usar la cédula como identificador
+    if not paciente_id and paciente_cedula:
+        paciente_id = paciente_cedula
+    
+    if not paciente_id:
+        raise HTTPException(status_code=400, detail="paciente_id o paciente_cedula son requeridos")
     
     # Obtener datos del paciente (puede ser de appointments o pacientes)
     paciente = await db.appointments.find_one({"id": paciente_id}, {"_id": 0})
