@@ -179,7 +179,7 @@ const Diente = ({ diente, onSelectDiente, onSelectSuperficie, isSelected, herram
   );
 };
 
-export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacienteCedula, doctorId, onClose }) => {
+export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacienteCedula, doctorId, onClose, onOdontogramaLoaded }) => {
   const [odontograma, setOdontograma] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tipoDenticion, setTipoDenticion] = useState("permanente");
