@@ -391,8 +391,23 @@ export const HistoriaClinicaCompleta = ({
                 pacienteNombre={paciente?.nombre_completo || paciente?.nombre}
                 pacienteCedula={paciente?.cedula}
                 doctorId={user?.doctor_id || ""}
+                onOdontogramaLoaded={(id) => setOdontogramaId(id)}
               />
             </div>
+          </TabsContent>
+        )}
+
+        {/* Tab de Plan de Tratamiento */}
+        {esOdontologia && (
+          <TabsContent value="plan-tratamiento" className="tab-content-full">
+            <PlanTratamientoTab
+              token={token}
+              pacienteId={paciente?.id || consultas[0]?.id}
+              pacienteNombre={paciente?.nombre_completo || paciente?.nombre}
+              pacienteCedula={paciente?.cedula}
+              doctorId={user?.doctor_id || ""}
+              odontogramaId={odontogramaId}
+            />
           </TabsContent>
         )}
 
