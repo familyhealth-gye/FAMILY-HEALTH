@@ -1339,6 +1339,113 @@ async def delete_proforma(
         raise HTTPException(status_code=404, detail="Proforma no encontrada")
     return {"message": "Proforma eliminada exitosamente"}
 
+
+@api_router.post("/proformas/desde-plan-tratamiento")
+async def crear_proforma_desde_plan(
+    input: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Crear una proforma a partir de procedimientos seleccionados del plan de tratamiento.
+    Input esperado:
+    {
+        "plan_id": "...",
+        "procedimiento_ids": ["id1", "id2", ...],  # Si está vacío, usar todos
+        "paciente_nombre": "...",
+        "paciente_cedula": "...",
+        "paciente_telefono": "...",
+        "doctor_id": "...",
+        "especialidad": "Odontología",
+        "observaciones": ""
+    }
+    """
+    plan_id = input.get('plan_id')
+    procedimiento_ids = input.get('procedimiento_ids', [])
+    
+    # Obtener el plan de tratamiento
+    plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan de tratamiento no encontrado")
+    
+    procedimientos = plan.get('procedimientos', [])
+    
+    # Filtrar procedimientos si se especificaron IDs
+    if procedimiento_ids and len(procedimiento_ids) > 0:
+        procedimientos = [p for p in procedimientos if p.get('id') in procedimiento_ids]
+    
+    if not procedimientos:
+        raise HTTPException(status_code=400, detail="No hay procedimientos para incluir en la proforma")
+    
+    # Obtener datos del doctor
+    doctor_id = input.get('doctor_id', plan.get('doctor_id', ''))
+    doctor_nombre = ""
+    especialidad = input.get('especialidad', 'Odontología')
+    
+    if doctor_id:
+        doctor = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
+        if doctor:
+            doctor_nombre = doctor.get('nombre', '')
+            especialidad = doctor.get('especialidad', especialidad)
+    
+    # Generar número de proforma
+    count = await db.proformas.count_documents({})
+    numero_proforma = f"PRO-{count + 1:06d}"
+    
+    # Crear items de la proforma desde los procedimientos
+    items = []
+    for proc in procedimientos:
+        diente = proc.get('diente_numero', '')
+        nombre_proc = proc.get('procedimiento', '')
+        precio = proc.get('precio', 0)
+        
+        descripcion = nombre_proc
+        if diente:
+            descripcion = f"{nombre_proc} - Diente {diente}"
+        
+        items.append(ProformaItem(
+            descripcion=descripcion,
+            cantidad=1,
+            precio_unitario=precio,
+            subtotal=precio
+        ))
+    
+    # Calcular totales
+    subtotal = sum(item.subtotal for item in items)
+    descuento = input.get('descuento', 0)
+    total = subtotal - descuento
+    
+    # Crear la proforma
+    proforma = Proforma(
+        numero_proforma=numero_proforma,
+        paciente_nombre=input.get('paciente_nombre', plan.get('paciente_nombre', '')),
+        paciente_cedula=input.get('paciente_cedula', plan.get('paciente_cedula', '')),
+        paciente_telefono=input.get('paciente_telefono', ''),
+        doctor_id=doctor_id,
+        doctor_nombre=doctor_nombre,
+        especialidad=especialidad,
+        items=items,
+        subtotal=subtotal,
+        descuento=descuento,
+        total=total,
+        fecha_emision=datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        validez_dias=input.get('validez_dias', 30),
+        observaciones=input.get('observaciones', f"Generada desde Plan de Tratamiento - {plan_id}")
+    )
+    
+    doc = proforma.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.proformas.insert_one(doc)
+    
+    return {
+        "message": "Proforma creada exitosamente",
+        "proforma_id": proforma.id,
+        "numero_proforma": numero_proforma,
+        "total": total,
+        "items_count": len(items)
+    }
+
+
 @api_router.get("/proformas/{proforma_id}/pdf")
 async def get_proforma_pdf(
     proforma_id: str,
