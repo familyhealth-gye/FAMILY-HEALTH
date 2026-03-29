@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,7 @@ import axios from "axios";
 import { 
   Plus, Trash2, Edit2, Check, X, RefreshCw, 
   FileText, ChevronDown, ChevronUp, Wand2,
-  ClipboardList
+  ClipboardList, Send, Receipt
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
