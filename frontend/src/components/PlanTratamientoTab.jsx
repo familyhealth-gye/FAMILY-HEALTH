@@ -84,6 +84,14 @@ export const PlanTratamientoTab = ({
     notas: ""
   });
 
+  // Dialog para enviar a proforma
+  const [proformaDialogOpen, setProformaDialogOpen] = useState(false);
+  const [seleccionProforma, setSeleccionProforma] = useState("todos"); // todos | fase | manual
+  const [faseSeleccionada, setFaseSeleccionada] = useState("1");
+  const [procedimientosSeleccionados, setProcedimientosSeleccionados] = useState([]);
+  const [telefonoPaciente, setTelefonoPaciente] = useState("");
+  const [observacionesProforma, setObservacionesProforma] = useState("");
+
   useEffect(() => {
     if (pacienteCedula) {
       buscarPlanExistente();
