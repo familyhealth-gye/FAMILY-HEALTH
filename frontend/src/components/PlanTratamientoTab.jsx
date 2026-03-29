@@ -274,6 +274,105 @@ export const PlanTratamientoTab = ({
     }
   };
 
+  // ========== FUNCIONES PARA ENVIAR A PROFORMA ==========
+  
+  const handleOpenProformaDialog = () => {
+    setSeleccionProforma("todos");
+    setFaseSeleccionada("1");
+    setProcedimientosSeleccionados([]);
+    setTelefonoPaciente("");
+    setObservacionesProforma("");
+    setProformaDialogOpen(true);
+  };
+
+  const toggleProcedimientoSeleccion = (procId) => {
+    setProcedimientosSeleccionados(prev => {
+      if (prev.includes(procId)) {
+        return prev.filter(id => id !== procId);
+      } else {
+        return [...prev, procId];
+      }
+    });
+  };
+
+  const seleccionarTodosFase = (faseNum) => {
+    const procsFase = plan?.procedimientos?.filter(p => p.fase === Number(faseNum)) || [];
+    const idsActuales = new Set(procedimientosSeleccionados);
+    const idsFase = procsFase.map(p => p.id);
+    
+    // Si todos los de esta fase ya están seleccionados, deseleccionarlos
+    const todosSeleccionados = idsFase.every(id => idsActuales.has(id));
+    
+    if (todosSeleccionados) {
+      setProcedimientosSeleccionados(prev => prev.filter(id => !idsFase.includes(id)));
+    } else {
+      setProcedimientosSeleccionados(prev => [...new Set([...prev, ...idsFase])]);
+    }
+  };
+
+  const getProcedimientosParaProforma = () => {
+    if (!plan?.procedimientos) return [];
+    
+    switch (seleccionProforma) {
+      case "todos":
+        return plan.procedimientos.filter(p => p.estado === 'pendiente');
+      case "fase":
+        return plan.procedimientos.filter(p => p.fase === Number(faseSeleccionada) && p.estado === 'pendiente');
+      case "manual":
+        return plan.procedimientos.filter(p => procedimientosSeleccionados.includes(p.id));
+      default:
+        return [];
+    }
+  };
+
+  const calcularTotalProforma = () => {
+    const procs = getProcedimientosParaProforma();
+    return procs.reduce((sum, p) => sum + (p.precio || 0), 0);
+  };
+
+  const handleEnviarAProforma = async () => {
+    const procedimientosAEnviar = getProcedimientosParaProforma();
+    
+    if (procedimientosAEnviar.length === 0) {
+      toast.error("No hay procedimientos seleccionados para enviar");
+      return;
+    }
+
+    // Verificar que todos tengan precio
+    const sinPrecio = procedimientosAEnviar.filter(p => !p.precio || p.precio === 0);
+    if (sinPrecio.length > 0) {
+      const confirmar = window.confirm(
+        `${sinPrecio.length} procedimiento(s) no tienen precio asignado. ¿Desea continuar de todas formas?`
+      );
+      if (!confirmar) return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post(
+        `${API}/proformas/desde-plan-tratamiento`,
+        {
+          plan_id: plan.id,
+          procedimiento_ids: procedimientosAEnviar.map(p => p.id),
+          paciente_nombre: pacienteNombre,
+          paciente_cedula: pacienteCedula,
+          paciente_telefono: telefonoPaciente,
+          doctor_id: doctorId || "",
+          especialidad: "Odontología",
+          observaciones: observacionesProforma
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success(`Proforma ${response.data.numero_proforma} creada exitosamente`);
+      setProformaDialogOpen(false);
+    } catch (error) {
+      console.error("Error al crear proforma:", error);
+      toast.error(error.response?.data?.detail || "Error al crear proforma");
+    }
+    setLoading(false);
+  };
+
   // Agrupar procedimientos por fase
   const procedimientosPorFase = () => {
     if (!plan?.procedimientos) return {};
