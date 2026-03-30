@@ -421,7 +421,7 @@ export const PlanTratamientoTab = ({
           </p>
         </div>
         
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {odontogramaId && (
             <Button 
               onClick={generarDesdeOdontograma}
@@ -436,6 +436,15 @@ export const PlanTratamientoTab = ({
             <Plus size={16} style={{ marginRight: '0.5rem' }} />
             Agregar Procedimiento
           </Button>
+          {totalProcedimientos > 0 && (
+            <Button 
+              onClick={handleOpenProformaDialog}
+              style={{ background: '#059669' }}
+            >
+              <Receipt size={16} style={{ marginRight: '0.5rem' }} />
+              Enviar a Proforma
+            </Button>
+          )}
         </div>
       </div>
 
