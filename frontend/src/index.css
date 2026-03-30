@@ -149,3 +149,27 @@
   margin: 0 auto;
   padding-bottom: 100px;
 }
+
+/* ========== FIX PARA RADIX UI SELECT/DIALOG PORTALS ========== */
+/* Los portales de Radix necesitan z-index alto para aparecer sobre elementos fixed */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+[data-radix-select-content],
+[data-radix-dialog-content],
+[role="listbox"],
+[role="dialog"] {
+  z-index: 9999 !important;
+}
+
+/* Asegurar que el overlay del dialog esté por encima */
+[data-radix-dialog-overlay] {
+  z-index: 9998 !important;
+}
+
+/* Fix para SelectContent dentro de modales y vistas fijas */
+.SelectContent,
+[class*="SelectContent"] {
+  z-index: 9999 !important;
+}
