@@ -757,6 +757,192 @@ export const PlanTratamientoTab = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para enviar a proforma */}
+      <Dialog open={proformaDialogOpen} onOpenChange={setProformaDialogOpen}>
+        <DialogContent style={{ maxWidth: '600px', maxHeight: '80vh', overflow: 'auto' }}>
+          <DialogHeader>
+            <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Receipt size={20} />
+              Enviar a Proforma
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem 0' }}>
+            {/* Tipo de selección */}
+            <div>
+              <Label>Seleccionar procedimientos</Label>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                <Button 
+                  variant={seleccionProforma === 'todos' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSeleccionProforma('todos')}
+                >
+                  Todos los pendientes
+                </Button>
+                <Button 
+                  variant={seleccionProforma === 'fase' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSeleccionProforma('fase')}
+                >
+                  Por fase
+                </Button>
+                <Button 
+                  variant={seleccionProforma === 'manual' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSeleccionProforma('manual')}
+                >
+                  Selección manual
+                </Button>
+              </div>
+            </div>
+
+            {/* Selector de fase */}
+            {seleccionProforma === 'fase' && (
+              <div>
+                <Label>Fase a incluir</Label>
+                <select
+                  value={faseSeleccionada}
+                  onChange={(e) => setFaseSeleccionada(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '6px',
+                    border: '1px solid #D1D5DB',
+                    marginTop: '0.25rem'
+                  }}
+                >
+                  <option value="1">Fase 1</option>
+                  <option value="2">Fase 2</option>
+                  <option value="3">Fase 3</option>
+                  <option value="4">Fase 4</option>
+                </select>
+              </div>
+            )}
+
+            {/* Selección manual */}
+            {seleccionProforma === 'manual' && (
+              <div style={{ 
+                border: '1px solid #E5E7EB', 
+                borderRadius: '8px', 
+                padding: '0.75rem',
+                maxHeight: '200px',
+                overflow: 'auto'
+              }}>
+                <Label style={{ marginBottom: '0.5rem', display: 'block' }}>
+                  Seleccione los procedimientos:
+                </Label>
+                {plan?.procedimientos?.map(proc => (
+                  <div 
+                    key={proc.id}
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      padding: '0.5rem',
+                      borderBottom: '1px solid #F3F4F6'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={procedimientosSeleccionados.includes(proc.id)}
+                      onChange={() => toggleProcedimientoSeleccion(proc.id)}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    <span style={{ flex: 1 }}>
+                      {proc.procedimiento}
+                      {proc.diente_numero && ` - Diente ${proc.diente_numero}`}
+                    </span>
+                    <span style={{ color: '#059669', fontWeight: '500' }}>
+                      ${(proc.precio || 0).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Preview de procedimientos */}
+            <div style={{ 
+              background: '#F9FAFB', 
+              padding: '1rem', 
+              borderRadius: '8px' 
+            }}>
+              <Label style={{ marginBottom: '0.5rem', display: 'block' }}>
+                Procedimientos a incluir ({getProcedimientosParaProforma().length}):
+              </Label>
+              {getProcedimientosParaProforma().length === 0 ? (
+                <p style={{ color: '#9CA3AF', fontSize: '0.9rem' }}>
+                  No hay procedimientos seleccionados
+                </p>
+              ) : (
+                <div style={{ fontSize: '0.9rem' }}>
+                  {getProcedimientosParaProforma().map(proc => (
+                    <div key={proc.id} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      padding: '0.25rem 0'
+                    }}>
+                      <span>
+                        • {proc.procedimiento}
+                        {proc.diente_numero && ` (${proc.diente_numero})`}
+                      </span>
+                      <span style={{ color: '#059669' }}>
+                        ${(proc.precio || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{ 
+                    borderTop: '1px solid #E5E7EB', 
+                    marginTop: '0.5rem', 
+                    paddingTop: '0.5rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontWeight: 'bold'
+                  }}>
+                    <span>Total:</span>
+                    <span style={{ color: '#059669' }}>
+                      ${calcularTotalProforma().toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Datos adicionales */}
+            <div>
+              <Label>Teléfono del paciente</Label>
+              <Input
+                value={telefonoPaciente}
+                onChange={(e) => setTelefonoPaciente(e.target.value)}
+                placeholder="Número de teléfono..."
+              />
+            </div>
+
+            <div>
+              <Label>Observaciones</Label>
+              <Textarea
+                value={observacionesProforma}
+                onChange={(e) => setObservacionesProforma(e.target.value)}
+                placeholder="Observaciones adicionales para la proforma..."
+                rows={2}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProformaDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleEnviarAProforma}
+              disabled={loading || getProcedimientosParaProforma().length === 0}
+              style={{ background: '#059669' }}
+            >
+              {loading ? 'Creando...' : 'Crear Proforma'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
