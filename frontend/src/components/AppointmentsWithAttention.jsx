@@ -84,10 +84,24 @@ export const AppointmentsWithAttention = ({
   };
 
   const handleAttentionSuccess = async () => {
-    setVistaAtencion(false);
-    setSelectedAppointment(null);
-    await fetchData();
-    toast.success("Consulta terminada - Cita pendiente de pago");
+    try {
+      // Actualizar el estado de la cita a "Pendiente de Pago"
+      if (selectedAppointment?.id) {
+        await axios.put(
+          `${API}/appointments/${selectedAppointment.id}`,
+          { estado: "Pendiente de Pago" },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+      
+      setVistaAtencion(false);
+      setSelectedAppointment(null);
+      await fetchData();
+      toast.success("Consulta terminada - Cita pendiente de pago");
+    } catch (error) {
+      console.error("Error al cerrar consulta:", error);
+      toast.error("Error al cerrar consulta");
+    }
   };
 
   // Filter appointments by doctor if user is a doctor
