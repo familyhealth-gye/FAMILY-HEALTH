@@ -8,7 +8,7 @@ import requests
 import json
 from datetime import datetime
 
-BACKEND_URL = "https://clinic-tooth-render.preview.emergentagent.com/api"
+BACKEND_URL = "https://patient-payments-2.preview.emergentagent.com/api"
 
 def test_proforma_abono_integration():
     """Test integration between proformas and abonos"""
