@@ -318,7 +318,6 @@ const BusquedaPaciente = ({
   );
 };
 
-export default BusquedaPaciente;
 
   const buscarPaciente = async (cedulaBuscar) => {
     if (!cedulaBuscar || cedulaBuscar.trim() === '') {
