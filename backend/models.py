@@ -115,7 +115,8 @@ class Prescription(BaseModel):
     paciente_id: str
     paciente_nombre: str = ""
     paciente_cedula: str = ""
-    paciente_edad: int = 0
+    paciente_fecha_nacimiento: str = ""  # CAMPO PRINCIPAL (edad calculada en frontend)
+    paciente_edad: int = 0  # DEPRECADO - Solo para compatibilidad
     
     # Campos del doctor
     doctor_id: str = ""
@@ -216,7 +217,8 @@ class Appointment(BaseModel):
     paciente_id: str = ""  # Referencia interna al registro unificado de paciente
     nombre_completo: str
     cedula: str  # Mantener por compatibilidad
-    edad: int
+    fecha_nacimiento: str = ""  # CAMPO PRINCIPAL para edad (calculada automáticamente en frontend)
+    edad: int = 0  # DEPRECADO - Solo para compatibilidad con datos antiguos
     telefono: str
     # Cita
     especialidad: str
@@ -233,7 +235,8 @@ class Appointment(BaseModel):
 class AppointmentCreate(BaseModel):
     nombre_completo: str
     cedula: str
-    edad: int
+    fecha_nacimiento: str = ""  # CAMPO PRINCIPAL
+    edad: int = 0  # DEPRECADO - opcional para compatibilidad
     telefono: str
     especialidad: str
     doctor_id: str
@@ -246,7 +249,8 @@ class AppointmentCreate(BaseModel):
 class AppointmentUpdate(BaseModel):
     nombre_completo: Optional[str] = None
     cedula: Optional[str] = None
-    edad: Optional[int] = None
+    fecha_nacimiento: Optional[str] = None  # CAMPO PRINCIPAL
+    edad: Optional[int] = None  # DEPRECADO - opcional
     telefono: Optional[str] = None
     especialidad: Optional[str] = None
     doctor_id: Optional[str] = None

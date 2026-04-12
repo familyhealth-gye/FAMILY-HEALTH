@@ -26,6 +26,7 @@ import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
 import { OdontogramaClinicoTab } from "@/components/OdontogramaClinicoTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
+import { calcularEdad, formatearEdad, validarFechaNacimiento } from "@/lib/edadUtils";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -58,8 +59,7 @@ function App() {
   const [appointmentForm, setAppointmentForm] = useState({
     nombre_completo: "",
     cedula: "",
-    fecha_nacimiento: "",
-    edad: "",
+    fecha_nacimiento: "",  // CAMPO PRINCIPAL (edad calculada automáticamente)
     telefono: "",
     especialidad: "",
     doctor_id: "",
@@ -216,9 +216,12 @@ function App() {
     try {
       const data = {
         ...appointmentForm,
-        edad: parseInt(appointmentForm.edad),
+        fecha_nacimiento: appointmentForm.fecha_nacimiento || "",
         fecha: appointmentForm.fecha ? format(appointmentForm.fecha, "yyyy-MM-dd") : ""
       };
+      
+      // NO enviar edad - se calcula automáticamente
+      delete data.edad;
       
       if (editingAppointment) {
         await axios.put(`${API}/appointments/${editingAppointment.id}`, data);
@@ -242,7 +245,7 @@ function App() {
     setAppointmentForm({
       nombre_completo: appointment.nombre_completo,
       cedula: appointment.cedula,
-      edad: appointment.edad.toString(),
+      fecha_nacimiento: appointment.fecha_nacimiento || "",
       telefono: appointment.telefono,
       especialidad: appointment.especialidad,
       doctor_id: appointment.doctor_id,
@@ -270,7 +273,7 @@ function App() {
     setAppointmentForm({
       nombre_completo: "",
       cedula: "",
-      edad: "",
+      fecha_nacimiento: "",
       telefono: "",
       especialidad: "",
       doctor_id: "",
@@ -596,14 +599,20 @@ function App() {
                         </div>
                       </div>
                       <div className="form-field">
-                        <Label>Edad</Label>
+                        <Label>Fecha de Nacimiento *</Label>
                         <Input
-                          data-testid="appointment-age-input"
-                          type="number"
-                          value={appointmentForm.edad}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, edad: e.target.value})}
+                          data-testid="appointment-birthdate-input"
+                          type="date"
+                          value={appointmentForm.fecha_nacimiento}
+                          onChange={(e) => setAppointmentForm({...appointmentForm, fecha_nacimiento: e.target.value})}
+                          max={new Date().toISOString().split('T')[0]}
                           required
                         />
+                        {appointmentForm.fecha_nacimiento && validarFechaNacimiento(appointmentForm.fecha_nacimiento) && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            Edad: <span className="font-semibold">{formatearEdad(appointmentForm.fecha_nacimiento)}</span>
+                          </p>
+                        )}
                       </div>
                       <div className="form-field">
                         <Label>Teléfono</Label>
