@@ -16,7 +16,8 @@ from financial_models import (
     DetalleServicio, DetalleServicioCreate,
     Pago, PagoCreate,
     CatalogoServicio, CatalogoServicioCreate,
-    ReporteFinanciero, ResumenPaciente
+    ReporteFinanciero, ResumenPaciente,
+    CierreCaja, CierreCajaCreate
 )
 from auth import TokenData, get_current_user
 
@@ -28,6 +29,85 @@ MONGO_URL = os.environ.get('MONGODB_URI', os.environ.get('MONGO_URL', 'mongodb:/
 DB_NAME = os.environ.get('DB_NAME', 'family_health_db')
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
+
+
+# ========== FUNCIÓN HELPER: UNIFICACIÓN DE PACIENTES ==========
+async def unificar_paciente_por_cedula(cedula: str, datos_adicionales: dict = None) -> Paciente:
+    """
+    FUNCIÓN CENTRAL DE UNIFICACIÓN DE PACIENTES
+    
+    Busca paciente por cédula. Si existe, lo retorna (opcionalmente actualiza datos).
+    Si no existe, crea uno nuevo con los datos proporcionados.
+    
+    Esta función garantiza que la cédula sea el identificador único en todo el sistema.
+    
+    Args:
+        cedula: Cédula del paciente (identificador único)
+        datos_adicionales: Dict con campos opcionales (nombre, telefono, email, etc.)
+    
+    Returns:
+        Paciente: Objeto Paciente (existente o recién creado)
+    """
+    if not cedula or cedula.strip() == "":
+        raise HTTPException(status_code=400, detail="La cédula es obligatoria")
+    
+    cedula = cedula.strip()
+    
+    # Buscar paciente existente por cédula
+    paciente_doc = await db.pacientes.find_one({"cedula": cedula}, {"_id": 0})
+    
+    if paciente_doc:
+        # Paciente existe - actualizar datos si se proporcionan
+        if datos_adicionales:
+            update_data = {}
+            campos_actualizables = ['nombre', 'telefono', 'direccion', 'email', 'fecha_nacimiento', 'sexo']
+            
+            for campo in campos_actualizables:
+                if campo in datos_adicionales and datos_adicionales[campo]:
+                    # Solo actualizar si el campo está vacío o el nuevo valor es diferente
+                    if not paciente_doc.get(campo) or paciente_doc.get(campo) == "":
+                        update_data[campo] = datos_adicionales[campo]
+            
+            if update_data:
+                update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+                await db.pacientes.update_one({"cedula": cedula}, {"$set": update_data})
+                # Recargar documento actualizado
+                paciente_doc = await db.pacientes.find_one({"cedula": cedula}, {"_id": 0})
+        
+        # Convertir strings ISO a datetime si es necesario
+        if isinstance(paciente_doc.get('created_at'), str):
+            paciente_doc['created_at'] = datetime.fromisoformat(paciente_doc['created_at'])
+        if isinstance(paciente_doc.get('updated_at'), str):
+            paciente_doc['updated_at'] = datetime.fromisoformat(paciente_doc['updated_at'])
+        
+        return Paciente(**paciente_doc)
+    
+    else:
+        # Paciente NO existe - crear nuevo
+        if not datos_adicionales or not datos_adicionales.get('nombre'):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Paciente con cédula {cedula} no existe. Debe proporcionar al menos el nombre para crearlo."
+            )
+        
+        paciente_data = {
+            "cedula": cedula,
+            "nombre": datos_adicionales.get('nombre', ''),
+            "telefono": datos_adicionales.get('telefono', ''),
+            "direccion": datos_adicionales.get('direccion', ''),
+            "email": datos_adicionales.get('email', ''),
+            "fecha_nacimiento": datos_adicionales.get('fecha_nacimiento', ''),
+            "sexo": datos_adicionales.get('sexo', '')
+        }
+        
+        nuevo_paciente = Paciente(**paciente_data)
+        doc = nuevo_paciente.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        doc['updated_at'] = doc['updated_at'].isoformat()
+        
+        await db.pacientes.insert_one(doc)
+        
+        return nuevo_paciente
 
 
 # ========== PACIENTES ==========
@@ -931,3 +1011,345 @@ async def eliminar_pago(
         "saldo": saldo,
         "estado_pago": estado_pago
     }
+
+
+
+
+# ========== REPORTES ADICIONALES ==========
+
+@financial_router.get("/reportes/ingresos-del-dia")
+async def reporte_ingresos_del_dia(
+    fecha: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Reporte de ingresos del día
+    Muestra todos los pagos realizados en una fecha específica
+    """
+    from datetime import datetime as dt
+    
+    if not fecha:
+        fecha = dt.now().strftime("%Y-%m-%d")
+    
+    # Buscar todos los pagos del día
+    consultas = await db.consultas_financieras.find(
+        {"pagos.fecha": {"$regex": f"^{fecha}"}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    total_efectivo = 0
+    total_transferencia = 0
+    total_tarjeta = 0
+    total_seguro = 0
+    total_otros = 0
+    num_transacciones = 0
+    detalles = []
+    
+    for consulta in consultas:
+        for pago in consulta.get('pagos', []):
+            if pago.get('fecha', '').startswith(fecha):
+                tipo_pago = pago.get('tipo_pago', 'otros').lower()
+                monto = pago.get('monto', 0)
+                
+                if tipo_pago == 'efectivo':
+                    total_efectivo += monto
+                elif tipo_pago == 'transferencia':
+                    total_transferencia += monto
+                elif tipo_pago == 'tarjeta':
+                    total_tarjeta += monto
+                elif tipo_pago == 'seguro':
+                    total_seguro += monto
+                else:
+                    total_otros += monto
+                
+                num_transacciones += 1
+                
+                detalles.append({
+                    "consulta_id": consulta.get('id'),
+                    "paciente_nombre": consulta.get('paciente_nombre'),
+                    "paciente_cedula": consulta.get('paciente_cedula'),
+                    "especialidad": consulta.get('especialidad'),
+                    "doctor_nombre": consulta.get('doctor_nombre'),
+                    "monto": monto,
+                    "tipo_pago": tipo_pago,
+                    "referencia": pago.get('referencia', ''),
+                    "hora": pago.get('fecha', '').split(' ')[-1] if ' ' in pago.get('fecha', '') else ''
+                })
+    
+    total_general = total_efectivo + total_transferencia + total_tarjeta + total_seguro + total_otros
+    
+    return {
+        "fecha": fecha,
+        "total_efectivo": round(total_efectivo, 2),
+        "total_transferencia": round(total_transferencia, 2),
+        "total_tarjeta": round(total_tarjeta, 2),
+        "total_seguro": round(total_seguro, 2),
+        "total_otros": round(total_otros, 2),
+        "total_general": round(total_general, 2),
+        "num_transacciones": num_transacciones,
+        "detalles": detalles
+    }
+
+
+@financial_router.get("/reportes/por-especialidad")
+async def reporte_por_especialidad(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Reporte de ingresos agrupados por especialidad
+    """
+    from datetime import datetime as dt
+    from collections import defaultdict
+    
+    if not fecha_inicio:
+        fecha_inicio = dt.now().strftime("%Y-%m-%d")
+    if not fecha_fin:
+        fecha_fin = fecha_inicio
+    
+    query = {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}}
+    consultas = await db.consultas_financieras.find(query, {"_id": 0}).to_list(1000)
+    
+    por_especialidad = defaultdict(lambda: {"total_facturado": 0, "total_cobrado": 0, "num_consultas": 0})
+    
+    for consulta in consultas:
+        esp = consulta.get('especialidad', 'Sin Especialidad')
+        por_especialidad[esp]["total_facturado"] += consulta.get('total', 0)
+        por_especialidad[esp]["total_cobrado"] += consulta.get('total_pagado', 0)
+        por_especialidad[esp]["num_consultas"] += 1
+    
+    resultado = []
+    for esp, datos in por_especialidad.items():
+        resultado.append({
+            "especialidad": esp,
+            "num_consultas": datos["num_consultas"],
+            "total_facturado": round(datos["total_facturado"], 2),
+            "total_cobrado": round(datos["total_cobrado"], 2),
+            "saldo_pendiente": round(datos["total_facturado"] - datos["total_cobrado"], 2)
+        })
+    
+    resultado.sort(key=lambda x: x["total_cobrado"], reverse=True)
+    
+    return {
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "especialidades": resultado,
+        "total_facturado": round(sum(r["total_facturado"] for r in resultado), 2),
+        "total_cobrado": round(sum(r["total_cobrado"] for r in resultado), 2)
+    }
+
+
+@financial_router.get("/reportes/por-doctor")
+async def reporte_por_doctor(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Reporte de ingresos agrupados por doctor
+    """
+    from datetime import datetime as dt
+    from collections import defaultdict
+    
+    if not fecha_inicio:
+        fecha_inicio = dt.now().strftime("%Y-%m-%d")
+    if not fecha_fin:
+        fecha_fin = fecha_inicio
+    
+    query = {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}}
+    consultas = await db.consultas_financieras.find(query, {"_id": 0}).to_list(1000)
+    
+    por_doctor = defaultdict(lambda: {"total_facturado": 0, "total_cobrado": 0, "num_consultas": 0, "especialidad": ""})
+    
+    for consulta in consultas:
+        doctor = consulta.get('doctor_nombre', 'Sin Doctor')
+        doctor_id = consulta.get('doctor_id', '')
+        por_doctor[doctor]["doctor_id"] = doctor_id
+        por_doctor[doctor]["total_facturado"] += consulta.get('total', 0)
+        por_doctor[doctor]["total_cobrado"] += consulta.get('total_pagado', 0)
+        por_doctor[doctor]["num_consultas"] += 1
+        if not por_doctor[doctor]["especialidad"]:
+            por_doctor[doctor]["especialidad"] = consulta.get('especialidad', '')
+    
+    resultado = []
+    for doctor, datos in por_doctor.items():
+        resultado.append({
+            "doctor_nombre": doctor,
+            "doctor_id": datos["doctor_id"],
+            "especialidad": datos["especialidad"],
+            "num_consultas": datos["num_consultas"],
+            "total_facturado": round(datos["total_facturado"], 2),
+            "total_cobrado": round(datos["total_cobrado"], 2),
+            "saldo_pendiente": round(datos["total_facturado"] - datos["total_cobrado"], 2)
+        })
+    
+    resultado.sort(key=lambda x: x["total_cobrado"], reverse=True)
+    
+    return {
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "doctores": resultado,
+        "total_facturado": round(sum(r["total_facturado"] for r in resultado), 2),
+        "total_cobrado": round(sum(r["total_cobrado"] for r in resultado), 2)
+    }
+
+
+@financial_router.get("/reportes/por-tipo-pago")
+async def reporte_por_tipo_pago(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Reporte de ingresos agrupados por tipo de pago
+    """
+    from datetime import datetime as dt
+    from collections import defaultdict
+    
+    if not fecha_inicio:
+        fecha_inicio = dt.now().strftime("%Y-%m-%d")
+    if not fecha_fin:
+        fecha_fin = fecha_inicio
+    
+    # Buscar consultas en el rango de fechas
+    consultas = await db.consultas_financieras.find(
+        {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    por_tipo = defaultdict(lambda: {"total": 0, "num_pagos": 0})
+    
+    for consulta in consultas:
+        for pago in consulta.get('pagos', []):
+            # Verificar que el pago esté en el rango de fechas
+            fecha_pago = pago.get('fecha', '').split(' ')[0]
+            if fecha_inicio <= fecha_pago <= fecha_fin:
+                tipo = pago.get('tipo_pago', 'otros')
+                por_tipo[tipo]["total"] += pago.get('monto', 0)
+                por_tipo[tipo]["num_pagos"] += 1
+    
+    resultado = []
+    for tipo, datos in por_tipo.items():
+        resultado.append({
+            "tipo_pago": tipo,
+            "num_pagos": datos["num_pagos"],
+            "total": round(datos["total"], 2)
+        })
+    
+    resultado.sort(key=lambda x: x["total"], reverse=True)
+    
+    return {
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "tipos_pago": resultado,
+        "total_general": round(sum(r["total"] for r in resultado), 2)
+    }
+
+
+# ========== CIERRE DE CAJA ==========
+
+@financial_router.post("/cierre-caja", response_model=CierreCaja)
+async def crear_cierre_caja(
+    input: CierreCajaCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Crear cierre de caja diario
+    Calcula automáticamente todos los totales del día
+    """
+    # Verificar que no exista ya un cierre para esta fecha
+    existing = await db.cierres_caja.find_one({"fecha": input.fecha, "estado": "cerrado"}, {"_id": 0})
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ya existe un cierre de caja cerrado para la fecha {input.fecha}"
+        )
+    
+    # Obtener reporte del día
+    reporte_dia = await reporte_ingresos_del_dia(fecha=input.fecha, current_user=current_user)
+    
+    # Obtener resúmenes
+    reporte_especialidades = await reporte_por_especialidad(
+        fecha_inicio=input.fecha,
+        fecha_fin=input.fecha,
+        current_user=current_user
+    )
+    
+    reporte_doctores = await reporte_por_doctor(
+        fecha_inicio=input.fecha,
+        fecha_fin=input.fecha,
+        current_user=current_user
+    )
+    
+    # Crear cierre
+    cierre = CierreCaja(
+        fecha=input.fecha,
+        usuario_cierre=current_user.username,
+        usuario_nombre=current_user.username,
+        total_efectivo=reporte_dia["total_efectivo"],
+        total_transferencia=reporte_dia["total_transferencia"],
+        total_tarjeta=reporte_dia["total_tarjeta"],
+        total_seguro=reporte_dia.get("total_seguro", 0),
+        total_otros=reporte_dia.get("total_otros", 0),
+        total_general=reporte_dia["total_general"],
+        num_transacciones=reporte_dia["num_transacciones"],
+        observaciones=input.observaciones,
+        estado="cerrado",
+        por_especialidad=reporte_especialidades.get("especialidades", []),
+        por_doctor=reporte_doctores.get("doctores", [])
+    )
+    
+    doc = cierre.model_dump()
+    doc['fecha_cierre'] = doc['fecha_cierre'].isoformat()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.cierres_caja.insert_one(doc)
+    
+    return cierre
+
+
+@financial_router.get("/cierres-caja", response_model=List[CierreCaja])
+async def get_cierres_caja(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Obtener historial de cierres de caja
+    """
+    query = {}
+    if fecha_inicio and fecha_fin:
+        query["fecha"] = {"$gte": fecha_inicio, "$lte": fecha_fin}
+    elif fecha_inicio:
+        query["fecha"] = {"$gte": fecha_inicio}
+    
+    cierres = await db.cierres_caja.find(query, {"_id": 0}).sort("fecha", -1).to_list(1000)
+    
+    for c in cierres:
+        if isinstance(c.get('fecha_cierre'), str):
+            c['fecha_cierre'] = datetime.fromisoformat(c['fecha_cierre'])
+        if isinstance(c.get('created_at'), str):
+            c['created_at'] = datetime.fromisoformat(c['created_at'])
+    
+    return cierres
+
+
+@financial_router.get("/cierre-caja/{cierre_id}", response_model=CierreCaja)
+async def get_cierre_caja(
+    cierre_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Obtener un cierre de caja específico
+    """
+    cierre = await db.cierres_caja.find_one({"id": cierre_id}, {"_id": 0})
+    if not cierre:
+        raise HTTPException(status_code=404, detail="Cierre de caja no encontrado")
+    
+    if isinstance(cierre.get('fecha_cierre'), str):
+        cierre['fecha_cierre'] = datetime.fromisoformat(cierre['fecha_cierre'])
+    if isinstance(cierre.get('created_at'), str):
+        cierre['created_at'] = datetime.fromisoformat(cierre['created_at'])
+    
+    return cierre

@@ -20,7 +20,7 @@ import { PaymentsTab } from "@/components/PaymentsTab";
 import { UsersTab } from "@/components/UsersTab";
 import { AppointmentsWithAttention } from "@/components/AppointmentsWithAttention";
 import { ProformasTab } from "@/components/ProformasTab";
-import { AbonosTab } from "@/components/AbonosTab";
+import CajaTab from "@/components/CajaTab";
 import { PacientesTab } from "@/components/PacientesTab";
 import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
 import { OdontogramaClinicoTab } from "@/components/OdontogramaClinicoTab";
@@ -421,9 +421,9 @@ function App() {
                   <Receipt className="tab-icon" />
                   Proformas
                 </TabsTrigger>
-                <TabsTrigger value="abonos" data-testid="abonos-tab">
+                <TabsTrigger value="caja" data-testid="caja-tab">
                   <CreditCard className="tab-icon" />
-                  Abonos
+                  Caja
                 </TabsTrigger>
               </>
             )}
@@ -925,8 +925,8 @@ function App() {
 
           {/* Abonos Tab - Admin & Recepcion */}
           {(user.role === "Administrador" || user.role === "Recepcion") && (
-            <TabsContent value="abonos">
-              <AbonosTab token={token} />
+            <TabsContent value="caja">
+              <CajaTab />
             </TabsContent>
           )}
 

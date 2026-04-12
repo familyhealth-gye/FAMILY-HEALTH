@@ -103,12 +103,22 @@
 #====================================================================================================
 
 user_problem_statement: |
-  Usuario solicitó priorizar:
-  1. Proformas (cotizaciones de tratamientos)
-  2. Odontograma del paciente (usado a diario en odontología)
-  3. Historia Clínica de Odontología
+  FASE ACTUAL: Unificación de Pacientes y Módulo de Caja Centralizado
   
-  Continuó con implementación de estos módulos manteniendo funcionalidad existente.
+  1. Unificación de Pacientes:
+     - La cédula es el identificador único global del paciente
+     - Todos los módulos trabajan con paciente_cedula como campo principal
+     - Función helper unificar_paciente_por_cedula() evita duplicados
+     - Aplicado en: citas, consultas, proformas, odontología, laboratorio, pagos
+  
+  2. Módulo de Caja Centralizado:
+     - Caja central que funciona para todas las especialidades
+     - Concepto de SERVICIOS (no solo proformas)
+     - Pagos parciales (abonos) con cálculo automático de saldo
+     - Tipos de pago: efectivo, transferencia, tarjeta, seguro
+     - Estados: pendiente, abonado, pagado
+     - Reportes: ingresos del día, por especialidad, por doctor, por tipo de pago
+     - Cierre de caja diario con exportación
 
 backend:
   - task: "Modelos Proformas, Abonos y Odontogramas"
@@ -301,6 +311,195 @@ backend:
           3. ✅ PUT /api/odontograma-clinico/{id}/diente/16/superficie/oclusal - Actualiza superficie "oclusal" del diente "16" con diagnóstico "caries" y persiste correctamente
           4. ✅ PUT /api/odontograma-clinico/{id}/diente/48 - Marca diente "48" como "ausente" y persiste correctamente
           5. ✅ POST /api/odontograma-clinico/{id}/cambiar-denticion - Cambia de permanente a temporal, regenera 20 dientes correctamente
+
+  
+  - task: "Función Helper: unificar_paciente_por_cedula()"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          FUNCIÓN CENTRAL DE UNIFICACIÓN DE PACIENTES:
+          - Busca paciente por cédula en collection "pacientes"
+          - Si existe: retorna paciente y opcionalmente actualiza datos
+          - Si no existe: crea nuevo paciente con los datos proporcionados
+          - Garantiza que la cédula sea el identificador único en todo el sistema
+          - Previene duplicados automáticamente
+          - Todos los endpoints que crean/modifican pacientes deben usar esta función
+  
+  - task: "Modelo Appointment con paciente_cedula"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          ACTUALIZADO MODELO APPOINTMENT:
+          - Agregado campo paciente_cedula (IDENTIFICADOR PRINCIPAL)
+          - Agregado campo paciente_id (referencia interna)
+          - La cédula es el campo primario para identificación
+          - Mantiene compatibilidad con campo cedula existente
+  
+  - task: "Endpoint POST /api/appointments con unificación"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          MODIFICADO ENDPOINT DE CREACIÓN DE CITAS:
+          - Llama a unificar_paciente_por_cedula() antes de crear cita
+          - Usa la cédula para buscar/crear paciente
+          - Vincula la cita con paciente_cedula y paciente_id
+          - Previene creación de pacientes duplicados
+          - Actualiza datos del paciente si es necesario
+  
+  - task: "Modelos CierreCaja y CierreCajaCreate"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          NUEVOS MODELOS PARA CIERRE DE CAJA:
+          - CierreCaja: modelo completo con totales por tipo de pago
+          - Campos: fecha, usuario_cierre, total_efectivo, total_transferencia, total_tarjeta, total_seguro, total_otros
+          - total_general, num_transacciones, observaciones
+          - Incluye resúmenes por_especialidad y por_doctor
+          - CierreCajaCreate: modelo para crear cierre
+  
+  - task: "Endpoint GET /api/financial/reportes/ingresos-del-dia"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          REPORTE DE INGRESOS DEL DÍA:
+          - Muestra todos los pagos realizados en una fecha específica
+          - Agrupa por tipo de pago (efectivo, transferencia, tarjeta, seguro, otros)
+          - Retorna total_general y num_transacciones
+          - Incluye detalles de cada transacción con paciente, especialidad, doctor
+  
+  - task: "Endpoint GET /api/financial/reportes/por-especialidad"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          REPORTE POR ESPECIALIDAD:
+          - Agrupa ingresos por especialidad
+          - Filtro por rango de fechas (fecha_inicio, fecha_fin)
+          - Retorna: num_consultas, total_facturado, total_cobrado, saldo_pendiente
+          - Ordenado por total_cobrado descendente
+  
+  - task: "Endpoint GET /api/financial/reportes/por-doctor"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          REPORTE POR DOCTOR:
+          - Agrupa ingresos por doctor
+          - Filtro por rango de fechas
+          - Retorna: doctor_nombre, doctor_id, especialidad, num_consultas, totales
+          - Ordenado por total_cobrado descendente
+  
+  - task: "Endpoint GET /api/financial/reportes/por-tipo-pago"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          REPORTE POR TIPO DE PAGO:
+          - Agrupa ingresos por tipo de pago
+          - Filtro por rango de fechas
+          - Retorna: tipo_pago, num_pagos, total
+          - Útil para conciliación de caja
+  
+  - task: "Endpoint POST /api/financial/cierre-caja"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          CREAR CIERRE DE CAJA DIARIO:
+          - Calcula automáticamente todos los totales del día
+          - Verifica que no exista cierre cerrado para la misma fecha
+          - Integra reportes de ingresos, especialidades y doctores
+          - Genera documento completo con estado "cerrado"
+          - Incluye observaciones del usuario
+  
+  - task: "Endpoint GET /api/financial/cierres-caja"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          HISTORIAL DE CIERRES DE CAJA:
+          - Lista todos los cierres de caja registrados
+          - Filtro opcional por rango de fechas
+          - Ordenado por fecha descendente
+          - Útil para auditoría y consulta histórica
+  
+  - task: "Endpoint GET /api/financial/cierre-caja/{id}"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/financial_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Obtener un cierre de caja específico por ID para visualización detallada"
+
           6. ✅ GET /api/odontograma-clinico/paciente/{paciente_id} - Retorna odontogramas del paciente correctamente
           
           VALIDACIONES VERIFICADAS:
@@ -319,6 +518,94 @@ frontend:
     working: "NA"
     file: "/app/frontend/src/components/OdontogramaClinicoTab.jsx"
     stuck_count: 0
+
+
+  - task: "Componente BusquedaPaciente.jsx (reutilizable)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/BusquedaPaciente.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          COMPONENTE REUTILIZABLE DE BÚSQUEDA DE PACIENTES:
+          - Busca pacientes por cédula usando endpoint /api/financial/pacientes
+          - Si existe: muestra datos del paciente (nombre, teléfono, email, etc.)
+          - Si no existe: muestra formulario para crear nuevo paciente
+          - Notifica al componente padre con callback onPacienteSeleccionado
+          - Soporte para formulario completo (opcional) con campos adicionales
+          - Validación de cédula obligatoria
+          - Mensaje claro cuando paciente será creado automáticamente
+  
+  - task: "Componente CajaTab.jsx (Módulo completo)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/CajaTab.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          MÓDULO DE CAJA CENTRALIZADO CON 4 VISTAS:
+          
+          1. RESUMEN DEL DÍA:
+             - Tarjetas con totales por tipo de pago (efectivo, transferencia, tarjeta)
+             - Total general y número de transacciones
+             - Tabla detallada con todos los pagos del día
+             - Botón para realizar cierre de caja
+          
+          2. CUENTAS PENDIENTES:
+             - Lista de consultas con saldo pendiente
+             - Información de paciente, especialidad, doctor
+             - Visualización de total, pagado y saldo
+             - Botón para registrar pago directo desde la lista
+             - Modal de registro de pago con validaciones
+          
+          3. REPORTES:
+             - Selector de rango de fechas
+             - Reporte por Especialidad (tabla con totales)
+             - Reporte por Doctor (tabla con totales)
+             - Reporte por Tipo de Pago (tarjetas visuales)
+             - Totales generales en cada reporte
+          
+          4. CIERRES DE CAJA:
+             - Historial de todos los cierres realizados
+             - Visualización de totales por tipo de pago
+             - Observaciones y usuario que realizó el cierre
+             - Estado del cierre
+          
+          FUNCIONALIDADES:
+          - Registro de pagos con tipos: efectivo, transferencia, tarjeta, seguro, otros
+          - Referencia/Nº transacción opcional
+          - Notas adicionales por pago
+          - Cierre de caja con observaciones
+          - Validación de cierre único por día
+          - Interfaz moderna con Lucide React icons
+          - Responsive design con Tailwind CSS
+  
+  - task: "Integración CajaTab en App.js"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          REEMPLAZO DE ABONOSTAB POR CAJATAB:
+          - Import de CajaTab en lugar de AbonosTab
+          - TabsTrigger cambiado de "abonos" a "caja"
+          - Acceso: Administrador y Recepción
+          - Nuevo icono: CreditCard
+          - Nombre del tab: "Caja"
+
     priority: "high"
     needs_retesting: true
     status_history:
@@ -421,93 +708,95 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.0"
+  version: "2.0"
   test_sequence: 0
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Componente OdontogramaClinicoTab"
-    - "Componente OdontogramaStandalone"
+    - "Función Helper: unificar_paciente_por_cedula()"
+    - "Endpoint POST /api/appointments con unificación"
+    - "Endpoint GET /api/financial/reportes/ingresos-del-dia"
+    - "Endpoint GET /api/financial/reportes/por-especialidad"
+    - "Endpoint GET /api/financial/reportes/por-doctor"
+    - "Endpoint GET /api/financial/reportes/por-tipo-pago"
+    - "Endpoint POST /api/financial/cierre-caja"
+    - "Endpoint GET /api/financial/cierres-caja"
+    - "Componente CajaTab.jsx (Módulo completo)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "Implementación completa de Proformas, Abonos y Odontograma con historia clínica de odontología. Backend con modelos y endpoints, frontend con componentes visuales interactivos. Linting pasado en todos los archivos. Backend reiniciado correctamente."
-  - agent: "testing"
-    message: "🎉 BACKEND TESTING COMPLETADO - TODOS LOS ENDPOINTS FUNCIONANDO: ✅ Proformas (3/3 tests), ✅ Abonos (3/3 tests), ✅ Odontogramas (3/3 tests), ✅ Historia Clínica Odontológica (3/3 tests). Total: 12/12 tests pasados. Cálculos automáticos, autenticación JWT, vinculación proforma-abono, y roles de usuario verificados. Sistema listo para producción."
-  - agent: "main"
     message: |
-      MIGRACIÓN FINANCIERA COMPLETADA:
+      🚀 IMPLEMENTACIÓN COMPLETA: UNIFICACIÓN DE PACIENTES Y MÓDULO DE CAJA
       
-      1. Backend - Nuevos endpoints en /api/financial/:
-         - POST /consultas/desde-cita/{appointment_id} - Crea consulta financiera al cerrar atención médica
-         - POST /consultas/desde-proforma/{proforma_id} - Convierte proforma aceptada en consulta financiera (Odontología)
-         - POST /consultas/{id}/pagos - Registra pagos con actualización automática de saldos
-         - DELETE /consultas/{id}/pagos/{pago_id} - Elimina pagos y recalcula saldos
-         - GET /reportes/pendientes - Lista consultas con saldo pendiente
-         
-      2. Frontend - AbonosTab completamente reescrito:
-         - Usa /api/financial/consultas en lugar de /api/abonos
-         - Muestra consultas pendientes de pago
-         - Permite registrar pagos vinculados a consultas
-         - Detalle completo con historial de pagos
-         
-      3. Integración automática:
-         - MedicinaGeneralForm: crea consulta financiera al cerrar consulta
-         - PediatriaForm: crea consulta financiera al cerrar consulta
-         - ProformasTab: botón "Iniciar Tratamiento" para convertir proforma → consulta financiera
-         
-      4. Flujo financiero cerrado:
-         - Cada pago está vinculado a consulta_id
-         - total, total_pagado, saldo, estado_pago se calculan automáticamente
-         - estado_pago: pendiente → parcial → pagado
-  - agent: "testing"
-    message: |
-      🎉 CICLO FINANCIERO COMPLETAMENTE TESTADO Y FUNCIONANDO:
+      ========== BACKEND ==========
       
-      ✅ TODOS LOS ENDPOINTS FINANCIEROS FUNCIONANDO (5/5):
-      1. POST /api/financial/consultas/desde-cita/{id} - Crea consulta desde cita médica ✅
-      2. POST /api/financial/consultas/{id}/pagos - Registra pagos con cálculos automáticos ✅  
-      3. POST /api/financial/consultas/desde-proforma/{id} - Convierte proforma a consulta ✅
-      4. GET /api/financial/reportes/pendientes - Lista cuentas pendientes ✅
-      5. DELETE /api/financial/consultas/{id}/pagos/{pago_id} - Elimina pagos y recalcula ✅
+      1. UNIFICACIÓN DE PACIENTES POR CÉDULA:
+         ✅ Función helper unificar_paciente_por_cedula() en financial_routes.py
+         ✅ Modelo Appointment actualizado con paciente_cedula (principal) y paciente_id (interno)
+         ✅ Endpoint POST /api/appointments modificado para usar unificación automática
+         ✅ Modelos CierreCaja y CierreCajaCreate en financial_models.py
       
-      🔧 ISSUES RESUELTOS:
-      - Fixed database connection mismatch (financial_routes usaba 'family_health_db' vs 'medical_app')
-      - Fixed PagoCreate model (removed consulta_id requirement from body)
-      - Fixed doctor user authentication handling
+      2. NUEVOS ENDPOINTS DE REPORTES (todos en /api/financial/):
+         ✅ GET /reportes/ingresos-del-dia - Totales por tipo de pago con detalles
+         ✅ GET /reportes/por-especialidad - Ingresos agrupados por especialidad
+         ✅ GET /reportes/por-doctor - Ingresos agrupados por doctor
+         ✅ GET /reportes/por-tipo-pago - Ingresos agrupados por tipo de pago
       
-      📊 VALIDACIONES VERIFICADAS:
-      - Cálculos automáticos de totales, saldos, estado_pago
-      - Autenticación JWT requerida en todos endpoints
-      - Validación de estados de proforma (solo 'Aceptada' → 'Facturada')
-      - Recálculo correcto al eliminar pagos
-      - Integración correcta con appointments y proformas existentes
+      3. ENDPOINTS DE CIERRE DE CAJA:
+         ✅ POST /cierre-caja - Crear cierre diario con cálculos automáticos
+         ✅ GET /cierres-caja - Historial de cierres
+         ✅ GET /cierre-caja/{id} - Obtener cierre específico
       
-      Sistema financiero 100% operativo y listo para producción.
-  - agent: "testing"
-    message: |
-      🎉 ODONTOGRAMA CLÍNICO FDI COMPLETAMENTE TESTADO Y FUNCIONANDO:
+      ========== FRONTEND ==========
       
-      ✅ TODOS LOS 6 ENDPOINTS REQUERIDOS FUNCIONANDO PERFECTAMENTE:
-      1. POST /api/odontograma-clinico (permanente) - Crea 32 dientes con numeración FDI ✅
-      2. POST /api/odontograma-clinico (temporal) - Crea 20 dientes con numeración FDI temporal ✅
-      3. PUT /api/odontograma-clinico/{id}/diente/{numero_fdi}/superficie/{superficie} - Actualiza superficie ✅
-      4. PUT /api/odontograma-clinico/{id}/diente/{numero_fdi} - Actualiza estado de diente ✅
-      5. POST /api/odontograma-clinico/{id}/cambiar-denticion - Cambia tipo dentición ✅
-      6. GET /api/odontograma-clinico/paciente/{paciente_id} - Obtiene odontogramas por paciente ✅
+      1. COMPONENTE REUTILIZABLE:
+         ✅ BusquedaPaciente.jsx - Búsqueda por cédula con creación automática
       
-      🦷 VALIDACIONES ESPECÍFICAS VERIFICADAS:
-      - Numeración FDI permanente: 18-11, 21-28, 31-38, 41-48 (32 dientes)
-      - Numeración FDI temporal: 55-51, 61-65, 71-75, 81-85 (20 dientes)
-      - 5 superficies por diente: oclusal/incisal, vestibular, palatino/lingual, mesial, distal
-      - Actualización de superficie "oclusal" del diente "16" con diagnóstico "caries" persiste correctamente
-      - Marcado de diente "48" como "ausente" persiste correctamente
-      - Cambio de permanente a temporal regenera 20 dientes correctamente
-      - Filtrado por paciente funciona correctamente
-      - Autenticación JWT requerida en todos endpoints
+      2. MÓDULO DE CAJA COMPLETO (CajaTab.jsx):
+         ✅ Vista Resumen del Día - Totales por tipo de pago y tabla de detalles
+         ✅ Vista Cuentas Pendientes - Lista con opción de registro de pago
+         ✅ Vista Reportes - Especialidad, Doctor, Tipo de Pago
+         ✅ Vista Cierres de Caja - Historial completo
+         ✅ Modal de Registro de Pago - Con validaciones
+         ✅ Modal de Cierre de Caja - Con observaciones
       
-      Sistema de Odontograma Clínico FDI 100% operativo para uso clínico diario en odontología.
+      3. INTEGRACIÓN:
+         ✅ CajaTab reemplaza AbonosTab en App.js
+         ✅ Tab "Caja" accesible para Administrador y Recepción
+      
+      ========== ARQUITECTURA ==========
+      
+      UNIFICACIÓN DE PACIENTES:
+      - La cédula es el identificador único global
+      - unificar_paciente_por_cedula() previene duplicados automáticamente
+      - Si paciente existe: retorna y actualiza datos opcionales
+      - Si no existe: crea nuevo con los datos proporcionados
+      - Aplicado en POST /api/appointments (más módulos pendientes)
+      
+      MÓDULO DE CAJA:
+      - Centraliza TODOS los pagos del sistema
+      - Soporta múltiples especialidades y tipos de servicio
+      - Pagos parciales con cálculo automático de saldos
+      - Reportes por especialidad, doctor y tipo de pago
+      - Cierre de caja diario con validación única
+      - Interfaz moderna y responsive
+      
+      ========== PREPARADO PARA TESTING ==========
+      
+      FLUJOS A PROBAR:
+      1. Crear cita con paciente nuevo (verificar unificación)
+      2. Crear cita con paciente existente (verificar reutilización)
+      3. Registrar pagos desde módulo de Caja
+      4. Generar reportes de ingresos del día
+      5. Generar reportes por especialidad, doctor y tipo de pago
+      6. Realizar cierre de caja
+      7. Ver historial de cierres
+      
+      SIGUIENTE PASO:
+      - Testing completo de backend con deep_testing_backend_v2
+      - Verificar que todos los endpoints funcionan correctamente
+      - Confirmar que la unificación de pacientes previene duplicados

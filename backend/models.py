@@ -211,10 +211,14 @@ class Appointment(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # Identificación del paciente (cédula es la principal)
+    paciente_cedula: str  # IDENTIFICADOR PRINCIPAL
+    paciente_id: str = ""  # Referencia interna al registro unificado de paciente
     nombre_completo: str
-    cedula: str
+    cedula: str  # Mantener por compatibilidad
     edad: int
     telefono: str
+    # Cita
     especialidad: str
     doctor_id: str
     doctor_nombre: str

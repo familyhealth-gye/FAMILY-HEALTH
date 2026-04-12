@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -14,13 +14,11 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 # Importar módulo financiero
-from financial_routes import financial_router
+from financial_routes import financial_router, unificar_paciente_por_cedula
 
 app = FastAPI(title="Family Health API", description="Sistema Clínico Multiespecialidad SaaS", version="2.0")
 
-# CORS - DEBE IR PRIMERO
-from fastapi.middleware.cors import CORSMiddleware
-
+# CORS configuration
 origins = ["*"]
 
 app.add_middleware(
@@ -972,12 +970,34 @@ async def delete_doctor(doctor_id: str):
 # Appointment endpoints
 @api_router.post("/appointments", response_model=Appointment)
 async def create_appointment(input: AppointmentCreate):
+    """
+    Crear cita con unificación automática de paciente por cédula
+    """
+    # Verificar que el doctor existe
     doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor no encontrado")
     
+    # UNIFICACIÓN DE PACIENTE POR CÉDULA
+    # Esta es la clave: primero unificamos al paciente usando la cédula
+    paciente = await unificar_paciente_por_cedula(
+        cedula=input.cedula,
+        datos_adicionales={
+            "nombre": input.nombre_completo,
+            "telefono": input.telefono,
+            # Podemos agregar más campos si los tenemos en AppointmentCreate
+        }
+    )
+    
+    # Crear la cita vinculada al paciente unificado
     appointment_dict = input.model_dump()
     appointment_dict['doctor_nombre'] = doctor['nombre']
+    
+    # IMPORTANTE: Guardar paciente_cedula como referencia principal
+    # El paciente_id también se guarda pero la cédula es el identificador primario
+    appointment_dict['paciente_cedula'] = paciente.cedula
+    appointment_dict['paciente_id'] = paciente.id  # Referencia interna
+    
     appointment_obj = Appointment(**appointment_dict)
     
     doc = appointment_obj.model_dump()
@@ -1469,7 +1489,7 @@ async def get_proforma_pdf(
     # Logo
     try:
         c.drawImage("/app/frontend/public/logo.png", 50, height - 100, width=100, height=50, preserveAspectRatio=True)
-    except:
+    except Exception:
         pass
     
     # Título

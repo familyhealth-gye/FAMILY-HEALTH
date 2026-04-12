@@ -210,3 +210,42 @@ class CatalogoServicioCreate(BaseModel):
     descripcion: str = ""
     especialidad: str
     precio_base: float
+
+
+# ========== CIERRE DE CAJA ==========
+class CierreCaja(BaseModel):
+    """Cierre de caja diario"""
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    fecha: str
+    fecha_cierre: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    usuario_cierre: str
+    usuario_nombre: str = ""
+    
+    # Totales por tipo de pago
+    total_efectivo: float = 0
+    total_transferencia: float = 0
+    total_tarjeta: float = 0
+    total_cheque: float = 0
+    total_seguro: float = 0
+    total_otros: float = 0
+    
+    # Total general
+    total_general: float = 0
+    num_transacciones: int = 0
+    
+    # Detalles
+    observaciones: str = ""
+    estado: str = "abierto"  # abierto, cerrado
+    
+    # Resúmenes
+    por_especialidad: List[dict] = []
+    por_doctor: List[dict] = []
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CierreCajaCreate(BaseModel):
+    fecha: str
+    observaciones: str = ""
