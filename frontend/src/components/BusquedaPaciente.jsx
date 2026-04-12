@@ -411,7 +411,6 @@ export default BusquedaPaciente;
     if (onPacienteSeleccionado) {
       onPacienteSeleccionado(null);
     }
-  };
 
   return (
     <div className="space-y-4 p-4 bg-white rounded-lg border">
