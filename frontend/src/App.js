@@ -216,10 +216,13 @@ function App() {
     setLoading(true);
     try {
       const data = {
-        ...appointmentForm,
+        ...appointmtForm,
+        especialidad: appointmentForm.especialidad || "",
         fecha_nacimiento: appointmentForm.fecha_nacimiento || "",
         fecha: appointmentForm.fecha ? format(appointmentForm.fecha, "yyyy-MM-dd") : ""
       };
+      
+      console.log("DATA ENVIADA:", data);
       
       // NO enviar edad - se calcula automáticamente
       delete data.edad;
