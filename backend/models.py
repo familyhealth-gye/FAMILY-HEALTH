@@ -213,7 +213,7 @@ class Appointment(BaseModel):
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     # Identificación del paciente (cédula es la principal)
-    paciente_cedula: str  # IDENTIFICADOR PRINCIPAL
+    paciente_cedula: str = ""  # IDENTIFICADOR PRINCIPAL (opcional durante migración)
     paciente_id: str = ""  # Referencia interna al registro unificado de paciente
     nombre_completo: str
     cedula: str  # Mantener por compatibilidad
