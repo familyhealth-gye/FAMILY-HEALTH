@@ -324,7 +324,10 @@ async def create_especialidad(
 async def seed_especialidades(
     current_user: TokenData = Depends(require_role("Administrador"))
 ):
-    """Crear especialidades iniciales"""
+    """
+    Crear especialidades iniciales
+    IMPORTANTE: NO borra especialidades existentes, solo agrega las faltantes
+    """
     especialidades_base = [
         {"nombre": "Medicina General", "descripcion": "Atención médica general"},
         {"nombre": "Odontología", "descripcion": "Salud bucal y dental"},
@@ -340,18 +343,31 @@ async def seed_especialidades(
         {"nombre": "Laboratorio", "descripcion": "Análisis clínicos y pruebas de laboratorio"}
     ]
     
-    # Limpiar existentes
-    await db.especialidades.delete_many({})
-    
+    # NO BORRAR EXISTENTES - Solo agregar las que faltan
     created = []
+    skipped = []
+    
     for esp_data in especialidades_base:
+        # Verificar si ya existe
+        existing = await db.especialidades.find_one({"nombre": esp_data["nombre"]}, {"_id": 0})
+        if existing:
+            skipped.append(esp_data['nombre'])
+            continue
+        
+        # Crear nueva especialidad
         esp_obj = Especialidad(**esp_data, activa=True)
         doc = esp_obj.model_dump()
         doc['created_at'] = doc['created_at'].isoformat()
         await db.especialidades.insert_one(doc)
         created.append(esp_data['nombre'])
     
-    return {"message": f"Creadas {len(created)} especialidades", "especialidades": created}
+    return {
+        "message": f"Proceso completado",
+        "creadas": len(created),
+        "existentes": len(skipped),
+        "nuevas_especialidades": created,
+        "especialidades_existentes": skipped
+    }
 
 # ========== MEDICAL HISTORY ENDPOINTS ==========
 
