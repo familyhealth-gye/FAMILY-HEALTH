@@ -223,7 +223,7 @@ function App() {
       };
       
       console.log("DATA ENVIADA:", data);
-      
+
       // NO enviar edad - se calcula automáticamente
       delete data.edad;
       
@@ -632,7 +632,7 @@ function App() {
                         <Label>Especialidad</Label>
                         <Select
                           value={appointmentForm.especialidad}
-                          onValueChange={(value) => setAppointmentForm({...appointmentForm, especialidad: value})}
+                          onValueChange={(value) => console.log ("Especialidad seleccionada:", value);setAppointmentForm(prev => ({...prev, especialidad: value})}
                         >
                           <SelectTrigger data-testid="appointment-specialty-select">
                             <SelectValue placeholder="Seleccione especialidad" />
