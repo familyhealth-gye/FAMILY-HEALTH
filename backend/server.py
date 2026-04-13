@@ -332,12 +332,12 @@ async def seed_especialidades(
         {"nombre": "Ortodoncia", "descripcion": "Corrección de dientes y mandíbula"},
         {"nombre": "Periodoncia", "descripcion": "Tratamiento de encías"},
         {"nombre": "Pediatría", "descripcion": "Atención infantil"},
-        {"nombre": "Nutrición", "descripcion": "Asesoramiento nutricional"},
-        {"nombre": "Psicología", "descripción": "Salud mental"},
-        {"nombre": "Ecografía", "descripcion": "Diagnóstico por imagen"},
-        {"nombre": "Ginecología", "descripcion": "Salud femenina"},
+        {"nombre": "Nutrición", "descripcion": "Asesoramiento nutricional y dietético"},
+        {"nombre": "Psicología", "descripcion": "Salud mental"},
+        {"nombre": "Ecografía", "descripcion": "Diagnóstico por imagen ecográfica"},
+        {"nombre": "Ginecología", "descripcion": "Salud femenina y reproductiva"},
         {"nombre": "Obstetricia", "descripcion": "Embarazo y parto"},
-        {"nombre": "Laboratorio", "descripcion": "Análisis clínicos"}
+        {"nombre": "Laboratorio", "descripcion": "Análisis clínicos y pruebas de laboratorio"}
     ]
     
     # Limpiar existentes

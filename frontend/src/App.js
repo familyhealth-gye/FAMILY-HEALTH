@@ -106,7 +106,7 @@ function App() {
       const promises = [
         axios.get(`${API}/doctors`, { headers }),
         axios.get(`${API}/appointments`, { headers }),
-        axios.get(`${API}/specialties`, { headers }),
+        axios.get(`${API}/especialidades`, { headers }),  // CORREGIDO: /especialidades en lugar de /specialties
         axios.get(`${API}/categories`, { headers }),
         axios.get(`${API}/invoices`, { headers }),
         axios.get(`${API}/inventory`, { headers }),
@@ -125,7 +125,8 @@ function App() {
       
       setDoctors(results[0].data);
       setAppointments(results[1].data);
-      setSpecialties(results[2].data.specialties);
+      // Las especialidades vienen como array directo, no como .specialties
+      setSpecialties(Array.isArray(results[2].data) ? results[2].data.map(e => e.nombre) : []);
       setCategories(results[3].data.categories);
       setInvoices(results[4].data);
       setInventory(results[5].data);
