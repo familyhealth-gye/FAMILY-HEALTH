@@ -989,6 +989,12 @@ async def create_appointment(input: AppointmentCreate):
     """
     Crear cita con unificación automática de paciente por cédula
     """
+    print(f"📝 Creando appointment - Input recibido:")
+    print(f"   Nombre: {input.nombre_completo}")
+    print(f"   Cédula: {input.cedula}")
+    print(f"   Fecha Nacimiento: {input.fecha_nacimiento}")
+    print(f"   Especialidad: {input.especialidad}")
+    
     # Verificar que el doctor existe
     doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
     if not doctor:
@@ -1001,7 +1007,7 @@ async def create_appointment(input: AppointmentCreate):
         datos_adicionales={
             "nombre": input.nombre_completo,
             "telefono": input.telefono,
-            # Podemos agregar más campos si los tenemos en AppointmentCreate
+            "fecha_nacimiento": input.fecha_nacimiento,
         }
     )
     

@@ -216,7 +216,7 @@ function App() {
     setLoading(true);
     try {
       const data = {
-        ...appointmtForm,
+        ...appointmentForm,
         especialidad: appointmentForm.especialidad || "",
         fecha_nacimiento: appointmentForm.fecha_nacimiento || "",
         fecha: appointmentForm.fecha ? format(appointmentForm.fecha, "yyyy-MM-dd") : ""
@@ -629,18 +629,24 @@ function App() {
                         />
                       </div>
                       <div className="form-field">
-                        <Label>Especialidad</Label>
+                       <Label>Especialidad</Label>
                         <Select
-                          value={appointmentForm.especialidad}
-                          onValueChange={(value) => console.log ("Especialidad seleccionada:", value);setAppointmentForm(prev => ({...prev, especialidad: value})}
-                        >
+                           value={appointmentForm.especialidad}
+                           onValueChange={(value) => {
+                             console.log("Especialidad seleccionada:", value);
+                              setAppointmentForm(prev => ({
+                              ...prev,
+                              especialidad: value
+                             }));
+                           }}
+                         >
                           <SelectTrigger data-testid="appointment-specialty-select">
                             <SelectValue placeholder="Seleccione especialidad" />
                           </SelectTrigger>
                           <SelectContent>
                             {specialties.map((spec) => (
                               <SelectItem key={spec} value={spec}>{spec}</SelectItem>
-                            ))}
+                               ))}
                           </SelectContent>
                         </Select>
                       </div>
