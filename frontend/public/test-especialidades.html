@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Especialidades</title>
+</head>
+<body>
+    <h1>Test de Especialidades</h1>
+    <button onclick="testEspecialidades()">Cargar Especialidades</button>
+    <div id="resultado"></div>
+
+    <script>
+        async function testEspecialidades() {
+            const API_URL = window.location.origin + '/api';
+            const resultado = document.getElementById('resultado');
+            
+            try {
+                console.log('🔍 Haciendo petición a:', API_URL + '/especialidades');
+                
+                const response = await fetch(API_URL + '/especialidades');
+                console.log('📡 Response status:', response.status);
+                console.log('📡 Response headers:', response.headers);
+                
+                const data = await response.json();
+                console.log('✅ Data recibida:', data);
+                console.log('✅ Total especialidades:', data.length);
+                
+                resultado.innerHTML = '<h2>Especialidades Cargadas:</h2>';
+                resultado.innerHTML += '<p>Total: ' + data.length + '</p>';
+                resultado.innerHTML += '<ul>';
+                data.forEach(esp => {
+                    resultado.innerHTML += '<li>' + esp.nombre + ' - ' + esp.descripcion + '</li>';
+                });
+                resultado.innerHTML += '</ul>';
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                resultado.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Cargar automáticamente al abrir
+        window.onload = testEspecialidades;
+    </script>
+</body>
+</html>

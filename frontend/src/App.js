@@ -47,6 +47,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [monthlyTotals, setMonthlyTotals] = useState({});
   
+  // Log para debugging de especialidades
+  useEffect(() => {
+    console.log("🔍 SPECIALTIES STATE:", specialties);
+    console.log("🔍 SPECIALTIES LENGTH:", specialties.length);
+  }, [specialties]);
+  
   // Doctor form
   const [doctorDialog, setDoctorDialog] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState(null);
@@ -123,10 +129,16 @@ function App() {
 
       const results = await Promise.all(promises);
       
+      console.log("🔍 ESPECIALIDADES RECIBIDAS:", results[2].data);
+      
       setDoctors(results[0].data);
       setAppointments(results[1].data);
-      // Las especialidades vienen como array directo, no como .specialties
-      setSpecialties(Array.isArray(results[2].data) ? results[2].data.map(e => e.nombre) : []);
+      // Las especialidades vienen como array de objetos con campo 'nombre'
+      const especialidadesArray = Array.isArray(results[2].data) 
+        ? results[2].data.map(e => e.nombre) 
+        : [];
+      console.log("✅ ESPECIALIDADES PROCESADAS:", especialidadesArray);
+      setSpecialties(especialidadesArray);
       setCategories(results[3].data.categories);
       setInvoices(results[4].data);
       setInventory(results[5].data);
@@ -222,24 +234,33 @@ function App() {
         fecha: appointmentForm.fecha ? format(appointmentForm.fecha, "yyyy-MM-dd") : ""
       };
       
-      console.log("DATA ENVIADA:", data);
+      console.log("📝 DATOS DEL FORMULARIO A ENVIAR:");
+      console.log("  - Nombre:", data.nombre_completo);
+      console.log("  - Cédula:", data.cedula);
+      console.log("  - Fecha Nacimiento:", data.fecha_nacimiento);
+      console.log("  - Teléfono:", data.telefono);
+      console.log("  - Especialidad:", data.especialidad);
+      console.log("  - Doctor ID:", data.doctor_id);
 
       // NO enviar edad - se calcula automáticamente
       delete data.edad;
       
       if (editingAppointment) {
-        await axios.put(`${API}/appointments/${editingAppointment.id}`, data);
+        const response = await axios.put(`${API}/appointments/${editingAppointment.id}`, data);
+        console.log("✅ Respuesta actualización:", response.data);
         toast.success("Cita actualizada exitosamente");
       } else {
-        await axios.post(`${API}/appointments`, data);
+        const response = await axios.post(`${API}/appointments`, data);
+        console.log("✅ Respuesta creación:", response.data);
         toast.success("Cita agendada exitosamente");
       }
       setAppointmentDialog(false);
       resetAppointmentForm();
       fetchData();
     } catch (error) {
-      console.error("Error:", error);
-      toast.error("Error al guardar la cita");
+      console.error("❌ Error completo:", error);
+      console.error("❌ Respuesta error:", error.response?.data);
+      toast.error(error.response?.data?.detail || "Error al guardar la cita");
     }
     setLoading(false);
   };
