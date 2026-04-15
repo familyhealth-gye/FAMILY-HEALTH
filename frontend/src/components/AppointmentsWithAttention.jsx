@@ -25,6 +25,17 @@ export const AppointmentsWithAttention = ({
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [modoAtencion, setModoAtencion] = useState("historia"); // "historia" o "formulario"
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  
+  // Estados para el modal de pago
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedAppointmentForPayment, setSelectedAppointmentForPayment] = useState(null);
+  const [consultaFinanciera, setConsultaFinanciera] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    monto: '',
+    tipo_pago: 'efectivo',
+    referencia: '',
+    notas: ''
+  });
 
   // Obtener la especialidad del usuario
   const userEspecialidad = user?.especialidad || null;
@@ -101,6 +112,88 @@ export const AppointmentsWithAttention = ({
     } catch (error) {
       console.error("Error al cerrar consulta:", error);
       toast.error("Error al cerrar consulta");
+    }
+  };
+
+  // Función para abrir el modal de pago
+  const handleOpenPaymentModal = async (appointment) => {
+    try {
+      // Buscar consulta financiera asociada a esta cita por paciente_cedula
+      const response = await axios.get(
+        `${API}/financial/reportes/pendientes`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Buscar la consulta financiera de este paciente
+      const consulta = response.data.consultas?.find(
+        c => c.paciente_cedula === appointment.cedula || 
+             c.paciente_cedula === appointment.paciente_cedula
+      );
+      
+      if (!consulta) {
+        toast.error("No se encontró consulta financiera para esta cita. El doctor debe cerrar la consulta primero.");
+        return;
+      }
+      
+      // Setear la consulta financiera y el appointment
+      setConsultaFinanciera(consulta);
+      setSelectedAppointmentForPayment(appointment);
+      setPaymentForm({
+        monto: consulta.saldo.toString(),
+        tipo_pago: 'efectivo',
+        referencia: '',
+        notas: ''
+      });
+      setShowPaymentModal(true);
+      
+    } catch (error) {
+      console.error("Error buscando consulta financiera:", error);
+      toast.error("Error al buscar información de pago");
+    }
+  };
+
+  // Función para registrar el pago
+  const handleRegisterPayment = async () => {
+    try {
+      if (!consultaFinanciera || !paymentForm.monto || parseFloat(paymentForm.monto) <= 0) {
+        toast.error("Ingrese un monto válido");
+        return;
+      }
+
+      // Registrar el pago en la consulta financiera
+      const response = await axios.post(
+        `${API}/financial/consultas/${consultaFinanciera.id}/pagos`,
+        {
+          fecha: new Date().toISOString().split('T')[0],
+          monto: parseFloat(paymentForm.monto),
+          tipo_pago: paymentForm.tipo_pago,
+          referencia: paymentForm.referencia,
+          notas: paymentForm.notas
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Si el saldo quedó en 0, actualizar el estado de la cita a "Pagada"
+      if (response.data.saldo === 0) {
+        await axios.put(
+          `${API}/appointments/${selectedAppointmentForPayment.id}`,
+          { estado: "Pagada" },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Pago registrado - Cita marcada como pagada");
+      } else {
+        toast.success(`Pago registrado - Saldo restante: $${response.data.saldo.toFixed(2)}`);
+      }
+
+      // Cerrar modal y refrescar datos
+      setShowPaymentModal(false);
+      setConsultaFinanciera(null);
+      setSelectedAppointmentForPayment(null);
+      fetchData();
+
+    } catch (error) {
+      console.error("Error registrando pago:", error);
+      toast.error(error.response?.data?.detail || "Error al registrar el pago");
     }
   };
 
@@ -230,19 +323,7 @@ export const AppointmentsWithAttention = ({
                   <Button
                     size="sm"
                     variant="default"
-                    onClick={async () => {
-                      try {
-                        await axios.put(
-                          `${API}/appointments/${appointment.id}`,
-                          { estado: "Pagada" },
-                          { headers: { Authorization: `Bearer ${token}` } }
-                        );
-                        toast.success("Pago registrado");
-                        fetchData();
-                      } catch (error) {
-                        toast.error("Error al registrar pago");
-                      }
-                    }}
+                    onClick={() => handleOpenPaymentModal(appointment)}
                     className="payment-button"
                   >
                     <Check className="button-icon" size={14} />
@@ -401,6 +482,127 @@ export const AppointmentsWithAttention = ({
   return (
     <>
       {appointmentsContent}
+      
+      {/* Modal de Registro de Pago */}
+      {showPaymentModal && consultaFinanciera && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">
+                Registrar Pago
+              </h3>
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setConsultaFinanciera(null);
+                  setSelectedAppointmentForPayment(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Información del paciente */}
+              <div className="p-3 bg-gray-50 rounded">
+                <p className="text-sm text-gray-600">Paciente:</p>
+                <p className="font-semibold text-gray-800">{consultaFinanciera.paciente_nombre}</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Total: <span className="font-bold text-gray-900">${consultaFinanciera.total.toFixed(2)}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Pagado: <span className="font-bold text-green-600">${consultaFinanciera.total_pagado.toFixed(2)}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Saldo pendiente: <span className="font-bold text-red-600">${consultaFinanciera.saldo.toFixed(2)}</span>
+                </p>
+              </div>
+
+              {/* Monto del Pago */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Monto del Pago *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={paymentForm.monto}
+                  onChange={(e) => setPaymentForm({...paymentForm, monto: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* Tipo de Pago */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Pago *
+                </label>
+                <select
+                  value={paymentForm.tipo_pago}
+                  onChange={(e) => setPaymentForm({...paymentForm, tipo_pago: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="efectivo">Efectivo</option>
+                  <option value="transferencia">Transferencia</option>
+                  <option value="tarjeta">Tarjeta</option>
+                  <option value="seguro">Seguro</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+
+              {/* Referencia */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Referencia/Nº Transacción
+                </label>
+                <input
+                  type="text"
+                  value={paymentForm.referencia}
+                  onChange={(e) => setPaymentForm({...paymentForm, referencia: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Opcional"
+                />
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notas
+                </label>
+                <textarea
+                  value={paymentForm.notas}
+                  onChange={(e) => setPaymentForm({...paymentForm, notas: e.target.value})}
+                  rows={2}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Notas adicionales..."
+                />
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleRegisterPayment}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Registrar Pago
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    setConsultaFinanciera(null);
+                    setSelectedAppointmentForPayment(null);
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
