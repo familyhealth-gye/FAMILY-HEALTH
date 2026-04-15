@@ -115,84 +115,167 @@ export const AppointmentsWithAttention = ({
     }
   };
 
-  // Función para abrir el modal de pago
+   // Función para abrir el modal de pago
   const handleOpenPaymentModal = async (appointment) => {
+    console.log("🔍 ======== INICIANDO PROCESO DE COBRO ========");
+    console.log("📋 Appointment recibido:", appointment);
+    console.log("🆔 Paciente Cédula:", appointment.cedula);
+    console.log("🆔 Paciente Cédula (alt):", appointment.paciente_cedula);
+    
     try {
-      // Buscar consulta financiera asociada a esta cita por paciente_cedula
+      // Buscar consultas financieras
+      console.log("📡 Llamando a GET /api/financial/consultas...");
+      
       const response = await axios.get(
-        `${API}/financial/reportes/pendientes`,
+        `${API}/financial/consultas`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      // Buscar la consulta financiera de este paciente
-      const consulta = response.data.consultas?.find(
-        c => c.paciente_cedula === appointment.cedula || 
-             c.paciente_cedula === appointment.paciente_cedula
+
+      console.log("✅ Response status:", response.status);
+      console.log("✅ Response data type:", typeof response.data);
+      console.log("✅ Response data:", response.data);
+      console.log("📊 Total consultas recibidas:", Array.isArray(response.data) ? response.data.length : 'No es array');
+
+      // Buscar la consulta del paciente
+      const cedula = appointment.cedula || appointment.paciente_cedula;
+      console.log("🔎 Buscando consulta con cédula:", cedula);
+
+      const consulta = response.data?.find(
+        (c) => {
+          console.log(`  Comparando: ${c.paciente_cedula} === ${cedula} ?`, c.paciente_cedula === cedula);
+          return c.paciente_cedula === cedula || c.paciente_cedula === appointment.paciente_cedula;
+        }
       );
-      
+
+      console.log("🎯 Consulta encontrada:", consulta);
+
       if (!consulta) {
+        console.error("❌ No se encontró consulta financiera");
+        console.log("📝 Consultas disponibles:", response.data?.map(c => ({
+          id: c.id,
+          cedula: c.paciente_cedula,
+          nombre: c.paciente_nombre,
+          saldo: c.saldo
+        })));
         toast.error("No se encontró consulta financiera para esta cita. El doctor debe cerrar la consulta primero.");
         return;
       }
-      
-      // Setear la consulta financiera y el appointment
+
+      console.log("✅ Consulta financiera encontrada:");
+      console.log("   - ID:", consulta.id);
+      console.log("   - Paciente:", consulta.paciente_nombre);
+      console.log("   - Cédula:", consulta.paciente_cedula);
+      console.log("   - Total:", consulta.total);
+      console.log("   - Total Pagado:", consulta.total_pagado);
+      console.log("   - Saldo:", consulta.saldo);
+      console.log("   - Estado Pago:", consulta.estado_pago);
+
+      // Setear datos
       setConsultaFinanciera(consulta);
       setSelectedAppointmentForPayment(appointment);
+
       setPaymentForm({
-        monto: consulta.saldo.toString(),
-        tipo_pago: 'efectivo',
-        referencia: '',
-        notas: ''
+        monto: consulta.saldo?.toString() || "0",
+        tipo_pago: "efectivo",
+        referencia: "",
+        notas: ""
       });
+
+      console.log("💰 Formulario de pago configurado con monto:", consulta.saldo);
+
       setShowPaymentModal(true);
-      
+      console.log("🎉 Modal de pago abierto exitosamente");
+      console.log("========================================");
+
     } catch (error) {
-      console.error("Error buscando consulta financiera:", error);
-      toast.error("Error al buscar información de pago");
+      console.error("❌ ======== ERROR EN PROCESO DE COBRO ========");
+      console.error("❌ Error completo:", error);
+      console.error("❌ Error message:", error.message);
+      console.error("❌ Response status:", error.response?.status);
+      console.error("❌ Response data:", error.response?.data);
+      console.error("❌ Response headers:", error.response?.headers);
+      console.error("========================================");
+      toast.error(error.response?.data?.detail || "Error al buscar información de pago. Revisa la consola.");
     }
   };
 
   // Función para registrar el pago
   const handleRegisterPayment = async () => {
+    console.log("💳 ======== INICIANDO REGISTRO DE PAGO ========");
+    console.log("📋 Consulta Financiera:", consultaFinanciera);
+    console.log("💰 Formulario de Pago:", paymentForm);
+    console.log("🆔 Appointment seleccionado:", selectedAppointmentForPayment);
+    
     try {
-      if (!consultaFinanciera || !paymentForm.monto || parseFloat(paymentForm.monto) <= 0) {
+      const monto = parseFloat(paymentForm.monto);
+      console.log("💵 Monto parseado:", monto);
+      
+      if (!consultaFinanciera || !paymentForm.monto || monto <= 0) {
+        console.error("❌ Validación fallida:");
+        console.error("   - Tiene consulta:", !!consultaFinanciera);
+        console.error("   - Tiene monto:", !!paymentForm.monto);
+        console.error("   - Monto válido:", monto > 0);
         toast.error("Ingrese un monto válido");
         return;
       }
 
+      const payloadPago = {
+        fecha: new Date().toISOString().split('T')[0],
+        monto: monto,
+        tipo_pago: paymentForm.tipo_pago,
+        referencia: paymentForm.referencia,
+        notas: paymentForm.notas
+      };
+
+      console.log("📤 Payload a enviar:", payloadPago);
+      console.log("📡 POST a:", `${API}/financial/consultas/${consultaFinanciera.id}/pagos`);
+
       // Registrar el pago en la consulta financiera
       const response = await axios.post(
         `${API}/financial/consultas/${consultaFinanciera.id}/pagos`,
-        {
-          fecha: new Date().toISOString().split('T')[0],
-          monto: parseFloat(paymentForm.monto),
-          tipo_pago: paymentForm.tipo_pago,
-          referencia: paymentForm.referencia,
-          notas: paymentForm.notas
-        },
+        payloadPago,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      console.log("✅ Pago registrado. Response:", response.data);
+      console.log("💰 Nuevo saldo:", response.data.saldo);
+      console.log("💵 Total pagado:", response.data.total_pagado);
+      console.log("📊 Estado pago:", response.data.estado_pago);
+
       // Si el saldo quedó en 0, actualizar el estado de la cita a "Pagada"
       if (response.data.saldo === 0) {
+        console.log("✅ Saldo = 0, actualizando cita a 'Pagada'...");
+        
         await axios.put(
           `${API}/appointments/${selectedAppointmentForPayment.id}`,
           { estado: "Pagada" },
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        
+        console.log("✅ Cita actualizada a estado 'Pagada'");
         toast.success("Pago registrado - Cita marcada como pagada");
       } else {
+        console.log(`⚠️ Saldo restante: $${response.data.saldo.toFixed(2)}`);
         toast.success(`Pago registrado - Saldo restante: $${response.data.saldo.toFixed(2)}`);
       }
 
       // Cerrar modal y refrescar datos
+      console.log("🔄 Cerrando modal y refrescando datos...");
       setShowPaymentModal(false);
       setConsultaFinanciera(null);
       setSelectedAppointmentForPayment(null);
       fetchData();
+      
+      console.log("🎉 Proceso de pago completado exitosamente");
+      console.log("========================================");
 
     } catch (error) {
-      console.error("Error registrando pago:", error);
+      console.error("❌ ======== ERROR AL REGISTRAR PAGO ========");
+      console.error("❌ Error completo:", error);
+      console.error("❌ Error message:", error.message);
+      console.error("❌ Response status:", error.response?.status);
+      console.error("❌ Response data:", error.response?.data);
+      console.error("========================================");
       toast.error(error.response?.data?.detail || "Error al registrar el pago");
     }
   };
