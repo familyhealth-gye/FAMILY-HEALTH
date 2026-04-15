@@ -49,12 +49,12 @@ export const AppointmentsWithAttention = ({
   });
 
   const handleStartAttention = async (appointment) => {
-    console.log("=== DEBUG APPOINTMENT ===", {
-      id: appointment.id,
-      especialidad: appointment.especialidad,
-      doctor_id: appointment.doctor_id,
-      estado: appointment.estado
-    });
+    console.log("🏥 ======== INICIANDO/REANUDANDO ATENCIÓN ========");
+    console.log("📋 Appointment original:", appointment);
+    console.log("🆔 Paciente ID:", appointment.paciente_id);
+    console.log("🆔 Paciente Cédula:", appointment.paciente_cedula || appointment.cedula);
+    console.log("👤 Usuario:", user?.role);
+    console.log("⚕️ Especialidad usuario:", userEspecialidad);
     
     // VALIDACIÓN: Solo validar si el usuario tiene especialidad definida
     // Si no tiene especialidad (usuario legacy), permitir acceso
@@ -71,25 +71,87 @@ export const AppointmentsWithAttention = ({
     
     try {
       // Update appointment status to "En Atención"
+      console.log("📡 Actualizando estado de cita a 'En Atención'...");
       await axios.put(
         `${API}/appointments/${appointment.id}`,
         { estado: "En Atención" },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      console.log("✅ Estado actualizado");
 
-      setSelectedAppointment(appointment);
+      // IMPORTANTE: Obtener datos completos del paciente si existe paciente_cedula
+      let appointmentConDatosPaciente = { ...appointment };
+      
+      const cedula = appointment.paciente_cedula || appointment.cedula;
+      console.log("🔍 Buscando datos completos del paciente con cédula:", cedula);
+      
+      if (cedula) {
+        try {
+          // Buscar paciente en el sistema unificado
+          console.log("📡 GET /api/financial/pacientes?search=", cedula);
+          const responsePacientes = await axios.get(
+            `${API}/financial/pacientes?search=${cedula}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          
+          console.log("📦 Respuesta pacientes:", responsePacientes.data);
+          
+          const paciente = responsePacientes.data.find(p => p.cedula === cedula);
+          console.log("👤 Paciente encontrado:", paciente);
+          
+          if (paciente) {
+            // Enriquecer el appointment con los datos completos del paciente
+            appointmentConDatosPaciente = {
+              ...appointment,
+              nombre_completo: paciente.nombre || appointment.nombre_completo,
+              cedula: paciente.cedula,
+              paciente_cedula: paciente.cedula,
+              paciente_id: paciente.id,
+              telefono: paciente.telefono || appointment.telefono,
+              fecha_nacimiento: paciente.fecha_nacimiento || appointment.fecha_nacimiento || "",
+              // La edad se calculará automáticamente desde fecha_nacimiento
+              email: paciente.email || "",
+              direccion: paciente.direccion || "",
+              sexo: paciente.sexo || ""
+            };
+            
+            console.log("✅ Appointment enriquecido con datos del paciente:");
+            console.log("   - Nombre:", appointmentConDatosPaciente.nombre_completo);
+            console.log("   - Cédula:", appointmentConDatosPaciente.cedula);
+            console.log("   - Fecha Nacimiento:", appointmentConDatosPaciente.fecha_nacimiento);
+            console.log("   - Teléfono:", appointmentConDatosPaciente.telefono);
+            console.log("   - Paciente ID:", appointmentConDatosPaciente.paciente_id);
+          } else {
+            console.warn("⚠️ No se encontró paciente en sistema unificado, usando datos del appointment");
+          }
+        } catch (errorPaciente) {
+          console.error("❌ Error buscando datos del paciente:", errorPaciente);
+          console.warn("⚠️ Continuando con datos del appointment original");
+        }
+      }
+
+      console.log("📝 Seteando appointment seleccionado con datos completos");
+      setSelectedAppointment(appointmentConDatosPaciente);
       
       // Para Odontología, abrir vista completa de historia clínica
       if (appointment.especialidad === "Odontología") {
+        console.log("🦷 Modo: Historia Clínica Odontológica");
         setModoAtencion("historia");
       } else {
+        console.log("📋 Modo: Formulario General");
         setModoAtencion("formulario");
       }
       
       setVistaAtencion(true);
+      console.log("🎉 Vista de atención abierta");
+      console.log("========================================");
+      
       await fetchData();
     } catch (error) {
-      console.error("Error al iniciar atención:", error);
+      console.error("❌ ======== ERROR AL INICIAR ATENCIÓN ========");
+      console.error("❌ Error completo:", error);
+      console.error("❌ Response:", error.response?.data);
+      console.error("========================================");
       toast.error("Error al iniciar atención: " + (error.response?.data?.detail || error.message));
     }
   };
