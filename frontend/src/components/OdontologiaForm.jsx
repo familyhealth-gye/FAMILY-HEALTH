@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,8 @@ const TOOTH_STATES = [
 
 export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  const [existingHistory, setExistingHistory] = useState(null);
   const [selectedTooth, setSelectedTooth] = useState(null);
   
   // Inicializar 32 dientes
@@ -82,6 +84,79 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
     observaciones: "",
     recomendaciones: ""
   });
+
+  // Cargar historia clínica existente al montar
+  useEffect(() => {
+    const loadExistingHistory = async () => {
+      if (!appointment?.id) {
+        setLoadingData(false);
+        return;
+      }
+      
+      try {
+        const response = await axios.get(
+          `${API}/medical-history/odontology/appointment/${appointment.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (response.data) {
+          console.log("=== HISTORIA ODONTOLÓGICA EXISTENTE CARGADA ===", response.data);
+          setExistingHistory(response.data);
+          
+          // Cargar datos en el formulario
+          const history = response.data;
+          setForm(prevForm => ({
+            ...prevForm,
+            motivo_consulta: history.motivo_consulta || "",
+            dolor_dental: history.dolor_dental || false,
+            ubicacion_dolor: history.ubicacion_dolor || "",
+            intensidad_dolor: history.intensidad_dolor || "",
+            tiempo_dolor: history.tiempo_dolor || "",
+            ultima_visita_odonto: history.ultima_visita_odonto || "",
+            frecuencia_cepillado: history.frecuencia_cepillado || "",
+            uso_hilo_dental: history.uso_hilo_dental || false,
+            uso_enjuague: history.uso_enjuague || false,
+            tratamientos_previos: history.tratamientos_previos || "",
+            diabetes: history.diabetes || false,
+            hipertension: history.hipertension || false,
+            cardiopatias: history.cardiopatias || false,
+            hepatitis: history.hepatitis || false,
+            vih: history.vih || false,
+            epilepsia: history.epilepsia || false,
+            embarazo: history.embarazo || false,
+            semanas_embarazo: history.semanas_embarazo || null,
+            alergias_medicamentos: history.alergias_medicamentos || "",
+            medicamentos_actuales: history.medicamentos_actuales || "",
+            fumador: history.fumador || false,
+            cigarrillos_dia: history.cigarrillos_dia || null,
+            bruxismo: history.bruxismo || false,
+            succion_digital: history.succion_digital || false,
+            estado_dental: history.estado_dental || prevForm.estado_dental,
+            dientes: history.dientes || prevForm.dientes,
+            diagnostico: history.diagnostico || "",
+            cie10_codigo: history.cie10_codigo || "",
+            plan_tratamiento: history.plan_tratamiento || "",
+            procedimientos_realizados: history.procedimientos_realizados || "",
+            materiales_utilizados: history.materiales_utilizados || "",
+            medicamentos: history.medicamentos || "",
+            proximo_control: history.proximo_control || "",
+            observaciones: history.observaciones || "",
+            recomendaciones: history.recomendaciones || ""
+          }));
+          
+          toast.info("Historia clínica cargada - puede continuar editando");
+        }
+      } catch (error) {
+        // 404 significa que no existe historia, es normal
+        if (error.response?.status !== 404) {
+          console.error("Error cargando historia odontológica:", error);
+        }
+      }
+      setLoadingData(false);
+    };
+    
+    loadExistingHistory();
+  }, [appointment?.id, token]);
 
   const handleToothClick = (toothNumber) => {
     setSelectedTooth(toothNumber);
@@ -142,7 +217,7 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Luego guardar la historia clínica con referencia al odontograma
+      // Luego guardar o actualizar la historia clínica con referencia al odontograma
       const historyData = { 
         ...form, 
         appointment_id: appointment.id,
@@ -150,14 +225,27 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
       };
       delete historyData.dientes; // No guardar dientes en historia, ya están en odontograma
 
-      console.log("=== ENVIANDO HISTORIA ODONTOLÓGICA ===");
+      console.log("=== GUARDANDO HISTORIA ODONTOLÓGICA ===");
+      console.log("Historia existente:", existingHistory ? "Sí (actualizar)" : "No (crear nueva)");
       console.log("Payload:", historyData);
 
-      await axios.post(
-        `${API}/medical-history/odontology`,
-        historyData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      if (existingHistory) {
+        // ACTUALIZAR historia existente
+        await axios.put(
+          `${API}/medical-history/odontology/${existingHistory.id}`,
+          historyData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Historia clínica actualizada");
+      } else {
+        // CREAR nueva historia
+        await axios.post(
+          `${API}/medical-history/odontology`,
+          historyData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Historia clínica guardada");
+      }
 
       toast.success("Historia clínica y odontograma guardados exitosamente");
       onSuccess();

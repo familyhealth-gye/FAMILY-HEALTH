@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,8 @@ const API = `${BACKEND_URL}/api`;
 
 export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  const [existingHistory, setExistingHistory] = useState(null);
   const [form, setForm] = useState({
     nombre_responsable: "",
     parentesco_responsable: "",
@@ -75,6 +77,70 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
     observaciones: ""
   });
 
+  // Cargar historia clínica existente al montar
+  useEffect(() => {
+    const loadExistingHistory = async () => {
+      if (!appointment?.id) {
+        setLoadingData(false);
+        return;
+      }
+      
+      try {
+        const response = await axios.get(
+          `${API}/medical-history/pediatric/appointment/${appointment.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (response.data) {
+          console.log("=== HISTORIA PEDIÁTRICA EXISTENTE CARGADA ===", response.data);
+          setExistingHistory(response.data);
+          
+          // Cargar datos en el formulario
+          const history = response.data;
+          setForm(prevForm => ({
+            ...prevForm,
+            nombre_responsable: history.nombre_responsable || "",
+            parentesco_responsable: history.parentesco_responsable || "",
+            telefono_responsable: history.telefono_responsable || "",
+            motivo_consulta: history.motivo_consulta || "",
+            enfermedad_actual: history.enfermedad_actual || "",
+            datos_nacimiento: history.datos_nacimiento || prevForm.datos_nacimiento,
+            lactancia_materna: history.lactancia_materna || "",
+            lactancia_meses: history.lactancia_meses || null,
+            desarrollo_psicomotor: history.desarrollo_psicomotor || prevForm.desarrollo_psicomotor,
+            desarrollo_acorde_edad: history.desarrollo_acorde_edad !== undefined ? history.desarrollo_acorde_edad : true,
+            observaciones_desarrollo: history.observaciones_desarrollo || "",
+            vacunas: history.vacunas || prevForm.vacunas,
+            esquema_completo: history.esquema_completo || false,
+            antecedentes_familiares: history.antecedentes_familiares || "",
+            alergias: history.alergias || "",
+            alimentacion_actual: history.alimentacion_actual || "",
+            numero_comidas_dia: history.numero_comidas_dia || null,
+            signos_vitales: history.signos_vitales || prevForm.signos_vitales,
+            perimetro_cefalico: history.perimetro_cefalico || null,
+            estado_general: history.estado_general || "",
+            estado_nutricional: history.estado_nutricional || "",
+            diagnostico: history.diagnostico || "",
+            cie10_codigo: history.cie10_codigo || "",
+            indicaciones_padres: history.indicaciones_padres || "",
+            proximo_control: history.proximo_control || "",
+            observaciones: history.observaciones || ""
+          }));
+          
+          toast.info("Historia clínica cargada - puede continuar editando");
+        }
+      } catch (error) {
+        // 404 significa que no existe historia, es normal
+        if (error.response?.status !== 404) {
+          console.error("Error cargando historia pediátrica:", error);
+        }
+      }
+      setLoadingData(false);
+    };
+    
+    loadExistingHistory();
+  }, [appointment?.id, token]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -95,7 +161,7 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
     setLoading(true);
 
     try {
-      // 1. Guardar historia clínica (obligatorio)
+      // 1. Guardar o actualizar historia clínica (obligatorio)
       const historyData = { ...form, appointment_id: appointment.id };
       delete historyData.medicamentos;
       
@@ -107,13 +173,25 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
       historyData.plan_tratamiento = planTratamiento || "Sin medicamentos prescritos";
 
       console.log("=== GUARDANDO HISTORIA PEDIÁTRICA ===");
-      await axios.post(
-        `${API}/medical-history/pediatric`,
-        historyData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      console.log("Historia existente:", existingHistory ? "Sí (actualizar)" : "No (crear nueva)");
       
-      toast.success("Historia clínica guardada");
+      if (existingHistory) {
+        // ACTUALIZAR historia existente
+        await axios.put(
+          `${API}/medical-history/pediatric/${existingHistory.id}`,
+          historyData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Historia clínica actualizada");
+      } else {
+        // CREAR nueva historia
+        await axios.post(
+          `${API}/medical-history/pediatric`,
+          historyData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Historia clínica guardada");
+      }
 
       // 2. Crear receta SOLO si hay medicamentos (opcional)
       const medicamentosFiltrados = form.medicamentos.filter(m => m.nombre && m.nombre.trim());
