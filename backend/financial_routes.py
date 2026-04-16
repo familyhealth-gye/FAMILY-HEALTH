@@ -793,10 +793,24 @@ async def crear_consulta_desde_cita(
         total += servicio.subtotal
         servicios_list.append(servicio)
     
+    # Buscar cédula con fallback para garantizar que no quede vacía
+    cedula_paciente = (
+        appointment.get("cedula") or
+        appointment.get("paciente_cedula") or
+        ""
+    )
+    if not cedula_paciente:
+        paciente_db = await db.pacientes.find_one(
+            {"nombre": {"$regex": appointment.get("nombre_completo", ""), "$options": "i"}},
+            {"_id": 0}
+        )
+        if paciente_db:
+            cedula_paciente = paciente_db.get("cedula", "")
+
     # Crear consulta financiera
     consulta = ConsultaFinanciera(
         paciente_id=appointment_id,
-        paciente_cedula=appointment.get("cedula", ""),
+        paciente_cedula=cedula_paciente,
         paciente_nombre=appointment.get("nombre_completo", ""),
         doctor_id=appointment.get("doctor_id", ""),
         doctor_nombre=doctor_nombre,

@@ -203,10 +203,12 @@ export const AppointmentsWithAttention = ({
       console.log("🔎 Buscando consulta con cédula:", cedula);
 
       const consulta = response.data?.find(
-        (c) => {
-          console.log(`  Comparando: ${c.paciente_cedula} === ${cedula} ?`, c.paciente_cedula === cedula);
-          return c.paciente_cedula === cedula || c.paciente_cedula === appointment.paciente_cedula;
-        }
+       (c) => {
+         const porCita = c.appointment_id === appointment.id;
+         const porCedula = c.paciente_cedula === cedula || c.paciente_cedula === appointment.paciente_cedula;
+         console.log(`  ID cita: ${c.appointment_id} === ${appointment.id} ? ${porCita}`);
+         return porCita || porCedula;
+       }
       );
 
       console.log("🎯 Consulta encontrada:", consulta);
