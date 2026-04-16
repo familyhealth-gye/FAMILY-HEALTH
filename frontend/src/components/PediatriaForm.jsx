@@ -127,11 +127,14 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
             observaciones: history.observaciones || ""
           }));
           
-          toast.info("Historia clínica cargada - puede continuar editando");
+          toast.info("Consulta anterior cargada - puede continuar editando");
         }
       } catch (error) {
-        // 404 significa que no existe historia, es normal
-        if (error.response?.status !== 404) {
+        // 404 significa que no existe historia, es normal para consultas nuevas
+        if (error.response?.status === 404) {
+          console.log("✅ Consulta nueva - formulario inicializado vacío");
+          toast.success("Nueva consulta - formulario listo");
+        } else {
           console.error("Error cargando historia pediátrica:", error);
         }
       }

@@ -132,7 +132,8 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
             bruxismo: history.bruxismo || false,
             succion_digital: history.succion_digital || false,
             estado_dental: history.estado_dental || prevForm.estado_dental,
-            dientes: history.dientes || prevForm.dientes,
+            // ✅ CORRECCIÓN: Solo cargar dientes si existen en esta consulta específica
+            dientes: history.dientes && history.dientes.length > 0 ? history.dientes : prevForm.dientes,
             diagnostico: history.diagnostico || "",
             cie10_codigo: history.cie10_codigo || "",
             plan_tratamiento: history.plan_tratamiento || "",
@@ -144,11 +145,14 @@ export const OdontologiaForm = ({ appointment, token, onClose, onSuccess }) => {
             recomendaciones: history.recomendaciones || ""
           }));
           
-          toast.info("Historia clínica cargada - puede continuar editando");
+          toast.info("Consulta anterior cargada - puede continuar editando");
         }
       } catch (error) {
-        // 404 significa que no existe historia, es normal
-        if (error.response?.status !== 404) {
+        // 404 significa que no existe historia, es normal para consultas nuevas
+        if (error.response?.status === 404) {
+          console.log("✅ Consulta nueva - formulario inicializado vacío");
+          toast.success("Nueva consulta - formulario listo");
+        } else {
           console.error("Error cargando historia odontológica:", error);
         }
       }
