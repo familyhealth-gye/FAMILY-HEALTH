@@ -8,6 +8,9 @@ import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
 import { HistoriaClinicaCompleta } from "./HistoriaClinicaCompleta";
+import { NutricionForm } from "./NutricionForm";
+import { GinecologiaForm } from "./GinecologiaForm";
+import { EcografiaForm } from "./EcografiaForm";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -203,12 +206,10 @@ export const AppointmentsWithAttention = ({
       console.log("🔎 Buscando consulta con cédula:", cedula);
 
       const consulta = response.data?.find(
-       (c) => {
-         const porCita = c.appointment_id === appointment.id;
-         const porCedula = c.paciente_cedula === cedula || c.paciente_cedula === appointment.paciente_cedula;
-         console.log(`  ID cita: ${c.appointment_id} === ${appointment.id} ? ${porCita}`);
-         return porCita || porCedula;
-       }
+        (c) => {
+          console.log(`  Comparando: ${c.paciente_cedula} === ${cedula} ?`, c.paciente_cedula === cedula);
+          return c.paciente_cedula === cedula || c.paciente_cedula === appointment.paciente_cedula;
+        }
       );
 
       console.log("🎯 Consulta encontrada:", consulta);
@@ -603,11 +604,40 @@ export const AppointmentsWithAttention = ({
             />
           )}
           
-          {!["Medicina General", "Pediatría", "Odontología"].includes(selectedAppointment.especialidad) && (
+          {selectedAppointment.especialidad === "Nutrición" && (
+            <NutricionForm
+              appointment={selectedAppointment}
+              token={token}
+              onClose={() => { setVistaAtencion(false); setSelectedAppointment(null); }}
+              onSuccess={handleAttentionSuccess}
+            />
+          )}
+
+          {["Ginecología","Obstetricia","Ginecología/Obstetricia"].includes(selectedAppointment.especialidad) && (
+            <GinecologiaForm
+              appointment={selectedAppointment}
+              token={token}
+              onClose={() => { setVistaAtencion(false); setSelectedAppointment(null); }}
+              onSuccess={handleAttentionSuccess}
+            />
+          )}
+
+          {selectedAppointment.especialidad === "Ecografía" && (
+            <EcografiaForm
+              appointment={selectedAppointment}
+              token={token}
+              onClose={() => { setVistaAtencion(false); setSelectedAppointment(null); }}
+              onSuccess={handleAttentionSuccess}
+            />
+          )}
+
+          {!["Medicina General","Pediatría","Odontología","Nutrición",
+             "Ginecología","Obstetricia","Ginecología/Obstetricia","Ecografía"
+            ].includes(selectedAppointment.especialidad) && (
             <div style={{padding: '2rem', textAlign: 'center'}}>
-              <p>Historia clínica de {selectedAppointment.especialidad} aún no implementada.</p>
+              <p>Historia clínica de <strong>{selectedAppointment.especialidad}</strong> próximamente.</p>
               <p style={{marginTop: '1rem', color: '#64748B'}}>
-                Por ahora están disponibles Medicina General, Pediatría y Odontología.
+                Disponibles: Medicina General, Pediatría, Odontología, Nutrición, Ginecología y Ecografía.
               </p>
               <Button 
                 onClick={() => {

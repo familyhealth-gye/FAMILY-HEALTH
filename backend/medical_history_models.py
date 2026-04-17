@@ -446,3 +446,467 @@ class MedicalHistoryOdontologyCreate(BaseModel):
     proximo_control: Optional[str] = ""
     observaciones: Optional[str] = ""
     recomendaciones: Optional[str] = ""
+
+# ========== ODONTOLOGÍA - EVOLUCIÓN POR SESIÓN ==========
+
+class ProcedimientoRealizado(BaseModel):
+    """Procedimiento ejecutado en una sesión específica"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    diente_numero: str          # FDI: "16", "26", etc.
+    procedimiento: str          # "Resina simple", "Extracción", etc.
+    superficies: List[str] = [] # ["oclusal", "mesial"]
+    precio: float = 0.0
+    plan_tratamiento_item_id: Optional[str] = ""  # Referencia al item del plan
+    notas: str = ""
+
+
+class EvolicionSesion(BaseModel):
+    """
+    Registro de lo que se hizo en UNA sesión de odontología.
+    Un paciente puede tener muchas sesiones, cada una con sus procedimientos.
+    El odontograma se actualiza automáticamente al marcar procedimientos como realizados.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Datos de la sesión
+    appointment_id: str         # La cita de HOY
+    paciente_cedula: str        # Identificador único del paciente
+    paciente_nombre: str
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str                  # Fecha de la sesión
+
+    # Motivo de esta sesión
+    motivo_sesion: str = ""     # "Continuación resinas", "Control", etc.
+
+    # Procedimientos realizados en esta sesión
+    procedimientos_realizados: List[ProcedimientoRealizado] = []
+
+    # Materiales usados
+    materiales_utilizados: str = ""
+
+    # Signos vitales (opcional en odonto pero útil)
+    presion_arterial: Optional[str] = ""
+    frecuencia_cardiaca: Optional[int] = None
+
+    # Evolución clínica (notas del doctor sobre el estado del paciente hoy)
+    evolucion: str = ""
+
+    # Próxima sesión
+    proximo_procedimiento: str = ""   # Qué se hará en la próxima cita
+    proxima_cita: Optional[str] = ""
+
+    # Receta de esta sesión (analgésicos, antibióticos post-procedimiento)
+    tiene_receta: bool = False
+    medicamentos: Optional[str] = ""
+
+    # Total cobrado en esta sesión
+    total_sesion: float = 0.0
+
+    # Estado del pago de esta sesión
+    estado_pago: str = "pendiente"  # pendiente | pagado | abono
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EvolicionSesionCreate(BaseModel):
+    """Modelo para crear una evolución de sesión"""
+    appointment_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    motivo_sesion: str = ""
+    procedimientos_realizados: List[ProcedimientoRealizado] = []
+    materiales_utilizados: str = ""
+    presion_arterial: Optional[str] = ""
+    frecuencia_cardiaca: Optional[int] = None
+    evolucion: str = ""
+    proximo_procedimiento: str = ""
+    proxima_cita: Optional[str] = ""
+    tiene_receta: bool = False
+    medicamentos: Optional[str] = ""
+    total_sesion: float = 0.0
+    estado_pago: str = "pendiente"
+
+
+# ========== NUTRICIÓN ==========
+
+class ExamenFisicoNutricion(BaseModel):
+    peso: Optional[float] = None
+    talla: Optional[float] = None
+    imc: Optional[float] = None
+    porcentaje_grasa: Optional[float] = None
+    porcentaje_musculo: Optional[float] = None
+    edad_corporal: Optional[int] = None
+    # Pliegues cutáneos (mm)
+    pliegue_suprailiaco: Optional[float] = None
+    pliegue_tricipital: Optional[float] = None
+    pliegue_bicipital: Optional[float] = None
+    pliegue_subescapular: Optional[float] = None
+    # Circunferencias (cm)
+    cintura: Optional[float] = None
+    cadera: Optional[float] = None
+    icc: Optional[float] = None          # índice cintura-cadera
+    muneca: Optional[float] = None
+    circunferencia_brazo: Optional[float] = None
+
+class LaboratorioNutricion(BaseModel):
+    fecha_lab: Optional[str] = ""
+    hemoglobina: Optional[float] = None
+    plaquetas: Optional[float] = None
+    glucosa: Optional[float] = None
+    urea: Optional[float] = None
+    creatinina: Optional[float] = None
+    acido_urico: Optional[float] = None
+    colesterol: Optional[float] = None
+    hdl: Optional[float] = None
+    ldl: Optional[float] = None
+    trigliceridos: Optional[float] = None
+    tgo: Optional[float] = None
+    tgp: Optional[float] = None
+
+class ControlNutricion(BaseModel):
+    numero: int
+    fecha: Optional[str] = ""
+    peso: Optional[float] = None
+    talla: Optional[float] = None
+    imc: Optional[float] = None
+    porcentaje_grasa: Optional[float] = None
+    porcentaje_musculo: Optional[float] = None
+    edad_corporal: Optional[int] = None
+    cintura: Optional[float] = None
+    cadera: Optional[float] = None
+    icc: Optional[float] = None
+    observaciones: Optional[str] = ""
+
+class MedicalHistoryNutricion(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    appointment_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    paciente_edad: Optional[int] = None
+    paciente_sexo: Optional[str] = ""
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    especialidad: str = "Nutrición"
+
+    # Base clínica
+    motivo_consulta: str
+    evolucion_enfermedad: Optional[str] = ""
+
+    # Antecedentes
+    ant_familiares: Optional[str] = ""
+    ant_personales: Optional[str] = ""
+    ant_otros: Optional[str] = ""        # cirugías, gestas, partos, abortos
+    alergias_intolerancias: Optional[str] = ""
+    medicamentos_actuales: Optional[str] = ""
+
+    # Examen físico
+    examen_fisico: ExamenFisicoNutricion = Field(default_factory=ExamenFisicoNutricion)
+
+    # Diagnóstico estandarizado
+    diagnostico_texto: Optional[str] = ""
+    cie10_codigo: Optional[str] = ""
+    cie10_descripcion: Optional[str] = ""
+
+    # Laboratorio
+    laboratorio: LaboratorioNutricion = Field(default_factory=LaboratorioNutricion)
+
+    # Plan alimentario
+    plan_alimentario: Optional[str] = ""
+    anamnesis: Optional[str] = ""
+    notas: Optional[str] = ""
+
+    # Receta
+    receta: Optional[str] = ""
+    medicamentos: Optional[List[dict]] = []
+
+    # Controles de seguimiento (hasta 10)
+    controles: List[ControlNutricion] = Field(default_factory=list)
+
+    # Conexión financiera
+    consulta_financiera_id: Optional[str] = ""
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class MedicalHistoryNutricionCreate(BaseModel):
+    appointment_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    paciente_edad: Optional[int] = None
+    paciente_sexo: Optional[str] = ""
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    motivo_consulta: str
+    evolucion_enfermedad: Optional[str] = ""
+    ant_familiares: Optional[str] = ""
+    ant_personales: Optional[str] = ""
+    ant_otros: Optional[str] = ""
+    alergias_intolerancias: Optional[str] = ""
+    medicamentos_actuales: Optional[str] = ""
+    examen_fisico: ExamenFisicoNutricion = Field(default_factory=ExamenFisicoNutricion)
+    diagnostico_texto: Optional[str] = ""
+    cie10_codigo: Optional[str] = ""
+    cie10_descripcion: Optional[str] = ""
+    laboratorio: LaboratorioNutricion = Field(default_factory=LaboratorioNutricion)
+    plan_alimentario: Optional[str] = ""
+    anamnesis: Optional[str] = ""
+    notas: Optional[str] = ""
+    receta: Optional[str] = ""
+    medicamentos: Optional[List[dict]] = []
+    controles: List[ControlNutricion] = Field(default_factory=list)
+
+
+# ========== GINECOLOGÍA / OBSTETRICIA ==========
+
+class DatosGinecologicos(BaseModel):
+    menarquia: Optional[str] = ""
+    ritmo_menstrual: Optional[str] = ""
+    inicio_actividad_sexual: Optional[str] = ""
+    menopausia: Optional[str] = ""
+    partos: Optional[int] = None
+    abortos: Optional[int] = None
+    cesareas: Optional[int] = None
+    gestas: Optional[int] = None
+    metodo_anticonceptivo: Optional[str] = ""
+    vida_sexual_activa: Optional[bool] = None
+    ultimo_papanicolaou: Optional[str] = ""
+    resultado_papanicolaou: Optional[str] = ""
+    ultima_mamografia: Optional[str] = ""
+    resultado_mamografia: Optional[str] = ""
+
+class DatosEmbarazo(BaseModel):
+    esta_embarazada: bool = False
+    fur: Optional[str] = ""              # Fecha Última Regla
+    fpp: Optional[str] = ""              # Fecha Probable de Parto
+    semanas_gestacion: Optional[int] = None
+    trimestre: Optional[int] = None      # 1, 2, 3
+    numero_embarazo: Optional[int] = None
+    embarazo_planificado: Optional[bool] = None
+    # Controles prenatales
+    presion_arterial: Optional[str] = ""
+    peso_actual: Optional[float] = None
+    altura_uterina: Optional[float] = None    # cm
+    frecuencia_cardiaca_fetal: Optional[int] = None
+    presentacion_fetal: Optional[str] = ""    # cefálica, podálica, transversa
+    movimientos_fetales: Optional[str] = ""   # presentes, ausentes, disminuidos
+    edemas: Optional[str] = ""               # no, leve, moderado, severo
+    # Laboratorio prenatal
+    grupo_sanguineo: Optional[str] = ""
+    factor_rh: Optional[str] = ""
+    vdrl: Optional[str] = ""
+    vih_prenatal: Optional[str] = ""
+    toxoplasma: Optional[str] = ""
+    rubeola: Optional[str] = ""
+    glucosa_prenatal: Optional[float] = None
+    hemoglobina_prenatal: Optional[float] = None
+    # Ecografías
+    eco_primer_trimestre: Optional[str] = ""
+    eco_segundo_trimestre: Optional[str] = ""
+    eco_tercer_trimestre: Optional[str] = ""
+    eco_morfologica: Optional[str] = ""
+    # Vacunas embarazo
+    vacuna_tetano: Optional[bool] = None
+    vacuna_influenza: Optional[bool] = None
+    # Notas del trimestre
+    notas_primer_trimestre: Optional[str] = ""
+    notas_segundo_trimestre: Optional[str] = ""
+    notas_tercer_trimestre: Optional[str] = ""
+
+class MedicalHistoryGinecologia(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    appointment_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    paciente_edad: Optional[int] = None
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    especialidad: str = "Ginecología"
+
+    # Base clínica
+    motivo_consulta: str
+    enfermedad_actual: Optional[str] = ""
+
+    # Antecedentes generales
+    ant_familiares_hta: bool = False
+    ant_familiares_diabetes: bool = False
+    ant_familiares_cancer: bool = False
+    ant_familiares_otros: Optional[str] = ""
+    ant_personales_quirurgicos: Optional[str] = ""
+    ant_personales_alergias: Optional[str] = ""
+    ant_personales_otros: Optional[str] = ""
+    medicamentos_actuales: Optional[str] = ""
+
+    # Datos ginecológicos
+    datos_ginecologicos: DatosGinecologicos = Field(default_factory=DatosGinecologicos)
+
+    # Embarazo (se activa si está embarazada)
+    datos_embarazo: DatosEmbarazo = Field(default_factory=DatosEmbarazo)
+
+    # Examen físico
+    peso: Optional[float] = None
+    talla: Optional[float] = None
+    imc: Optional[float] = None
+    presion_arterial: Optional[str] = ""
+    frecuencia_cardiaca: Optional[int] = None
+    temperatura: Optional[float] = None
+    examen_fisico_general: Optional[str] = ""
+    examen_ginecologico: Optional[str] = ""
+
+    # Diagnóstico estandarizado
+    diagnostico_texto: Optional[str] = ""
+    cie10_codigo: Optional[str] = ""
+    cie10_descripcion: Optional[str] = ""
+
+    # Tratamiento y receta
+    tratamiento: Optional[str] = ""
+    receta: Optional[str] = ""
+    medicamentos: Optional[List[dict]] = []
+    indicaciones: Optional[str] = ""
+    proximo_control: Optional[str] = ""
+    notas: Optional[str] = ""
+
+    # Conexión financiera
+    consulta_financiera_id: Optional[str] = ""
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class MedicalHistoryGinecologiaCreate(BaseModel):
+    appointment_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    paciente_edad: Optional[int] = None
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    motivo_consulta: str
+    enfermedad_actual: Optional[str] = ""
+    ant_familiares_hta: bool = False
+    ant_familiares_diabetes: bool = False
+    ant_familiares_cancer: bool = False
+    ant_familiares_otros: Optional[str] = ""
+    ant_personales_quirurgicos: Optional[str] = ""
+    ant_personales_alergias: Optional[str] = ""
+    ant_personales_otros: Optional[str] = ""
+    medicamentos_actuales: Optional[str] = ""
+    datos_ginecologicos: DatosGinecologicos = Field(default_factory=DatosGinecologicos)
+    datos_embarazo: DatosEmbarazo = Field(default_factory=DatosEmbarazo)
+    peso: Optional[float] = None
+    talla: Optional[float] = None
+    imc: Optional[float] = None
+    presion_arterial: Optional[str] = ""
+    frecuencia_cardiaca: Optional[int] = None
+    temperatura: Optional[float] = None
+    examen_fisico_general: Optional[str] = ""
+    examen_ginecologico: Optional[str] = ""
+    diagnostico_texto: Optional[str] = ""
+    cie10_codigo: Optional[str] = ""
+    cie10_descripcion: Optional[str] = ""
+    tratamiento: Optional[str] = ""
+    receta: Optional[str] = ""
+    medicamentos: Optional[List[dict]] = []
+    indicaciones: Optional[str] = ""
+    proximo_control: Optional[str] = ""
+    notas: Optional[str] = ""
+
+
+# ========== ECOGRAFÍA ==========
+
+class HallazgoEcografico(BaseModel):
+    organo: str                           # "Útero", "Ovario derecho", etc.
+    normal: bool = True
+    descripcion: Optional[str] = ""
+    medidas: Optional[str] = ""           # "8.5 x 4.2 x 3.1 cm"
+
+class MedicalHistoryEcografia(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    appointment_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    paciente_edad: Optional[int] = None
+    paciente_sexo: Optional[str] = ""
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    especialidad: str = "Ecografía"
+
+    # Tipo de ecografía
+    tipo_ecografia: str = ""              # "Obstétrica", "Pélvica", "Abdominal", "Renal", "Tiroides", etc.
+    via: Optional[str] = ""              # "Abdominal", "Transvaginal", "Transrectal"
+    indicacion_clinica: Optional[str] = ""
+
+    # Para ecografía obstétrica
+    es_obstetrica: bool = False
+    semanas_gestacion: Optional[int] = None
+    fur: Optional[str] = ""
+    numero_fetos: Optional[int] = 1
+    latido_cardiaco_fetal: Optional[bool] = None
+    frecuencia_cardiaca_fetal: Optional[int] = None
+    presentacion: Optional[str] = ""
+    placenta: Optional[str] = ""
+    liquido_amniotico: Optional[str] = ""
+    biometria_fetal: Optional[str] = ""   # DBP, LF, CA, etc. en texto
+
+    # Hallazgos por órgano (flexible)
+    hallazgos: List[HallazgoEcografico] = Field(default_factory=list)
+
+    # Diagnóstico estandarizado
+    conclusion: str = ""
+    cie10_codigo: Optional[str] = ""
+    cie10_descripcion: Optional[str] = ""
+    recomendaciones: Optional[str] = ""
+    notas: Optional[str] = ""
+
+    # Imagen adjunta (URL o base64)
+    imagen_url: Optional[str] = ""
+
+    # Conexión financiera
+    consulta_financiera_id: Optional[str] = ""
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class MedicalHistoryEcografiaCreate(BaseModel):
+    appointment_id: str
+    paciente_cedula: str
+    paciente_nombre: str
+    paciente_edad: Optional[int] = None
+    paciente_sexo: Optional[str] = ""
+    doctor_id: str
+    doctor_nombre: str
+    fecha: str
+    tipo_ecografia: str = ""
+    via: Optional[str] = ""
+    indicacion_clinica: Optional[str] = ""
+    es_obstetrica: bool = False
+    semanas_gestacion: Optional[int] = None
+    fur: Optional[str] = ""
+    numero_fetos: Optional[int] = 1
+    latido_cardiaco_fetal: Optional[bool] = None
+    frecuencia_cardiaca_fetal: Optional[int] = None
+    presentacion: Optional[str] = ""
+    placenta: Optional[str] = ""
+    liquido_amniotico: Optional[str] = ""
+    biometria_fetal: Optional[str] = ""
+    hallazgos: List[HallazgoEcografico] = Field(default_factory=list)
+    conclusion: str = ""
+    cie10_codigo: Optional[str] = ""
+    cie10_descripcion: Optional[str] = ""
+    recomendaciones: Optional[str] = ""
+    notas: Optional[str] = ""
+    imagen_url: Optional[str] = ""

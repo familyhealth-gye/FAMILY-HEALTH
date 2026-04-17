@@ -63,13 +63,17 @@ from models import (
 from medical_history_models import (
     MedicalHistoryGeneral, MedicalHistoryGeneralCreate,
     MedicalHistoryPediatric, MedicalHistoryPediatricCreate,
-    MedicalHistoryOdontology, MedicalHistoryOdontologyCreate, EstadoDental
+    MedicalHistoryOdontology, MedicalHistoryOdontologyCreate, EstadoDental,
+    EvolicionSesion, EvolicionSesionCreate,
+    MedicalHistoryNutricion, MedicalHistoryNutricionCreate,
+    MedicalHistoryGinecologia, MedicalHistoryGinecologiaCreate,
+    MedicalHistoryEcografia, MedicalHistoryEcografiaCreate
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
     get_current_user, require_role, Token, TokenData, UserLogin
 )
-from pdf_generator import generate_prescription_pdf
+from pdf_generator import generate_prescription_pdf, generate_certificado_pdf
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -773,6 +777,526 @@ async def update_odontology_history(
     
     return MedicalHistoryOdontology(**update_data)
 
+
+# ========== EVOLUCIÓN POR SESIÓN - ODONTOLOGÍA ==========
+
+@api_router.post("/evoluciones-sesion", response_model=EvolicionSesion)
+async def create_evolucion_sesion(
+    input: EvolicionSesionCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Crea el registro de lo que se hizo en una sesión de odontología.
+    Actualiza automáticamente el estado de los dientes en el odontograma.
+    """
+    # Verificar si ya existe una evolución para este appointment
+    existing = await db.evoluciones_sesion.find_one(
+        {"appointment_id": input.appointment_id}, {"_id": 0}
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Ya existe una evolución para esta cita")
+
+    evolucion = EvolicionSesion(**input.model_dump())
+    doc = evolucion.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.evoluciones_sesion.insert_one(doc)
+
+    # Actualizar estado de dientes en odontograma automáticamente
+    if input.procedimientos_realizados and input.paciente_cedula:
+        odontograma = await db.odontogramas_clinicos.find_one(
+            {"paciente_cedula": input.paciente_cedula}, {"_id": 0}
+        )
+        if odontograma:
+            dientes = odontograma.get("dientes", [])
+            ESTADO_MAP = {
+                "Resina": "restaurado",
+                "Amalgama": "restaurado",
+                "Corona": "corona",
+                "Extracción": "ausente",
+                "Implante": "implante",
+                "Endodoncia": "endodoncia",
+                "Limpieza": "presente",
+                "Blanqueamiento": "presente",
+            }
+            for proc in input.procedimientos_realizados:
+                diente_num = proc.diente_numero
+                nuevo_estado = next(
+                    (v for k, v in ESTADO_MAP.items() if k.lower() in proc.procedimiento.lower()),
+                    "tratado"
+                )
+                for i, d in enumerate(dientes):
+                    if str(d.get("numero_fdi", "")) == str(diente_num):
+                        dientes[i]["estado_tratamiento"] = nuevo_estado
+                        dientes[i]["ultimo_procedimiento"] = proc.procedimiento
+                        dientes[i]["fecha_ultimo_tratamiento"] = input.fecha
+                        break
+
+            await db.odontogramas_clinicos.update_one(
+                {"paciente_cedula": input.paciente_cedula},
+                {"$set": {
+                    "dientes": dientes,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+
+    # Actualizar estado de la cita
+    await db.appointments.update_one(
+        {"id": input.appointment_id},
+        {"$set": {"estado": "Pendiente de Pago"}}
+    )
+
+    return evolucion
+
+
+@api_router.get("/evoluciones-sesion/paciente/{cedula}", response_model=List[EvolicionSesion])
+async def get_evoluciones_by_paciente(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtiene todas las sesiones de un paciente ordenadas por fecha (más reciente primero)"""
+    evoluciones = await db.evoluciones_sesion.find(
+        {"paciente_cedula": cedula}, {"_id": 0}
+    ).sort("fecha", -1).to_list(1000)
+
+    for e in evoluciones:
+        if isinstance(e.get("created_at"), str):
+            e["created_at"] = datetime.fromisoformat(e["created_at"])
+
+    return evoluciones
+
+
+@api_router.get("/evoluciones-sesion/appointment/{appointment_id}", response_model=EvolicionSesion)
+async def get_evolucion_by_appointment(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtiene la evolución de una cita específica"""
+    evolucion = await db.evoluciones_sesion.find_one(
+        {"appointment_id": appointment_id}, {"_id": 0}
+    )
+    if not evolucion:
+        raise HTTPException(status_code=404, detail="Evolución no encontrada")
+
+    if isinstance(evolucion.get("created_at"), str):
+        evolucion["created_at"] = datetime.fromisoformat(evolucion["created_at"])
+
+    return EvolicionSesion(**evolucion)
+
+
+@api_router.put("/evoluciones-sesion/{evolucion_id}", response_model=EvolicionSesion)
+async def update_evolucion_sesion(
+    evolucion_id: str,
+    input: EvolicionSesionCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualiza una evolución de sesión existente"""
+    existing = await db.evoluciones_sesion.find_one({"id": evolucion_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Evolución no encontrada")
+
+    update_data = input.model_dump()
+    update_data["id"] = evolucion_id
+    update_data["created_at"] = existing.get("created_at")
+
+    await db.evoluciones_sesion.update_one(
+        {"id": evolucion_id},
+        {"$set": update_data}
+    )
+
+    if isinstance(update_data["created_at"], str):
+        update_data["created_at"] = datetime.fromisoformat(update_data["created_at"])
+
+    return EvolicionSesion(**update_data)
+
+
+# ========== HELPER: CREAR CONSULTA FINANCIERA AUTOMÁTICA ==========
+
+async def crear_consulta_financiera_automatica(appointment_id: str, paciente_cedula: str, 
+                                                paciente_nombre: str, doctor_id: str,
+                                                especialidad: str, username: str):
+    """
+    Crea consulta financiera automáticamente al cerrar cualquier consulta clínica.
+    Si ya existe, la retorna sin duplicar.
+    """
+    try:
+        existing = await db.consultas_financieras.find_one({"appointment_id": appointment_id}, {"_id": 0})
+        if existing:
+            return existing.get("id")
+
+        appointment = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+        if not appointment:
+            return None
+
+        cedula = paciente_cedula or appointment.get("cedula") or appointment.get("paciente_cedula") or ""
+        doctor = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
+        doctor_nombre = doctor.get("nombre", "") if doctor else ""
+
+        # Buscar precio en catálogo
+        precio = 30.0
+        try:
+            servicio_cat = await db.catalogo_servicios.find_one(
+                {"especialidad": {"$regex": especialidad, "$options": "i"}}, {"_id": 0}
+            )
+            if servicio_cat:
+                precio = servicio_cat.get("precio_base", 30.0)
+        except:
+            pass
+
+        from financial_models import ConsultaFinanciera, DetalleServicio
+        servicio = DetalleServicio(
+            consulta_id="",
+            servicio=f"Consulta {especialidad}",
+            descripcion=f"Consulta médica - {especialidad}",
+            precio_unitario=precio,
+            cantidad=1,
+            subtotal=precio
+        )
+
+        consulta = ConsultaFinanciera(
+            paciente_id=appointment_id,
+            paciente_cedula=cedula,
+            paciente_nombre=paciente_nombre,
+            doctor_id=doctor_id,
+            doctor_nombre=doctor_nombre,
+            appointment_id=appointment_id,
+            especialidad=especialidad,
+            fecha=datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+            motivo=appointment.get("observaciones", ""),
+            total=precio,
+            total_pagado=0,
+            saldo=precio,
+            estado_pago="pendiente",
+            servicios=[],
+            pagos=[],
+            created_by=username
+        )
+        servicio.consulta_id = consulta.id
+        consulta.servicios = [servicio]
+
+        doc = consulta.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        doc['updated_at'] = doc['updated_at'].isoformat()
+        for srv in doc['servicios']:
+            srv['created_at'] = srv['created_at'].isoformat()
+
+        await db.consultas_financieras.insert_one(doc)
+        await db.appointments.update_one({"id": appointment_id}, {"$set": {"estado": "Pendiente de Pago"}})
+        return consulta.id
+    except Exception as e:
+        logging.error(f"Error creando consulta financiera automática: {str(e)}")
+        return None
+
+
+# ========== NUTRICIÓN ==========
+
+@api_router.post("/medical-history/nutricion", response_model=MedicalHistoryNutricion)
+async def create_nutricion_history(
+    input: MedicalHistoryNutricionCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.medical_history_nutricion.find_one({"appointment_id": input.appointment_id}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Ya existe historia clínica para esta cita")
+
+    history = MedicalHistoryNutricion(**input.model_dump())
+    doc = history.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.medical_history_nutricion.insert_one(doc)
+
+    # Crear consulta financiera automáticamente
+    fin_id = await crear_consulta_financiera_automatica(
+        input.appointment_id, input.paciente_cedula, input.paciente_nombre,
+        input.doctor_id, "Nutrición", current_user.username
+    )
+    if fin_id:
+        await db.medical_history_nutricion.update_one({"id": history.id}, {"$set": {"consulta_financiera_id": fin_id}})
+
+    return history
+
+
+@api_router.get("/medical-history/nutricion/appointment/{appointment_id}", response_model=MedicalHistoryNutricion)
+async def get_nutricion_history_by_appointment(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    history = await db.medical_history_nutricion.find_one({"appointment_id": appointment_id}, {"_id": 0})
+    if not history:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    if isinstance(history.get('created_at'), str):
+        history['created_at'] = datetime.fromisoformat(history['created_at'])
+    return MedicalHistoryNutricion(**history)
+
+
+@api_router.get("/medical-history/nutricion/paciente/{cedula}", response_model=List[MedicalHistoryNutricion])
+async def get_nutricion_histories_by_paciente(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    histories = await db.medical_history_nutricion.find(
+        {"paciente_cedula": cedula}, {"_id": 0}
+    ).sort("fecha", -1).to_list(100)
+    for h in histories:
+        if isinstance(h.get('created_at'), str):
+            h['created_at'] = datetime.fromisoformat(h['created_at'])
+    return histories
+
+
+@api_router.put("/medical-history/nutricion/{history_id}", response_model=MedicalHistoryNutricion)
+async def update_nutricion_history(
+    history_id: str,
+    input: MedicalHistoryNutricionCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.medical_history_nutricion.find_one({"id": history_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    update_data = input.model_dump()
+    update_data['id'] = history_id
+    update_data['created_at'] = existing.get('created_at')
+    await db.medical_history_nutricion.update_one({"id": history_id}, {"$set": update_data})
+    if isinstance(update_data['created_at'], str):
+        update_data['created_at'] = datetime.fromisoformat(update_data['created_at'])
+    return MedicalHistoryNutricion(**update_data)
+
+
+# ========== GINECOLOGÍA / OBSTETRICIA ==========
+
+@api_router.post("/medical-history/ginecologia", response_model=MedicalHistoryGinecologia)
+async def create_ginecologia_history(
+    input: MedicalHistoryGinecologiaCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.medical_history_ginecologia.find_one({"appointment_id": input.appointment_id}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Ya existe historia clínica para esta cita")
+
+    history = MedicalHistoryGinecologia(**input.model_dump())
+    doc = history.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.medical_history_ginecologia.insert_one(doc)
+
+    fin_id = await crear_consulta_financiera_automatica(
+        input.appointment_id, input.paciente_cedula, input.paciente_nombre,
+        input.doctor_id, "Ginecología", current_user.username
+    )
+    if fin_id:
+        await db.medical_history_ginecologia.update_one({"id": history.id}, {"$set": {"consulta_financiera_id": fin_id}})
+
+    return history
+
+
+@api_router.get("/medical-history/ginecologia/appointment/{appointment_id}", response_model=MedicalHistoryGinecologia)
+async def get_ginecologia_history_by_appointment(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    history = await db.medical_history_ginecologia.find_one({"appointment_id": appointment_id}, {"_id": 0})
+    if not history:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    if isinstance(history.get('created_at'), str):
+        history['created_at'] = datetime.fromisoformat(history['created_at'])
+    return MedicalHistoryGinecologia(**history)
+
+
+@api_router.get("/medical-history/ginecologia/paciente/{cedula}", response_model=List[MedicalHistoryGinecologia])
+async def get_ginecologia_histories_by_paciente(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    histories = await db.medical_history_ginecologia.find(
+        {"paciente_cedula": cedula}, {"_id": 0}
+    ).sort("fecha", -1).to_list(100)
+    for h in histories:
+        if isinstance(h.get('created_at'), str):
+            h['created_at'] = datetime.fromisoformat(h['created_at'])
+    return histories
+
+
+@api_router.put("/medical-history/ginecologia/{history_id}", response_model=MedicalHistoryGinecologia)
+async def update_ginecologia_history(
+    history_id: str,
+    input: MedicalHistoryGinecologiaCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.medical_history_ginecologia.find_one({"id": history_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    update_data = input.model_dump()
+    update_data['id'] = history_id
+    update_data['created_at'] = existing.get('created_at')
+    await db.medical_history_ginecologia.update_one({"id": history_id}, {"$set": update_data})
+    if isinstance(update_data['created_at'], str):
+        update_data['created_at'] = datetime.fromisoformat(update_data['created_at'])
+    return MedicalHistoryGinecologia(**update_data)
+
+
+# ========== ECOGRAFÍA ==========
+
+@api_router.post("/medical-history/ecografia", response_model=MedicalHistoryEcografia)
+async def create_ecografia_history(
+    input: MedicalHistoryEcografiaCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.medical_history_ecografia.find_one({"appointment_id": input.appointment_id}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Ya existe historia clínica para esta cita")
+
+    history = MedicalHistoryEcografia(**input.model_dump())
+    doc = history.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.medical_history_ecografia.insert_one(doc)
+
+    fin_id = await crear_consulta_financiera_automatica(
+        input.appointment_id, input.paciente_cedula, input.paciente_nombre,
+        input.doctor_id, "Ecografía", current_user.username
+    )
+    if fin_id:
+        await db.medical_history_ecografia.update_one({"id": history.id}, {"$set": {"consulta_financiera_id": fin_id}})
+
+    return history
+
+
+@api_router.get("/medical-history/ecografia/appointment/{appointment_id}", response_model=MedicalHistoryEcografia)
+async def get_ecografia_history_by_appointment(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    history = await db.medical_history_ecografia.find_one({"appointment_id": appointment_id}, {"_id": 0})
+    if not history:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    if isinstance(history.get('created_at'), str):
+        history['created_at'] = datetime.fromisoformat(history['created_at'])
+    return MedicalHistoryEcografia(**history)
+
+
+@api_router.get("/medical-history/ecografia/paciente/{cedula}", response_model=List[MedicalHistoryEcografia])
+async def get_ecografia_histories_by_paciente(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    histories = await db.medical_history_ecografia.find(
+        {"paciente_cedula": cedula}, {"_id": 0}
+    ).sort("fecha", -1).to_list(100)
+    for h in histories:
+        if isinstance(h.get('created_at'), str):
+            h['created_at'] = datetime.fromisoformat(h['created_at'])
+    return histories
+
+
+@api_router.put("/medical-history/ecografia/{history_id}", response_model=MedicalHistoryEcografia)
+async def update_ecografia_history(
+    history_id: str,
+    input: MedicalHistoryEcografiaCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    existing = await db.medical_history_ecografia.find_one({"id": history_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Historia no encontrada")
+    update_data = input.model_dump()
+    update_data['id'] = history_id
+    update_data['created_at'] = existing.get('created_at')
+    await db.medical_history_ecografia.update_one({"id": history_id}, {"$set": update_data})
+    if isinstance(update_data['created_at'], str):
+        update_data['created_at'] = datetime.fromisoformat(update_data['created_at'])
+    return MedicalHistoryEcografia(**update_data)
+
+
+# ========== HISTORIAL CLÍNICO UNIFICADO POR PACIENTE ==========
+
+@api_router.get("/historial-paciente/{cedula}")
+async def get_historial_paciente(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Retorna TODO el historial clínico de un paciente por cédula,
+    de todas las especialidades, ordenado por fecha descendente.
+    Usado por el panel lateral de historial.
+    """
+    historial = []
+
+    collections_map = [
+        ("medical_history_general", "Medicina General"),
+        ("medical_history_pediatric", "Pediatría"),
+        ("medical_history_odontology", "Odontología"),
+        ("medical_history_nutricion", "Nutrición"),
+        ("medical_history_ginecologia", "Ginecología"),
+        ("medical_history_ecografia", "Ecografía"),
+    ]
+
+    for collection_name, especialidad in collections_map:
+        collection = getattr(db, collection_name)
+        docs = await collection.find({"paciente_cedula": cedula}, {"_id": 0}).to_list(200)
+        for doc in docs:
+            historial.append({
+                "id": doc.get("id"),
+                "especialidad": especialidad,
+                "fecha": doc.get("fecha", ""),
+                "motivo_consulta": doc.get("motivo_consulta", doc.get("conclusion", "")),
+                "diagnostico": doc.get("diagnostico_texto", doc.get("diagnostico", "")),
+                "cie10_codigo": doc.get("cie10_codigo", ""),
+                "cie10_descripcion": doc.get("cie10_descripcion", ""),
+                "doctor_nombre": doc.get("doctor_nombre", ""),
+                "appointment_id": doc.get("appointment_id", ""),
+                "created_at": doc.get("created_at", ""),
+            })
+
+    historial.sort(key=lambda x: x.get("fecha", ""), reverse=True)
+    return historial
+
+
+# ========== CIE-10 BÚSQUEDA ==========
+
+CIE10_COMUNES = [
+    {"codigo": "J06.9", "descripcion": "Infección aguda de las vías respiratorias superiores, no especificada"},
+    {"codigo": "J00", "descripcion": "Rinofaringitis aguda (resfriado común)"},
+    {"codigo": "J03.9", "descripcion": "Amigdalitis aguda, no especificada"},
+    {"codigo": "J18.9", "descripcion": "Neumonía, no especificada"},
+    {"codigo": "A09", "descripcion": "Diarrea y gastroenteritis de presunto origen infeccioso"},
+    {"codigo": "K21.0", "descripcion": "Enfermedad por reflujo gastroesofágico con esofagitis"},
+    {"codigo": "K29.7", "descripcion": "Gastritis, no especificada"},
+    {"codigo": "N39.0", "descripcion": "Infección de vías urinarias, sitio no especificado"},
+    {"codigo": "I10", "descripcion": "Hipertensión esencial (primaria)"},
+    {"codigo": "E11.9", "descripcion": "Diabetes mellitus tipo 2, sin complicaciones"},
+    {"codigo": "E66.9", "descripcion": "Obesidad, no especificada"},
+    {"codigo": "E63.9", "descripcion": "Deficiencia nutricional, no especificada"},
+    {"codigo": "F32.9", "descripcion": "Episodio depresivo, no especificado"},
+    {"codigo": "F41.1", "descripcion": "Trastorno de ansiedad generalizada"},
+    {"codigo": "M54.5", "descripcion": "Lumbago no especificado"},
+    {"codigo": "M54.2", "descripcion": "Cervicalgia"},
+    {"codigo": "R51", "descripcion": "Cefalea"},
+    {"codigo": "R05", "descripcion": "Tos"},
+    {"codigo": "R50.9", "descripcion": "Fiebre, no especificada"},
+    {"codigo": "Z34.0", "descripcion": "Supervisión de embarazo normal, primigesta"},
+    {"codigo": "Z34.9", "descripcion": "Supervisión de embarazo normal, no especificado"},
+    {"codigo": "O80", "descripcion": "Parto único espontáneo"},
+    {"codigo": "N76.0", "descripcion": "Vaginitis aguda"},
+    {"codigo": "N91.2", "descripcion": "Amenorrea, no especificada"},
+    {"codigo": "K08.1", "descripcion": "Pérdida de dientes debida a accidente, extracción o enfermedad periodontal local"},
+    {"codigo": "K02.9", "descripcion": "Caries dental, no especificada"},
+    {"codigo": "K05.1", "descripcion": "Gingivitis crónica"},
+    {"codigo": "P00-P96", "descripcion": "Ciertas afecciones originadas en el período perinatal"},
+    {"codigo": "Z00.1", "descripcion": "Examen de control de salud del niño"},
+    {"codigo": "J45.9", "descripcion": "Asma, no especificada"},
+]
+
+@api_router.get("/cie10/buscar")
+async def buscar_cie10(
+    q: str = "",
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Busca códigos CIE-10. Si no hay query retorna los más comunes."""
+    if not q or len(q) < 2:
+        return CIE10_COMUNES[:20]
+
+    q_lower = q.lower()
+    resultados = [
+        item for item in CIE10_COMUNES
+        if q_lower in item["codigo"].lower() or q_lower in item["descripcion"].lower()
+    ]
+    return resultados[:15]
+
+
 # ========== PRESCRIPTION ENDPOINTS ==========
 # Sistema TRANSVERSAL de recetas para todas las especialidades
 
@@ -904,6 +1428,25 @@ async def download_prescription_pdf(
             "Content-Disposition": f"attachment; filename=receta_{prescription['paciente_cedula']}_{prescription['fecha']}.pdf"
         }
     )
+
+
+@api_router.post("/certificado/pdf")
+async def generate_certificado(
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Genera un certificado médico en PDF con branding Family Health"""
+    try:
+        pdf_buffer = generate_certificado_pdf(data)
+        from fastapi.responses import StreamingResponse
+        nombre = data.get('paciente_cedula', 'paciente')
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=certificado_{nombre}.pdf"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando certificado: {str(e)}")
 
 
 # ========== EXISTING ENDPOINTS (from Phase 2) ==========
