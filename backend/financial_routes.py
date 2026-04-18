@@ -6,9 +6,14 @@ from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
+from pathlib import Path
 import os
 import io
 import uuid
+
+# Cargar variables de entorno
+load_dotenv()
 
 from financial_models import (
     Paciente, PacienteCreate, PacienteUpdate,
@@ -27,8 +32,10 @@ financial_router = APIRouter(prefix="/financial", tags=["Financial"])
 # MongoDB Atlas Connection (same as server.py)
 MONGO_URL = os.environ.get('MONGODB_URI', os.environ.get('MONGO_URL', 'mongodb://localhost:27017'))
 DB_NAME = os.environ.get('DB_NAME', 'family_health_db')
-client = AsyncIOMotorClient(MONGO_URL)
+client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
 db = client[DB_NAME]
+
+print(f"🔗 financial_routes.py conectado a MongoDB: {DB_NAME}")
 
 
 # ========== FUNCIÓN HELPER: UNIFICACIÓN DE PACIENTES ==========
