@@ -379,8 +379,17 @@ function App() {
             </div>
           </div>
           <div className="user-section">
-            <span className="user-name">{user.nombre_completo}</span>
-            <span className="user-role">{user.role}</span>
+            <div style={{ textAlign:"right" }}>
+              <div className="user-name">{user.nombre_completo || user.nombre || user.username}</div>
+              <div style={{ display:"flex", gap:"6px", justifyContent:"flex-end", marginTop:"2px" }}>
+                {user.especialidad && (
+                  <span style={{ background:"rgba(255,255,255,0.2)", color:"white", borderRadius:"10px", padding:"1px 8px", fontSize:"11px" }}>
+                    {user.especialidad}
+                  </span>
+                )}
+                <span className="user-role">{user.role}</span>
+              </div>
+            </div>
             <Button variant="ghost" onClick={handleLogout} className="logout-button">
               <LogOut className="button-icon" />
               Salir

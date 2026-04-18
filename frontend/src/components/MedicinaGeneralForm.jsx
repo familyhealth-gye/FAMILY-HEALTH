@@ -7,6 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import axios from "axios";
 import { AntecedentesPanel } from "./AntecedentesPanel";
+import { CIE10Selector } from "./CIE10Selector";
+import { MedicacionRapida } from "./MedicacionRapida";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -16,701 +18,325 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
   const [loadingData, setLoadingData] = useState(true);
   const [existingHistory, setExistingHistory] = useState(null);
   const [form, setForm] = useState({
-    motivo_consulta: "",
-    enfermedad_actual: "",
+    motivo_consulta: "", enfermedad_actual: "",
     antecedentes_familiares: "",
-    padre_vivo: true,
-    padre_causa_muerte: "",
-    madre_vivo: true,
-    madre_causa_muerte: "",
+    padre_vivo: true, padre_causa_muerte: "",
+    madre_vivo: true, madre_causa_muerte: "",
     hermanos_vivos: 0,
-    ant_hta: false,
-    ant_diabetes: false,
-    ant_tbc: false,
-    ant_cancer: false,
-    ant_hepatopatias: false,
-    ant_nefropatias: false,
-    ant_mentales: false,
-    ant_endocrinas: false,
-    ant_epilepsia: false,
-    ant_asma: false,
-    ant_hematologicas: false,
-    otras_patologias: "",
-    alergias: "",
-    quirurgicos: "",
-    traumatismos: "",
-    hospitalizaciones: "",
-    transfusiones: false,
-    tabaco: "",
-    alcohol: "",
-    drogas: "",
-    sueno: "",
-    apetito: "",
-    defecacion: "",
-    micciones: "",
-    menarquia: null,
-    menopausia: null,
-    partos: null,
-    abortos: null,
-    cesareas: null,
-    metodo_anticonceptivo: "",
+    ant_hta: false, ant_diabetes: false, ant_tbc: false, ant_cancer: false,
+    ant_hepatopatias: false, ant_nefropatias: false, ant_mentales: false,
+    ant_endocrinas: false, ant_epilepsia: false, ant_asma: false, ant_hematologicas: false,
+    otras_patologias: "", alergias: "", quirurgicos: "",
+    traumatismos: "", hospitalizaciones: "", transfusiones: false,
+    tabaco: "", alcohol: "", drogas: "",
     signos_vitales: {
-      peso: null,
-      talla: null,
-      temperatura: null,
-      presion_arterial: "",
-      frecuencia_cardiaca: null,
-      frecuencia_respiratoria: null,
-      saturacion_oxigeno: null
+      peso: null, talla: null, temperatura: null,
+      presion_arterial: "", frecuencia_cardiaca: null,
+      frecuencia_respiratoria: null, saturacion_oxigeno: null
     },
-    impresion_general: "",
-    piel: "",
-    cabeza: "",
-    orl: "",
-    cuello: "",
-    torax: "",
-    cardiovascular: "",
-    pulmonar: "",
-    abdomen: "",
-    extremidades: "",
-    neurologico: "",
-    laboratorios: "",
-    diagnostico: "",
-    cie10_codigo: "",
-    medicamentos: [{nombre: '', dosis: '', frecuencia: '', duracion: '', indicaciones: ''}],
-    indicaciones_generales: "",
-    observaciones: ""
+    impresion_general: "", piel: "", cabeza: "", orl: "", cuello: "",
+    torax: "", cardiovascular: "", pulmonar: "", abdomen: "",
+    extremidades: "", neurologico: "", laboratorios: "",
+    diagnostico: "", cie10_codigo: "", cie10_descripcion: "",
+    medicamentos: [],
+    indicaciones_generales: "", precauciones: "", observaciones: ""
   });
 
-  // Cargar historia clínica existente al montar
   useEffect(() => {
-    const loadExistingHistory = async () => {
-      if (!appointment?.id) {
-        setLoadingData(false);
-        return;
-      }
-      
+    const load = async () => {
+      if (!appointment?.id) { setLoadingData(false); return; }
       try {
-        const response = await axios.get(
+        const res = await axios.get(
           `${API}/medical-history/general/appointment/${appointment.id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        
-        if (response.data) {
-          console.log("=== HISTORIA EXISTENTE CARGADA ===", response.data);
-          setExistingHistory(response.data);
-          
-          // Cargar datos en el formulario
-          const history = response.data;
-          setForm(prevForm => ({
-            ...prevForm,
-            motivo_consulta: history.motivo_consulta || "",
-            enfermedad_actual: history.enfermedad_actual || "",
-            antecedentes_familiares: history.antecedentes_familiares || "",
-            alergias: history.alergias || "",
-            quirurgicos: history.quirurgicos || "",
-            traumatismos: history.traumatismos || "",
-            hospitalizaciones: history.hospitalizaciones || "",
-            tabaco: history.tabaco || "",
-            alcohol: history.alcohol || "",
-            drogas: history.drogas || "",
-            signos_vitales: history.signos_vitales || prevForm.signos_vitales,
-            impresion_general: history.impresion_general || "",
-            piel: history.piel || "",
-            cabeza: history.cabeza || "",
-            orl: history.orl || "",
-            cuello: history.cuello || "",
-            torax: history.torax || "",
-            cardiovascular: history.cardiovascular || "",
-            pulmonar: history.pulmonar || "",
-            abdomen: history.abdomen || "",
-            extremidades: history.extremidades || "",
-            neurologico: history.neurologico || "",
-            laboratorios: history.laboratorios || "",
-            diagnostico: history.diagnostico || "",
-            cie10_codigo: history.cie10_codigo || "",
-            plan_tratamiento: history.plan_tratamiento || "",
-            observaciones: history.observaciones || ""
+        if (res.data) {
+          setExistingHistory(res.data);
+          const h = res.data;
+          setForm(f => ({
+            ...f,
+            motivo_consulta: h.motivo_consulta || "",
+            enfermedad_actual: h.enfermedad_actual || "",
+            antecedentes_familiares: h.antecedentes_familiares || "",
+            padre_vivo: h.padre_vivo !== undefined ? h.padre_vivo : true,
+            padre_causa_muerte: h.padre_causa_muerte || "",
+            madre_vivo: h.madre_vivo !== undefined ? h.madre_vivo : true,
+            madre_causa_muerte: h.madre_causa_muerte || "",
+            hermanos_vivos: h.hermanos_vivos || 0,
+            ant_hta: h.ant_hta || false, ant_diabetes: h.ant_diabetes || false,
+            ant_tbc: h.ant_tbc || false, ant_cancer: h.ant_cancer || false,
+            ant_hepatopatias: h.ant_hepatopatias || false,
+            ant_nefropatias: h.ant_nefropatias || false,
+            ant_mentales: h.ant_mentales || false,
+            ant_endocrinas: h.ant_endocrinas || false,
+            ant_epilepsia: h.ant_epilepsia || false, ant_asma: h.ant_asma || false,
+            ant_hematologicas: h.ant_hematologicas || false,
+            otras_patologias: h.otras_patologias || "",
+            alergias: h.alergias || "", quirurgicos: h.quirurgicos || "",
+            traumatismos: h.traumatismos || "", hospitalizaciones: h.hospitalizaciones || "",
+            transfusiones: h.transfusiones || false, tabaco: h.tabaco || "",
+            alcohol: h.alcohol || "", drogas: h.drogas || "",
+            signos_vitales: h.signos_vitales || f.signos_vitales,
+            impresion_general: h.impresion_general || "", piel: h.piel || "",
+            cabeza: h.cabeza || "", orl: h.orl || "", cuello: h.cuello || "",
+            torax: h.torax || "", cardiovascular: h.cardiovascular || "",
+            pulmonar: h.pulmonar || "", abdomen: h.abdomen || "",
+            extremidades: h.extremidades || "", neurologico: h.neurologico || "",
+            laboratorios: h.laboratorios || "",
+            diagnostico: h.diagnostico || "",
+            cie10_codigo: h.cie10_codigo || "", cie10_descripcion: h.cie10_descripcion || "",
+            medicamentos: [],
+            indicaciones_generales: h.indicaciones_generales || "",
+            precauciones: h.precauciones || "",
+            observaciones: h.observaciones || "",
           }));
-          
-          toast.info("Historia clínica cargada - puede continuar editando");
+          toast.info("Consulta anterior cargada — puede continuar editando");
         }
-      } catch (error) {
-        // 404 significa que no existe historia, es normal
-        if (error.response?.status !== 404) {
-          console.error("Error cargando historia:", error);
-        }
+      } catch (e) {
+        if (e.response?.status !== 404) console.error(e);
+        else toast.success("Nueva consulta — formulario listo");
       }
       setLoadingData(false);
     };
-    
-    loadExistingHistory();
+    load();
   }, [appointment?.id, token]);
+
+  const setSV = (k, v) => setForm(f => ({ ...f, signos_vitales: { ...f.signos_vitales, [k]: v } }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validaciones frontend - solo campos esenciales
-    if (!form.motivo_consulta.trim()) {
-      toast.error("El motivo de consulta es obligatorio");
-      return;
-    }
-    if (!form.enfermedad_actual.trim()) {
-      toast.error("La enfermedad actual es obligatoria");
-      return;
-    }
-    if (!form.diagnostico.trim()) {
-      toast.error("El diagnóstico es obligatorio");
-      return;
-    }
-    
+    if (!form.motivo_consulta.trim()) { toast.error("El motivo de consulta es obligatorio"); return; }
+    if (!form.diagnostico.trim() && !form.cie10_codigo) { toast.error("El diagnóstico es obligatorio"); return; }
     setLoading(true);
-    let consultaCerrada = false;
-
     try {
-      // 1. Guardar o actualizar historia clínica
-      const historyData = { ...form, appointment_id: appointment.id };
-      delete historyData.medicamentos;
-      delete historyData.indicaciones_generales;
-      
-      const planTratamiento = form.medicamentos
-        .filter(m => m.nombre && m.nombre.trim())
-        .map((m, i) => `${i + 1}. ${m.nombre} ${m.dosis || ''} - ${m.frecuencia || ''} por ${m.duracion || ''}`)
-        .join('\n');
-      
-      historyData.plan_tratamiento = planTratamiento || "Sin medicamentos prescritos";
+      const payload = {
+        appointment_id: appointment.id,
+        ...form,
+        signos_vitales: {
+          peso: form.signos_vitales.peso ? parseFloat(form.signos_vitales.peso) : null,
+          talla: form.signos_vitales.talla ? parseFloat(form.signos_vitales.talla) : null,
+          temperatura: form.signos_vitales.temperatura ? parseFloat(form.signos_vitales.temperatura) : null,
+          presion_arterial: form.signos_vitales.presion_arterial || "",
+          frecuencia_cardiaca: form.signos_vitales.frecuencia_cardiaca ? parseInt(form.signos_vitales.frecuencia_cardiaca) : null,
+          frecuencia_respiratoria: form.signos_vitales.frecuencia_respiratoria ? parseInt(form.signos_vitales.frecuencia_respiratoria) : null,
+          saturacion_oxigeno: form.signos_vitales.saturacion_oxigeno ? parseFloat(form.signos_vitales.saturacion_oxigeno) : null,
+        },
+      };
+      // Quitar medicamentos del payload de historia (van a prescriptions)
+      delete payload.medicamentos;
 
-      console.log("=== GUARDANDO HISTORIA CLÍNICA ===");
-      console.log("Historia existente:", existingHistory ? "Sí (actualizar)" : "No (crear nueva)");
-      
       if (existingHistory) {
-        // ACTUALIZAR historia existente
-        await axios.put(
-          `${API}/medical-history/general/${existingHistory.id}`,
-          historyData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        toast.success("Historia clínica actualizada");
+        await axios.put(`${API}/medical-history/general/${existingHistory.id}`, payload,
+          { headers: { Authorization: `Bearer ${token}` } });
+        toast.success("Historia actualizada");
       } else {
-        // CREAR nueva historia
-        await axios.post(
-          `${API}/medical-history/general`,
-          historyData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        toast.success("Historia clínica guardada");
-      }
-      
-      consultaCerrada = true;
-      toast.success("Historia clínica guardada");
-
-      // 2. Crear receta SOLO si hay medicamentos (opcional)
-      const medicamentosFiltrados = form.medicamentos.filter(m => m.nombre && m.nombre.trim());
-      
-      if (medicamentosFiltrados.length > 0) {
-        try {
-          const prescriptionData = {
-            paciente_id: appointment.id,
-            appointment_id: appointment.id,
-            especialidad: "Medicina General",
-            doctor_id: appointment.doctor_id || "",
-            fecha: new Date().toISOString().split('T')[0],
-            diagnostico: form.diagnostico || "",
-            cie10_codigo: form.cie10_codigo || "",
-            cie10_descripcion: "",
-            medicamentos: medicamentosFiltrados.map(m => ({
-              nombre: m.nombre || "",
-              dosis: m.dosis || "",
-              frecuencia: m.frecuencia || "",
-              duracion: m.duracion || "",
-              via: m.via || "",
-              indicaciones: m.indicaciones || ""
-            })),
-            indicaciones_generales: form.indicaciones_generales || "",
-            observaciones: form.observaciones || ""
-          };
-
-          console.log("=== GUARDANDO RECETA MEDICINA GENERAL ===");
-          const prescriptionRes = await axios.post(
-            `${API}/prescriptions`,
-            prescriptionData,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-
-          toast.success("Receta guardada");
-
-          // 3. Intentar descargar PDF (opcional, no bloquea cierre)
-          try {
-            const pdfRes = await axios.get(
-              `${API}/prescriptions/${prescriptionRes.data.id}/pdf`,
-              { 
-                headers: { Authorization: `Bearer ${token}` },
-                responseType: 'blob'
-              }
-            );
-
-            const url = window.URL.createObjectURL(new Blob([pdfRes.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `receta_${appointment.cedula}_${new Date().toISOString().split('T')[0]}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
-          } catch (pdfError) {
-            console.warn("No se pudo descargar el PDF, pero la receta está guardada:", pdfError);
-            toast.info("Receta guardada. Puede descargarla después desde el historial del paciente.");
-          }
-        } catch (recetaError) {
-          console.error("Error al guardar receta:", recetaError);
-          toast.warning("Historia guardada. Error al crear receta: " + (recetaError.response?.data?.detail || "Error desconocido"));
-        }
+        await axios.post(`${API}/medical-history/general`, payload,
+          { headers: { Authorization: `Bearer ${token}` } });
+        toast.success("Historia guardada");
       }
 
-      // 4. Crear consulta financiera automáticamente
+      // Consulta financiera automática
       try {
-        // Obtener precio de consulta desde catálogo (si existe)
-        let precioConsulta = 25.00; // Precio por defecto Medicina General
-        try {
-          const catalogoRes = await axios.get(
-            `${API}/financial/catalogo?especialidad=Medicina General`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          const servicioConsulta = catalogoRes.data?.find(s => 
-            s.nombre.toLowerCase().includes('consulta')
-          );
-          if (servicioConsulta) {
-            precioConsulta = servicioConsulta.precio_base;
-          }
-        } catch (catError) {
-          console.warn("No se pudo obtener precio del catálogo, usando precio por defecto");
-        }
+        await axios.post(`${API}/financial/consultas/desde-cita/${appointment.id}`,
+          [{ servicio: "Consulta Medicina General", descripcion: form.diagnostico || "Consulta médica", precio_unitario: 15, cantidad: 1 }],
+          { headers: { Authorization: `Bearer ${token}` } });
+      } catch { /* ya existe */ }
 
-        await axios.post(
-          `${API}/financial/consultas/desde-cita/${appointment.id}`,
-          [{
-            servicio: "Consulta Medicina General",
-            descripcion: form.diagnostico || "Consulta médica",
-            precio_unitario: precioConsulta,
-            cantidad: 1
-          }],
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log("✅ Consulta financiera creada");
-      } catch (finError) {
-        // No bloquear el cierre si falla la creación financiera
-        console.warn("No se pudo crear consulta financiera:", finError);
-        if (finError.response?.status !== 400) { // 400 = ya existe
-          toast.warning("Historia guardada. Consulta financiera pendiente de crear manualmente.");
-        }
+      // Receta si hay medicamentos
+      const meds = form.medicamentos.filter(m => m.nombre?.trim());
+      if (meds.length > 0) {
+        try {
+          await axios.post(`${API}/prescriptions`, {
+            appointment_id: appointment.id,
+            paciente_cedula: appointment.cedula,
+            diagnostico: form.diagnostico,
+            cie10_codigo: form.cie10_codigo,
+            indicaciones_generales: form.indicaciones_generales,
+            precauciones: form.precauciones,
+            medicamentos: meds,
+            especialidad: "Medicina General",
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          toast.success("Receta creada");
+        } catch { toast.warning("Historia guardada. Error al crear receta."); }
       }
 
-      // Éxito final
-      toast.success("Consulta cerrada exitosamente");
-      onSuccess();
-      onClose();
-    } catch (error) {
-      console.error("=== ERROR ===");
-      console.error("Error completo:", error);
-      console.error("Response:", error.response?.data);
-      
-      const errorMsg = error.response?.data?.detail || 
-                       (typeof error.response?.data === 'string' ? error.response.data : null) ||
-                       "Error al guardar la historia clínica";
-      toast.error(errorMsg);
+      onSuccess(); onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Error al guardar la historia clínica");
     }
     setLoading(false);
   };
 
+  if (loadingData) return <div style={{ textAlign:"center", padding:"40px", color:"#00a8cc" }}>Cargando historia clínica...</div>;
+
+  const S = {
+    sec: { background:"#00a8cc", color:"white", fontWeight:"700", fontSize:"12px", padding:"6px 14px", borderRadius:"6px", marginBottom:"10px", marginTop:"16px" },
+    g2: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" },
+    g3: { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px" },
+    g4: { display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:"8px" },
+    f: { display:"flex", flexDirection:"column", gap:"3px" },
+    l: { fontSize:"12px", color:"#005f73", fontWeight:"600" },
+    i: { fontSize:"13px", height:"34px", borderColor:"#b2ebf2" },
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="medical-history-form">
-      {/* ALERTAS DE ANTECEDENTES — siempre visible */}
-      <div style={{ marginBottom: "12px" }}>
-        <AntecedentesPanel
-          cedula={appointment.cedula}
-          token={token}
-          especialidad="Medicina General"
-          onLoad={ant => {
-            if (ant.tiene_antecedentes) {
-              setForm(f => ({
-                ...f,
-                ant_hta: ant.hipertension || f.ant_hta,
-                ant_diabetes: ant.diabetes || f.ant_diabetes,
-                alergias: ant.alergias_medicamentos || ant.alergias || f.alergias,
-                medicamentos_actuales: ant.medicamentos_actuales || f.medicamentos_actuales || "",
-                antecedentes_familiares: ant.ant_familiares || f.antecedentes_familiares,
-              }));
-            }
-          }}
-          onChange={ant => setForm(f => ({
-            ...f,
-            ant_hta: ant.hipertension || f.ant_hta,
-            ant_diabetes: ant.diabetes || f.ant_diabetes,
-            alergias: ant.alergias_medicamentos || ant.alergias || f.alergias,
-          }))}
+    <form onSubmit={handleSubmit} style={{ padding:"16px 20px", overflowY:"auto", height:"100%" }}>
+
+      {/* Encabezado */}
+      <div style={{ background:"linear-gradient(135deg,#00a8cc,#005f73)", borderRadius:"10px", padding:"14px 18px", marginBottom:"16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div>
+          <h2 style={{ color:"white", margin:0, fontSize:"16px", fontWeight:"700" }}>🩺 Historia Clínica — Medicina General</h2>
+          <p style={{ color:"rgba(255,255,255,0.8)", margin:"2px 0 0", fontSize:"13px" }}>{appointment.nombre_completo} · {appointment.cedula}</p>
+        </div>
+        {existingHistory && <span style={{ background:"rgba(255,255,255,0.2)", color:"white", borderRadius:"6px", padding:"4px 10px", fontSize:"12px" }}>✏️ Editando</span>}
+      </div>
+
+      {/* ALERTAS — solo banner, sin formulario editable aquí */}
+      <AntecedentesPanel
+        cedula={appointment.cedula}
+        token={token}
+        especialidad="Medicina General"
+        onLoad={ant => {
+          if (ant.tiene_antecedentes) {
+            setForm(f => ({
+              ...f,
+              ant_hta: ant.hipertension || f.ant_hta,
+              ant_diabetes: ant.diabetes || f.ant_diabetes,
+              ant_epilepsia: ant.epilepsia || f.ant_epilepsia,
+              alergias: ant.alergias_medicamentos || ant.alergias || f.alergias,
+              antecedentes_familiares: ant.ant_familiares || f.antecedentes_familiares,
+            }));
+          }
+        }}
+        onChange={() => {}}
+      />
+
+      {/* MOTIVO */}
+      <div style={S.sec}>📝 MOTIVO DE CONSULTA</div>
+      <div style={{ ...S.g2, marginBottom:"10px" }}>
+        <div style={{ ...S.f, gridColumn:"1/-1" }}>
+          <Label style={S.l}>Motivo de consulta *</Label>
+          <Textarea value={form.motivo_consulta} onChange={e=>setForm(f=>({...f,motivo_consulta:e.target.value}))} rows={2} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} required />
+        </div>
+        <div style={{ ...S.f, gridColumn:"1/-1" }}>
+          <Label style={S.l}>Enfermedad actual *</Label>
+          <Textarea value={form.enfermedad_actual} onChange={e=>setForm(f=>({...f,enfermedad_actual:e.target.value}))} rows={3} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} required />
+        </div>
+      </div>
+
+      {/* ANTECEDENTES — aquí sí el formulario completo */}
+      <div style={S.sec}>📂 ANTECEDENTES</div>
+      <div style={{ background:"#f0fbff", borderRadius:"8px", padding:"12px", marginBottom:"10px" }}>
+        <div style={{ ...S.g3, marginBottom:"10px" }}>
+          <div style={S.f}>
+            <Label style={S.l}>Antecedentes familiares</Label>
+            <Textarea value={form.antecedentes_familiares} onChange={e=>setForm(f=>({...f,antecedentes_familiares:e.target.value}))} rows={2} style={{ fontSize:"12px" }} />
+          </div>
+          <div style={S.f}>
+            <Label style={S.l}>Quirúrgicos</Label>
+            <Textarea value={form.quirurgicos} onChange={e=>setForm(f=>({...f,quirurgicos:e.target.value}))} rows={2} style={{ fontSize:"12px" }} />
+          </div>
+          <div style={S.f}>
+            <Label style={S.l}>Alergias *</Label>
+            <Input value={form.alergias} onChange={e=>setForm(f=>({...f,alergias:e.target.value}))} style={{ ...S.i, borderColor: form.alergias ? "#f87171" : "#b2ebf2", background: form.alergias ? "#fff5f5" : "white" }} placeholder="Ninguna conocida" />
+          </div>
+        </div>
+        <p style={{ fontSize:"12px", fontWeight:"700", color:"#005f73", marginBottom:"6px" }}>Patologías:</p>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:"10px", marginBottom:"8px" }}>
+          {[["ant_hta","HTA"],["ant_diabetes","Diabetes"],["ant_tbc","TBC"],["ant_cancer","Cáncer"],
+            ["ant_hepatopatias","Hepatopatías"],["ant_nefropatias","Nefropatías"],
+            ["ant_epilepsia","Epilepsia"],["ant_asma","Asma"],["ant_mentales","Mentales"]
+          ].map(([k,l]) => (
+            <label key={k} style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"12px", cursor:"pointer", color: form[k] ? "#dc2626" : "#374151", fontWeight: form[k] ? "700" : "normal" }}>
+              <Checkbox checked={form[k]} onCheckedChange={v=>setForm(f=>({...f,[k]:v}))} />{l}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* SIGNOS VITALES */}
+      <div style={S.sec}>💓 SIGNOS VITALES</div>
+      <div style={{ ...S.g4, marginBottom:"10px" }}>
+        {[["peso","Peso","kg"],["talla","Talla","cm"],["temperatura","Temp.","°C"],
+          ["presion_arterial","P. Arterial",""],["frecuencia_cardiaca","Frec. Cardíaca","lpm"],
+          ["frecuencia_respiratoria","Frec. Resp.","rpm"],["saturacion_oxigeno","SatO2","%"]
+        ].map(([k,l,u]) => (
+          <div key={k} style={S.f}>
+            <Label style={{ ...S.l, fontSize:"11px" }}>{l}</Label>
+            <Input type={u===""?"text":"number"} step="0.1"
+              value={form.signos_vitales[k] || ""}
+              onChange={e=>setSV(k, e.target.value)}
+              style={{ ...S.i, fontSize:"12px" }} />
+            {u && <span style={{ fontSize:"10px", color:"#999" }}>{u}</span>}
+          </div>
+        ))}
+      </div>
+
+      {/* EXAMEN FÍSICO */}
+      <div style={S.sec}>🔍 EXAMEN FÍSICO</div>
+      <div style={{ ...S.g3, marginBottom:"10px" }}>
+        {[["impresion_general","Impresión general"],["piel","Piel / Mucosas"],["cabeza","Cabeza"],
+          ["orl","ORL"],["cuello","Cuello"],["torax","Tórax"],
+          ["cardiovascular","Cardiovascular"],["pulmonar","Pulmonar"],["abdomen","Abdomen"],
+          ["extremidades","Extremidades"],["neurologico","Neurológico"],
+        ].map(([k,l]) => (
+          <div key={k} style={S.f}>
+            <Label style={{ ...S.l, fontSize:"11px" }}>{l}</Label>
+            <Input value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={{ ...S.i, fontSize:"12px" }} />
+          </div>
+        ))}
+        <div style={{ ...S.f, gridColumn:"1/-1" }}>
+          <Label style={S.l}>Laboratorios / Exámenes</Label>
+          <Textarea value={form.laboratorios} onChange={e=>setForm(f=>({...f,laboratorios:e.target.value}))} rows={2} style={{ fontSize:"13px" }} />
+        </div>
+      </div>
+
+      {/* DIAGNÓSTICO */}
+      <div style={S.sec}>🩺 DIAGNÓSTICO</div>
+      <div style={{ marginBottom:"10px" }}>
+        <CIE10Selector token={token}
+          value={{ codigo:form.cie10_codigo, descripcion:form.cie10_descripcion }}
+          onChange={({codigo,descripcion})=>setForm(f=>({...f,cie10_codigo:codigo,cie10_descripcion:descripcion}))}
         />
-      </div>
-
-      <div className="form-section">
-        <h3 className="section-title-small">Motivo de Consulta</h3>
-        <div className="form-grid">
-          <div className="form-field full-width">
-            <Label>Motivo de Consulta *</Label>
-            <Textarea
-              value={form.motivo_consulta}
-              onChange={(e) => setForm({...form, motivo_consulta: e.target.value})}
-              required
-              rows={2}
-            />
-          </div>
-          <div className="form-field full-width">
-            <Label>Enfermedad Actual *</Label>
-            <Textarea
-              value={form.enfermedad_actual}
-              onChange={(e) => setForm({...form, enfermedad_actual: e.target.value})}
-              required
-              rows={3}
-            />
-          </div>
+        <div style={{ marginTop:"8px" }}>
+          <Label style={S.l}>Diagnóstico clínico *</Label>
+          <Textarea value={form.diagnostico} onChange={e=>setForm(f=>({...f,diagnostico:e.target.value}))}
+            rows={2} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} required />
         </div>
       </div>
 
-      <div className="form-section">
-        <h3 className="section-title-small">Antecedentes Familiares</h3>
-        <div className="form-grid">
-          <div className="form-field">
-            <Label>Padre</Label>
-            <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
-              <Checkbox
-                checked={form.padre_vivo}
-                onCheckedChange={(checked) => setForm({...form, padre_vivo: checked})}
-              />
-              <span>Vivo</span>
-            </div>
-          </div>
-          {!form.padre_vivo && (
-            <div className="form-field">
-              <Label>Causa de muerte</Label>
-              <Input
-                value={form.padre_causa_muerte}
-                onChange={(e) => setForm({...form, padre_causa_muerte: e.target.value})}
-              />
-            </div>
-          )}
-          <div className="form-field">
-            <Label>Madre</Label>
-            <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
-              <Checkbox
-                checked={form.madre_vivo}
-                onCheckedChange={(checked) => setForm({...form, madre_vivo: checked})}
-              />
-              <span>Viva</span>
-            </div>
-          </div>
-          {!form.madre_vivo && (
-            <div className="form-field">
-              <Label>Causa de muerte</Label>
-              <Input
-                value={form.madre_causa_muerte}
-                onChange={(e) => setForm({...form, madre_causa_muerte: e.target.value})}
-              />
-            </div>
-          )}
-          <div className="form-field">
-            <Label>Hermanos Vivos</Label>
-            <Input
-              type="number"
-              value={form.hermanos_vivos || ""}
-              onChange={(e) => setForm({...form, hermanos_vivos: parseInt(e.target.value) || 0})}
-            />
-          </div>
-          <div className="form-field full-width">
-            <Label>Otros Antecedentes Familiares</Label>
-            <Textarea
-              value={form.antecedentes_familiares}
-              onChange={(e) => setForm({...form, antecedentes_familiares: e.target.value})}
-              rows={2}
-            />
-          </div>
+      {/* RECETA — opcional */}
+      <div style={{ marginBottom:"10px" }}>
+        <MedicacionRapida especialidad="Medicina General"
+          medicamentos={form.medicamentos}
+          onChange={meds=>setForm(f=>({...f,medicamentos:meds}))} />
+      </div>
+
+      {/* INDICACIONES Y PRECAUCIONES */}
+      <div style={S.sec}>📋 INDICACIONES / PRECAUCIONES</div>
+      <div style={{ ...S.g2, marginBottom:"10px" }}>
+        <div style={S.f}>
+          <Label style={S.l}>Indicaciones generales</Label>
+          <Textarea value={form.indicaciones_generales} onChange={e=>setForm(f=>({...f,indicaciones_generales:e.target.value}))}
+            rows={3} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} />
+        </div>
+        <div style={S.f}>
+          <Label style={S.l}>Precauciones</Label>
+          <Textarea value={form.precauciones} onChange={e=>setForm(f=>({...f,precauciones:e.target.value}))}
+            placeholder="Ej: Reposo, no conducir, evitar..." rows={3} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} />
+        </div>
+        <div style={{ ...S.f, gridColumn:"1/-1" }}>
+          <Label style={S.l}>Observaciones</Label>
+          <Textarea value={form.observaciones} onChange={e=>setForm(f=>({...f,observaciones:e.target.value}))}
+            rows={2} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} />
         </div>
       </div>
 
-      <div className="form-section">
-        <h3 className="section-title-small">Antecedentes Patológicos</h3>
-        <div className="checkboxes-grid">
-          {[
-            {key: 'ant_hta', label: 'Hipertensión'},
-            {key: 'ant_diabetes', label: 'Diabetes'},
-            {key: 'ant_tbc', label: 'TBC'},
-            {key: 'ant_cancer', label: 'Cáncer'},
-            {key: 'ant_hepatopatias', label: 'Hepatopatías'},
-            {key: 'ant_nefropatias', label: 'Nefropatías'},
-            {key: 'ant_mentales', label: 'Enf. Mentales'},
-            {key: 'ant_endocrinas', label: 'Endocrinas'},
-            {key: 'ant_epilepsia', label: 'Epilepsia'},
-            {key: 'ant_asma', label: 'Asma'},
-            {key: 'ant_hematologicas', label: 'Hematológicas'}
-          ].map(item => (
-            <div key={item.key} className="checkbox-item">
-              <Checkbox
-                checked={form[item.key]}
-                onCheckedChange={(checked) => setForm({...form, [item.key]: checked})}
-              />
-              <Label>{item.label}</Label>
-            </div>
-          ))}
-        </div>
-        <div className="form-field full-width" style={{marginTop: '1rem'}}>
-          <Label>Otras Patologías</Label>
-          <Textarea
-            value={form.otras_patologias}
-            onChange={(e) => setForm({...form, otras_patologias: e.target.value})}
-            rows={2}
-          />
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3 className="section-title-small">Signos Vitales</h3>
-        <div className="form-grid">
-          <div className="form-field">
-            <Label>Peso (kg)</Label>
-            <Input
-              type="number"
-              step="0.1"
-              value={form.signos_vitales.peso || ""}
-              onChange={(e) => setForm({...form, signos_vitales: {...form.signos_vitales, peso: parseFloat(e.target.value)}})}
-            />
-          </div>
-          <div className="form-field">
-            <Label>Talla (cm)</Label>
-            <Input
-              type="number"
-              step="0.1"
-              value={form.signos_vitales.talla || ""}
-              onChange={(e) => setForm({...form, signos_vitales: {...form.signos_vitales, talla: parseFloat(e.target.value)}})}
-            />
-          </div>
-          <div className="form-field">
-            <Label>Temperatura (°C)</Label>
-            <Input
-              type="number"
-              step="0.1"
-              value={form.signos_vitales.temperatura || ""}
-              onChange={(e) => setForm({...form, signos_vitales: {...form.signos_vitales, temperatura: parseFloat(e.target.value)}})}
-            />
-          </div>
-          <div className="form-field">
-            <Label>Presión Arterial</Label>
-            <Input
-              placeholder="120/80"
-              value={form.signos_vitales.presion_arterial}
-              onChange={(e) => setForm({...form, signos_vitales: {...form.signos_vitales, presion_arterial: e.target.value}})}
-            />
-          </div>
-          <div className="form-field">
-            <Label>FC (lpm)</Label>
-            <Input
-              type="number"
-              value={form.signos_vitales.frecuencia_cardiaca || ""}
-              onChange={(e) => setForm({...form, signos_vitales: {...form.signos_vitales, frecuencia_cardiaca: parseInt(e.target.value)}})}
-            />
-          </div>
-          <div className="form-field">
-            <Label>FR (rpm)</Label>
-            <Input
-              type="number"
-              value={form.signos_vitales.frecuencia_respiratoria || ""}
-              onChange={(e) => setForm({...form, signos_vitales: {...form.signos_vitales, frecuencia_respiratoria: parseInt(e.target.value)}})}
-            />
-          </div>
-          <div className="form-field">
-            <Label>Sat O2 (%)</Label>
-            <Input
-              type="number"
-              step="0.1"
-              value={form.signos_vitales.saturacion_oxigeno || ""}
-              onChange={(e) => setForm({...form, signos_vitales: {...form.signos_vitales, saturacion_oxigeno: parseFloat(e.target.value)}})}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3 className="section-title-small">Examen Físico</h3>
-        <div className="form-grid">
-          <div className="form-field full-width">
-            <Label>Impresión General</Label>
-            <Textarea value={form.impresion_general} onChange={(e) => setForm({...form, impresion_general: e.target.value})} rows={2} />
-          </div>
-          {['piel', 'cabeza', 'orl', 'cuello', 'torax', 'cardiovascular', 'pulmonar', 'abdomen', 'extremidades', 'neurologico'].map(field => (
-            <div key={field} className="form-field full-width">
-              <Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Label>
-              <Input
-                value={form[field]}
-                onChange={(e) => setForm({...form, [field]: e.target.value})}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3 className="section-title-small">Diagnóstico</h3>
-        <div className="form-grid">
-          <div className="form-field full-width">
-            <Label>Diagnóstico *</Label>
-            <Textarea
-              value={form.diagnostico}
-              onChange={(e) => setForm({...form, diagnostico: e.target.value})}
-              required
-              rows={2}
-            />
-          </div>
-          <div className="form-field">
-            <Label>Código CIE-10</Label>
-            <Input
-              value={form.cie10_codigo}
-              onChange={(e) => setForm({...form, cie10_codigo: e.target.value})}
-              placeholder="Ej: J00"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3 className="section-title-small">Receta Médica</h3>
-        <div className="medications-list">
-          {form.medicamentos && form.medicamentos.map((med, index) => (
-            <div key={index} className="medication-item">
-              <div className="form-grid">
-                <div className="form-field">
-                  <Label>Medicamento {index + 1} *</Label>
-                  <Input
-                    value={med.nombre}
-                    onChange={(e) => {
-                      const newMeds = [...form.medicamentos];
-                      newMeds[index].nombre = e.target.value;
-                      setForm({...form, medicamentos: newMeds});
-                    }}
-                    placeholder="Ej: Paracetamol"
-                    required
-                  />
-                </div>
-                <div className="form-field">
-                  <Label>Dosis *</Label>
-                  <Input
-                    value={med.dosis}
-                    onChange={(e) => {
-                      const newMeds = [...form.medicamentos];
-                      newMeds[index].dosis = e.target.value;
-                      setForm({...form, medicamentos: newMeds});
-                    }}
-                    placeholder="Ej: 500mg"
-                    required
-                  />
-                </div>
-                <div className="form-field">
-                  <Label>Frecuencia *</Label>
-                  <Input
-                    value={med.frecuencia}
-                    onChange={(e) => {
-                      const newMeds = [...form.medicamentos];
-                      newMeds[index].frecuencia = e.target.value;
-                      setForm({...form, medicamentos: newMeds});
-                    }}
-                    placeholder="Ej: Cada 8 horas"
-                    required
-                  />
-                </div>
-                <div className="form-field">
-                  <Label>Duración *</Label>
-                  <Input
-                    value={med.duracion}
-                    onChange={(e) => {
-                      const newMeds = [...form.medicamentos];
-                      newMeds[index].duracion = e.target.value;
-                      setForm({...form, medicamentos: newMeds});
-                    }}
-                    placeholder="Ej: 7 días"
-                    required
-                  />
-                </div>
-                <div className="form-field full-width">
-                  <Label>Indicaciones</Label>
-                  <Input
-                    value={med.indicaciones}
-                    onChange={(e) => {
-                      const newMeds = [...form.medicamentos];
-                      newMeds[index].indicaciones = e.target.value;
-                      setForm({...form, medicamentos: newMeds});
-                    }}
-                    placeholder="Ej: Tomar después de las comidas"
-                  />
-                </div>
-              </div>
-              {form.medicamentos.length > 1 && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    const newMeds = form.medicamentos.filter((_, i) => i !== index);
-                    setForm({...form, medicamentos: newMeds});
-                  }}
-                  style={{marginTop: '0.5rem'}}
-                >
-                  Eliminar Medicamento
-                </Button>
-              )}
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setForm({
-                ...form,
-                medicamentos: [...form.medicamentos, {nombre: '', dosis: '', frecuencia: '', duracion: '', indicaciones: ''}]
-              });
-            }}
-            style={{marginTop: '1rem'}}
-          >
-            + Agregar Medicamento
-          </Button>
-        </div>
-        <div className="form-field full-width" style={{marginTop: '1rem'}}>
-          <Label>Indicaciones Generales</Label>
-          <Textarea
-            value={form.indicaciones_generales}
-            onChange={(e) => setForm({...form, indicaciones_generales: e.target.value})}
-            rows={2}
-            placeholder="Indicaciones generales para el paciente..."
-          />
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3 className="section-title-small">Observaciones Médicas</h3>
-        <div className="form-grid">
-          <div className="form-field full-width">
-            <Label>Observaciones</Label>
-            <Textarea
-              value={form.observaciones}
-              onChange={(e) => setForm({...form, observaciones: e.target.value})}
-              rows={3}
-              placeholder="Observaciones adicionales, recomendaciones, próxima cita..."
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="form-actions">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={loading}>
-          {loading ? "Guardando..." : "Terminar Consulta"}
+      {/* Botones */}
+      <div style={{ display:"flex", gap:"10px", justifyContent:"flex-end", paddingBottom:"20px" }}>
+        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
+        <Button type="submit" disabled={loading} style={{ background:"#00a8cc", color:"white" }}>
+          {loading ? "Guardando..." : existingHistory ? "Actualizar Consulta" : "Terminar Consulta"}
         </Button>
       </div>
     </form>

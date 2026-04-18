@@ -229,6 +229,28 @@ async def get_consultas_financieras(
     return consultas
 
 
+# ⚠️ IMPORTANTE: estas rutas específicas deben ir ANTES de /consultas/{consulta_id}
+# para que FastAPI no las confunda con el parámetro genérico
+
+@financial_router.get("/consultas/por-cita/{appointment_id}")
+async def get_consulta_por_cita(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtener consulta financiera por ID de cita — búsqueda directa y exacta"""
+    consulta = await db.consultas_financieras.find_one(
+        {"appointment_id": appointment_id}, {"_id": 0}
+    )
+    if not consulta:
+        raise HTTPException(status_code=404, detail="No existe consulta financiera para esta cita")
+    # Convertir fechas
+    if isinstance(consulta.get('created_at'), str):
+        consulta['created_at'] = datetime.fromisoformat(consulta['created_at'])
+    if isinstance(consulta.get('updated_at'), str):
+        consulta['updated_at'] = datetime.fromisoformat(consulta['updated_at'])
+    return consulta
+
+
 @financial_router.get("/consultas/{consulta_id}", response_model=ConsultaFinanciera)
 async def get_consulta_financiera(
     consulta_id: str,
@@ -484,39 +506,99 @@ async def create_catalogo_servicio(
 async def seed_catalogo_servicios(
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Poblar catálogo con servicios base"""
+    """Poblar/actualizar catálogo con precios reales de Family Health"""
+
     servicios_base = [
-        # Medicina General
-        {"codigo": "MG001", "nombre": "Consulta General", "especialidad": "Medicina General", "precio_base": 25.00},
-        {"codigo": "MG002", "nombre": "Control de Presión", "especialidad": "Medicina General", "precio_base": 15.00},
-        {"codigo": "MG003", "nombre": "Certificado Médico", "especialidad": "Medicina General", "precio_base": 20.00},
-        {"codigo": "MG004", "nombre": "Inyección Intramuscular", "especialidad": "Medicina General", "precio_base": 5.00},
-        {"codigo": "MG005", "nombre": "Curación Herida", "especialidad": "Medicina General", "precio_base": 15.00},
-        
-        # Odontología
-        {"codigo": "OD001", "nombre": "Consulta Odontológica", "especialidad": "Odontología", "precio_base": 25.00},
-        {"codigo": "OD002", "nombre": "Limpieza Dental", "especialidad": "Odontología", "precio_base": 35.00},
-        {"codigo": "OD003", "nombre": "Extracción Simple", "especialidad": "Odontología", "precio_base": 30.00},
-        {"codigo": "OD004", "nombre": "Extracción Compleja", "especialidad": "Odontología", "precio_base": 50.00},
-        {"codigo": "OD005", "nombre": "Resina (Calza)", "especialidad": "Odontología", "precio_base": 40.00},
-        {"codigo": "OD006", "nombre": "Endodoncia", "especialidad": "Odontología", "precio_base": 150.00},
-        {"codigo": "OD007", "nombre": "Corona Dental", "especialidad": "Odontología", "precio_base": 200.00},
-        {"codigo": "OD008", "nombre": "Blanqueamiento", "especialidad": "Odontología", "precio_base": 100.00},
-        {"codigo": "OD009", "nombre": "Rayos X Dental", "especialidad": "Odontología", "precio_base": 15.00},
-        
-        # Pediatría
-        {"codigo": "PD001", "nombre": "Consulta Pediátrica", "especialidad": "Pediatría", "precio_base": 30.00},
-        {"codigo": "PD002", "nombre": "Control Crecimiento", "especialidad": "Pediatría", "precio_base": 25.00},
-        {"codigo": "PD003", "nombre": "Vacunación", "especialidad": "Pediatría", "precio_base": 20.00},
-        
-        # Ginecología
-        {"codigo": "GI001", "nombre": "Consulta Ginecológica", "especialidad": "Ginecología", "precio_base": 35.00},
-        {"codigo": "GI002", "nombre": "Papanicolau", "especialidad": "Ginecología", "precio_base": 30.00},
-        {"codigo": "GI003", "nombre": "Ecografía Pélvica", "especialidad": "Ginecología", "precio_base": 50.00},
-        {"codigo": "GI004", "nombre": "Control Prenatal", "especialidad": "Ginecología", "precio_base": 35.00},
+        # ── MEDICINA GENERAL ─────────────────────────────────
+        {"codigo":"MG001","nombre":"Consulta Medicina General","especialidad":"Medicina General","precio_base":15.00},
+        {"codigo":"MG002","nombre":"Paquete 2 Consultas Medicina General","especialidad":"Medicina General","precio_base":20.00},
+        {"codigo":"MG003","nombre":"Certificado Médico","especialidad":"Medicina General","precio_base":20.00},
+        # ── NUTRICIÓN ─────────────────────────────────────────
+        {"codigo":"NT001","nombre":"Consulta Nutrición","especialidad":"Nutrición","precio_base":20.00},
+        {"codigo":"NT002","nombre":"Paquete 3 Consultas Nutrición","especialidad":"Nutrición","precio_base":60.00},
+        {"codigo":"NT003","nombre":"Paquete 5 Consultas Nutrición","especialidad":"Nutrición","precio_base":100.00},
+        # ── PSICOLOGÍA ────────────────────────────────────────
+        {"codigo":"PS001","nombre":"Consulta Psicología","especialidad":"Psicología","precio_base":30.00},
+        {"codigo":"PS002","nombre":"Paquete 2 Consultas Psicología","especialidad":"Psicología","precio_base":50.00},
+        # ── PEDIATRÍA ─────────────────────────────────────────
+        {"codigo":"PD001","nombre":"Consulta Pediátrica","especialidad":"Pediatría","precio_base":25.00},
+        # ── GINECOLOGÍA ───────────────────────────────────────
+        {"codigo":"GI001","nombre":"Consulta Ginecológica","especialidad":"Ginecología","precio_base":25.00},
+        {"codigo":"GI002","nombre":"Paquete Consulta + Eco Pélvica","especialidad":"Ginecología","precio_base":39.00},
+        # ── ECOGRAFÍAS ────────────────────────────────────────
+        {"codigo":"EC001","nombre":"Electrocardiograma","especialidad":"Ecografía","precio_base":40.00},
+        {"codigo":"EC002","nombre":"Ultrasonido Abdominal Completo","especialidad":"Ecografía","precio_base":40.00},
+        {"codigo":"EC003","nombre":"Ultrasonido Abdomen Superior","especialidad":"Ecografía","precio_base":25.00},
+        {"codigo":"EC004","nombre":"Ultrasonido Renal","especialidad":"Ecografía","precio_base":25.00},
+        {"codigo":"EC005","nombre":"Ultrasonido Mamas / Testicular","especialidad":"Ecografía","precio_base":25.00},
+        {"codigo":"EC006","nombre":"Ultrasonido Partes Blandas (rodilla, hombro, tobillo, talón)","especialidad":"Ecografía","precio_base":25.00},
+        {"codigo":"EC007","nombre":"Ultrasonido Tiroides / Paratiroides","especialidad":"Ecografía","precio_base":25.00},
+        {"codigo":"EC008","nombre":"Ultrasonido Vascular","especialidad":"Ecografía","precio_base":25.00},
+        # ── ODONTOLOGÍA ───────────────────────────────────────
+        {"codigo":"OD001","nombre":"Endodoncia","especialidad":"Odontología","precio_base":200.00},
+        {"codigo":"OD002","nombre":"Retratamiento de Conducto","especialidad":"Odontología","precio_base":250.00},
+        {"codigo":"OD003","nombre":"Corona Metal Porcelana","especialidad":"Odontología","precio_base":150.00},
+        {"codigo":"OD004","nombre":"Corona Emax","especialidad":"Odontología","precio_base":260.00},
+        {"codigo":"OD005","nombre":"Corona Zirconio","especialidad":"Odontología","precio_base":450.00},
+        {"codigo":"OD006","nombre":"Poste Metálico","especialidad":"Odontología","precio_base":60.00},
+        {"codigo":"OD007","nombre":"Poste de Fibra de Vidrio","especialidad":"Odontología","precio_base":80.00},
+        {"codigo":"OD008","nombre":"Alargamiento Coronario (1 pieza)","especialidad":"Odontología","precio_base":20.00},
+        {"codigo":"OD009","nombre":"Provisional","especialidad":"Odontología","precio_base":20.00},
+        {"codigo":"OD010","nombre":"Incrustación Directa","especialidad":"Odontología","precio_base":50.00},
+        {"codigo":"OD011","nombre":"Incrustación Indirecta","especialidad":"Odontología","precio_base":100.00},
+        {"codigo":"OD012","nombre":"Cuello Tipo 1","especialidad":"Odontología","precio_base":10.00},
+        {"codigo":"OD013","nombre":"Cuello Tipo 2","especialidad":"Odontología","precio_base":15.00},
+        {"codigo":"OD014","nombre":"Cuello Tipo 3","especialidad":"Odontología","precio_base":20.00},
+        {"codigo":"OD015","nombre":"Obturación Tipo 1","especialidad":"Odontología","precio_base":15.00},
+        {"codigo":"OD016","nombre":"Obturación Tipo 2","especialidad":"Odontología","precio_base":20.00},
+        {"codigo":"OD017","nombre":"Obturación Tipo 3","especialidad":"Odontología","precio_base":25.00},
+        {"codigo":"OD018","nombre":"Gingivectomía 6 Piezas","especialidad":"Odontología","precio_base":130.00},
+        {"codigo":"OD019","nombre":"Carilla de Resina","especialidad":"Odontología","precio_base":50.00},
+        {"codigo":"OD020","nombre":"Diseño de Sonrisa 6 Piezas","especialidad":"Odontología","precio_base":250.00},
+        {"codigo":"OD021","nombre":"Diseño de Sonrisa 8 Piezas","especialidad":"Odontología","precio_base":350.00},
+        {"codigo":"OD022","nombre":"Blanqueamiento 1 Sesión","especialidad":"Odontología","precio_base":50.00},
+        {"codigo":"OD023","nombre":"Blanqueamiento 2 Sesiones","especialidad":"Odontología","precio_base":100.00},
+        {"codigo":"OD024","nombre":"Blanqueamiento 3 Sesiones","especialidad":"Odontología","precio_base":120.00},
+        {"codigo":"OD025","nombre":"Profilaxis","especialidad":"Odontología","precio_base":15.00},
+        {"codigo":"OD026","nombre":"Profilaxis Profunda","especialidad":"Odontología","precio_base":30.00},
+        {"codigo":"OD027","nombre":"Detartraje","especialidad":"Odontología","precio_base":40.00},
+        {"codigo":"OD028","nombre":"Placa Acrílica 1-3 Piezas","especialidad":"Odontología","precio_base":100.00},
+        {"codigo":"OD029","nombre":"Placa Acrílica 4-6 Piezas","especialidad":"Odontología","precio_base":150.00},
+        {"codigo":"OD030","nombre":"Placa Acrílica Total","especialidad":"Odontología","precio_base":250.00},
+        {"codigo":"OD031","nombre":"Placa Acrílica con Malla","especialidad":"Odontología","precio_base":160.00},
+        {"codigo":"OD032","nombre":"Placa Acrílica Estética","especialidad":"Odontología","precio_base":200.00},
+        {"codigo":"OD033","nombre":"Placa Flex","especialidad":"Odontología","precio_base":260.00},
+        {"codigo":"OD034","nombre":"Yker Flex","especialidad":"Odontología","precio_base":150.00},
+        {"codigo":"OD035","nombre":"Cementación de Corona (otro lugar)","especialidad":"Odontología","precio_base":30.00},
+        {"codigo":"OD036","nombre":"Inicio Ortodoncia Metálica","especialidad":"Odontología","precio_base":60.00},
+        {"codigo":"OD037","nombre":"Control Ortodoncia Metálica","especialidad":"Odontología","precio_base":25.00},
+        {"codigo":"OD038","nombre":"Reposición Ortodoncia Metálica","especialidad":"Odontología","precio_base":3.00},
+        {"codigo":"OD039","nombre":"Inicio Ortodoncia Autoligado","especialidad":"Odontología","precio_base":170.00},
+        {"codigo":"OD040","nombre":"Control Ortodoncia Autoligado","especialidad":"Odontología","precio_base":40.00},
+        {"codigo":"OD041","nombre":"Reposición Ortodoncia Autoligado","especialidad":"Odontología","precio_base":5.00},
+        {"codigo":"OD042","nombre":"Inicio Autoligado Estético","especialidad":"Odontología","precio_base":350.00},
+        {"codigo":"OD043","nombre":"Control Autoligado Estético","especialidad":"Odontología","precio_base":60.00},
+        {"codigo":"OD044","nombre":"Reposición Autoligado Estético","especialidad":"Odontología","precio_base":10.00},
+        {"codigo":"OD045","nombre":"Inicio Ortodoncia Estética","especialidad":"Odontología","precio_base":70.00},
+        {"codigo":"OD046","nombre":"Control Ortodoncia Estética","especialidad":"Odontología","precio_base":30.00},
+        {"codigo":"OD047","nombre":"Extracción Simple","especialidad":"Odontología","precio_base":20.00},
+        {"codigo":"OD048","nombre":"Extracción de Resto Radicular","especialidad":"Odontología","precio_base":35.00},
+        {"codigo":"OD049","nombre":"Extracción Tercer Molar Tipo 1","especialidad":"Odontología","precio_base":40.00},
+        {"codigo":"OD050","nombre":"Extracción Tercer Molar Tipo 2","especialidad":"Odontología","precio_base":80.00},
+        {"codigo":"OD051","nombre":"Extracción Tercer Molar Tipo 3","especialidad":"Odontología","precio_base":150.00},
+        {"codigo":"OD052","nombre":"Extracción Tercer Molar con Especialista","especialidad":"Odontología","precio_base":90.00},
+        {"codigo":"OD053","nombre":"Implante + Cirugía (sin materiales)","especialidad":"Odontología","precio_base":850.00},
+        {"codigo":"OD054","nombre":"Ortopedia Ambas Placas","especialidad":"Odontología","precio_base":170.00},
+        {"codigo":"OD055","nombre":"Consulta Implantólogo","especialidad":"Odontología","precio_base":40.00},
+        {"codigo":"OD056","nombre":"Consulta Periodoncista","especialidad":"Odontología","precio_base":50.00},
+        {"codigo":"OD057","nombre":"Consulta Odontopediatría","especialidad":"Odontología","precio_base":40.00},
+        {"codigo":"OD058","nombre":"Bichectomía","especialidad":"Odontología","precio_base":250.00},
+        {"codigo":"OD059","nombre":"Lipo Papada 1 Sesión","especialidad":"Odontología","precio_base":160.00},
+        {"codigo":"OD060","nombre":"Lipo Papada 2 Sesiones","especialidad":"Odontología","precio_base":320.00},
     ]
-    
-    count = 0
+
+    count_new = 0
+    count_updated = 0
     for srv in servicios_base:
         existing = await db.catalogo_servicios.find_one({"codigo": srv["codigo"]}, {"_id": 0})
         if not existing:
@@ -524,9 +606,20 @@ async def seed_catalogo_servicios(
             doc = servicio.model_dump()
             doc['created_at'] = doc['created_at'].isoformat()
             await db.catalogo_servicios.insert_one(doc)
-            count += 1
-    
-    return {"message": f"Creados {count} servicios en catálogo", "total": len(servicios_base)}
+            count_new += 1
+        else:
+            # Actualizar precio si cambió
+            await db.catalogo_servicios.update_one(
+                {"codigo": srv["codigo"]},
+                {"$set": {"nombre": srv["nombre"], "precio_base": srv["precio_base"]}}
+            )
+            count_updated += 1
+
+    return {
+        "message": f"Catálogo actualizado: {count_new} nuevos, {count_updated} actualizados",
+        "total": len(servicios_base)
+    }
+
 
 
 # ========== CRUD COMPLETO CATÁLOGO ==========
@@ -960,18 +1053,6 @@ async def crear_consulta_desde_proforma(
 
 # ========== OBTENER CONSULTA POR APPOINTMENT ==========
 
-@financial_router.get("/consultas/por-cita/{appointment_id}")
-async def get_consulta_por_cita(
-    appointment_id: str,
-    current_user: TokenData = Depends(get_current_user)
-):
-    """Obtener consulta financiera por ID de cita"""
-    consulta = await db.consultas_financieras.find_one(
-        {"appointment_id": appointment_id}, {"_id": 0}
-    )
-    if not consulta:
-        return None
-    return consulta
 
 
 # ========== ELIMINAR PAGO DE CONSULTA ==========

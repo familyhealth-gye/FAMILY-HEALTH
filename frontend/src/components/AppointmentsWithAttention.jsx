@@ -186,74 +186,69 @@ export const AppointmentsWithAttention = ({
       const cedula = appointment.cedula || appointment.paciente_cedula || "";
       let consulta = null;
 
-      // 1. Buscar por appointment_id (lo más exacto)
+      // 1. Buscar directamente por appointment_id — endpoint específico
       try {
         const res = await axios.get(
-          `${API}/financial/consultas`,
+          `${API}/financial/consultas/por-cita/${appointment.id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        const todas = res.data || [];
-        // Primero por appointment_id exacto
-        consulta = todas.find(c => c.appointment_id === appointment.id);
-        // Si no, por cédula con el saldo pendiente más reciente
-        if (!consulta && cedula) {
-          const porCedula = todas.filter(c =>
-            c.paciente_cedula === cedula && c.estado_pago !== "pagado"
-          );
-          if (porCedula.length > 0) {
-            // Tomar la más reciente
-            consulta = porCedula.sort((a, b) =>
-              new Date(b.fecha) - new Date(a.fecha)
-            )[0];
-          }
+        if (res.data && res.data.id) {
+          consulta = res.data;
         }
-      } catch { /* continuar */ }
+      } catch { /* no existe, continuar */ }
 
-      // 2. Si no existe, crearla automáticamente
+      // 2. Si no existe aún, crearla automáticamente
       if (!consulta) {
-        toast.info("Creando consulta financiera...");
+        toast.info("Generando consulta financiera...");
         try {
-          const precioDefault = 30.0;
-          const nuevaRes = await axios.post(
+          await axios.post(
             `${API}/financial/consultas/desde-cita/${appointment.id}`,
             [{
               servicio: `Consulta ${appointment.especialidad || "Médica"}`,
               descripcion: appointment.observaciones || "Consulta médica",
-              precio_unitario: precioDefault,
+              precio_unitario: 30.0,
               cantidad: 1
             }],
             { headers: { Authorization: `Bearer ${token}` } }
           );
-          // Buscar la recién creada
-          const res2 = await axios.get(`${API}/financial/consultas`,
-            { headers: { Authorization: `Bearer ${token}` } });
-          consulta = (res2.data || []).find(c => c.appointment_id === appointment.id);
-          if (!consulta && cedula) {
-            consulta = (res2.data || [])
-              .filter(c => c.paciente_cedula === cedula)
-              .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
-          }
         } catch (err) {
-          if (err.response?.status === 400) {
-            // Ya existe pero no la encontramos antes — reintentar búsqueda
-            const res3 = await axios.get(`${API}/financial/consultas`,
-              { headers: { Authorization: `Bearer ${token}` } });
-            consulta = (res3.data || []).find(c => c.appointment_id === appointment.id)
-              || (res3.data || []).filter(c => c.paciente_cedula === cedula)
-                .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
-          }
+          // 400 = ya existe, seguimos
+          if (err.response?.status !== 400) throw err;
         }
+
+        // Buscar la recién creada (o la que ya existía)
+        try {
+          const res2 = await axios.get(
+            `${API}/financial/consultas/por-cita/${appointment.id}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res2.data && res2.data.id) consulta = res2.data;
+        } catch { /* continuar */ }
+      }
+
+      // 3. Último recurso: buscar en todas por cédula
+      if (!consulta && cedula) {
+        try {
+          const res3 = await axios.get(
+            `${API}/financial/consultas`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const todas = res3.data || [];
+          consulta = todas
+            .filter(c => c.paciente_cedula === cedula && c.estado_pago !== "pagado")
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0] || null;
+        } catch { /* continuar */ }
       }
 
       if (!consulta) {
-        toast.error("No se pudo encontrar ni crear la consulta financiera. Verifique que la consulta médica esté cerrada.");
+        toast.error("No se pudo crear la consulta financiera. Asegúrese de cerrar primero la consulta médica.");
         return;
       }
 
       setConsultaFinanciera(consulta);
       setSelectedAppointmentForPayment(appointment);
       setPaymentForm({
-        monto: consulta.saldo?.toString() || "0",
+        monto: (consulta.saldo || consulta.total || 0).toString(),
         tipo_pago: "efectivo",
         referencia: "",
         notas: ""
@@ -261,6 +256,7 @@ export const AppointmentsWithAttention = ({
       setShowPaymentModal(true);
 
     } catch (error) {
+      console.error("Error en cobro:", error);
       toast.error(error.response?.data?.detail || "Error al abrir el cobro");
     }
   };

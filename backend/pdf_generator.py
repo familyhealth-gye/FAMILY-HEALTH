@@ -1,5 +1,5 @@
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib.units import inch
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch, cm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
@@ -8,189 +8,183 @@ from io import BytesIO
 from datetime import datetime
 import os
 
-COLOR_AZUL = colors.HexColor('#00a8cc')
-COLOR_VERDE = colors.HexColor('#6decb9')
-COLOR_AZUL_OSCURO = colors.HexColor('#005f73')
-COLOR_GRIS = colors.HexColor('#666666')
-COLOR_FONDO = colors.HexColor('#f5faff')
+COLOR_AZUL       = colors.HexColor('#005f73')   # azul oscuro — diferente del logo turquesa
+COLOR_TURQUESA   = colors.HexColor('#00a8cc')
+COLOR_VERDE      = colors.HexColor('#6decb9')
+COLOR_FONDO      = colors.HexColor('#f5faff')
+COLOR_GRIS       = colors.HexColor('#555555')
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'public', 'logo.png')
+
+# Media hoja A4 (A5 apaisado es ~148x210, pero usamos A4 partido verticalmente)
+MEDIA_HOJA = (A4[0], A4[1] / 2)   # 210 x 148 mm aprox
 
 
 def _draw_header_footer(canvas_obj, doc):
     canvas_obj.saveState()
-    width, height = doc.pagesize
+    w, h = doc.pagesize
 
-    # Barra azul superior
+    # Barra superior — azul oscuro (distinto al logo turquesa)
     canvas_obj.setFillColor(COLOR_AZUL)
-    canvas_obj.rect(0, height - 1.4*inch, width, 1.4*inch, fill=1, stroke=0)
+    canvas_obj.rect(0, h - 1.1*inch, w, 1.1*inch, fill=1, stroke=0)
 
     # Logo
     if os.path.exists(LOGO_PATH):
         try:
-            canvas_obj.drawImage(LOGO_PATH, 0.3*inch, height - 1.25*inch,
-                                  width=1.1*inch, height=1.1*inch,
+            canvas_obj.drawImage(LOGO_PATH, 0.2*inch, h - 1.0*inch,
+                                  width=0.85*inch, height=0.85*inch,
                                   preserveAspectRatio=True, mask='auto')
         except Exception:
             pass
 
     # Texto encabezado
     canvas_obj.setFillColor(colors.white)
-    canvas_obj.setFont("Helvetica-Bold", 9)
-    canvas_obj.drawString(1.6*inch, height - 0.52*inch, "CENTRO DE ESPECIALIDADES FAMILY HEALTH")
-    canvas_obj.setFont("Helvetica", 8)
-    canvas_obj.drawString(1.6*inch, height - 0.72*inch, "CONTACTOS: 096-291-2170  /  04-500-7012")
-    canvas_obj.drawString(1.6*inch, height - 0.90*inch, "DIRECCION: MUCHO LOTE 2 MZ 2833 VILLA 15 | FAMILYHEALTH.GYE")
+    canvas_obj.setFont("Helvetica-Bold", 8.5)
+    canvas_obj.drawString(1.2*inch, h - 0.42*inch, "CENTRO DE ESPECIALIDADES FAMILY HEALTH")
+    canvas_obj.setFont("Helvetica", 7.5)
+    canvas_obj.drawString(1.2*inch, h - 0.58*inch, "CONTACTOS: 096-291-2170  /  04-500-7012")
+    canvas_obj.drawString(1.2*inch, h - 0.72*inch, "DIRECCIÓN: MUCHO LOTE 2 MZ 2833 VILLA 15  |  FAMILYHEALTH.GYE")
 
     # Línea verde decorativa
     canvas_obj.setFillColor(COLOR_VERDE)
-    canvas_obj.rect(0, height - 1.5*inch, width, 0.1*inch, fill=1, stroke=0)
+    canvas_obj.rect(0, h - 1.15*inch, w, 0.07*inch, fill=1, stroke=0)
 
-    # Marca de agua logo central
+    # Marca de agua logo centro (muy tenue)
     if os.path.exists(LOGO_PATH):
         try:
             canvas_obj.saveState()
             canvas_obj.setFillAlpha(0.04)
-            canvas_obj.drawImage(LOGO_PATH, width/2 - 2*inch, height/2 - 2*inch,
-                                  width=4*inch, height=4*inch,
+            canvas_obj.drawImage(LOGO_PATH, w/2 - 1.2*inch, h/2 - 1.5*inch,
+                                  width=2.4*inch, height=2.4*inch,
                                   preserveAspectRatio=True, mask='auto')
             canvas_obj.restoreState()
         except Exception:
             pass
 
-    # Barra azul pie de página
+    # Pie de página azul oscuro
     canvas_obj.setFillColor(COLOR_AZUL)
-    canvas_obj.rect(0, 0, width, 0.7*inch, fill=1, stroke=0)
+    canvas_obj.rect(0, 0, w, 0.48*inch, fill=1, stroke=0)
     canvas_obj.setFillColor(colors.white)
-    canvas_obj.setFont("Helvetica", 7.5)
-    canvas_obj.drawString(0.3*inch, 0.43*inch,
-        "MUCHO LOTE 2 VILLA ESPANA 2 MZ 2833 V15  |  Family Health  |  @familyhealth.gye")
-    canvas_obj.drawString(0.3*inch, 0.26*inch,
-        "0962 912 170  |  teethcarestudio@hotmail.com  |  Guayaquil - Ecuador")
-    canvas_obj.setFont("Helvetica", 7)
-    canvas_obj.drawRightString(width - 0.3*inch, 0.43*inch,
+    canvas_obj.setFont("Helvetica", 6.5)
+    canvas_obj.drawString(0.2*inch, 0.30*inch,
+        "centrodeespecialidadesfamilyhe@gmail.com  |  @familyhealth.gye  |  0962 912 170  |  Guayaquil - Ecuador")
+    canvas_obj.setFont("Helvetica", 6)
+    canvas_obj.drawRightString(w - 0.2*inch, 0.15*inch,
         f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
     canvas_obj.restoreState()
 
 
-def _get_styles():
-    styles = getSampleStyleSheet()
+def _estilos():
+    s = getSampleStyleSheet()
     return {
-        'titulo': ParagraphStyle('FHTitulo', parent=styles['Heading1'],
-            fontSize=14, textColor=COLOR_AZUL, spaceAfter=4,
-            alignment=TA_CENTER, fontName='Helvetica-Bold'),
-        'seccion': ParagraphStyle('FHSeccion', parent=styles['Heading2'],
-            fontSize=10, textColor=colors.white, spaceAfter=4, spaceBefore=8,
-            fontName='Helvetica-Bold', backColor=COLOR_AZUL, leading=16),
-        'normal': ParagraphStyle('FHNormal', parent=styles['Normal'],
-            fontSize=9, textColor=colors.HexColor('#333333'), spaceAfter=3),
-        'base': styles,
+        'titulo': ParagraphStyle('T', parent=s['Heading1'], fontSize=11,
+            textColor=COLOR_AZUL, spaceAfter=3, alignment=TA_CENTER, fontName='Helvetica-Bold'),
+        'sec': ParagraphStyle('S', parent=s['Heading2'], fontSize=8,
+            textColor=colors.white, backColor=COLOR_AZUL, spaceAfter=3, spaceBefore=6,
+            fontName='Helvetica-Bold', leading=13),
+        'normal': ParagraphStyle('N', parent=s['Normal'], fontSize=8,
+            textColor=colors.HexColor('#222222'), spaceAfter=2),
+        'small': ParagraphStyle('SM', parent=s['Normal'], fontSize=7,
+            textColor=COLOR_GRIS),
     }
 
 
 def generate_prescription_pdf(prescription_data: dict) -> BytesIO:
+    """Genera la receta médica en media hoja A4 con branding Family Health."""
     buffer = BytesIO()
-    s = _get_styles()
+    s = _estilos()
 
     def on_page(canvas_obj, doc):
         _draw_header_footer(canvas_obj, doc)
 
-    doc = SimpleDocTemplate(buffer, pagesize=letter,
-                            rightMargin=0.6*inch, leftMargin=0.6*inch,
-                            topMargin=1.8*inch, bottomMargin=0.9*inch)
-    elements = []
+    doc = SimpleDocTemplate(buffer, pagesize=MEDIA_HOJA,
+                            rightMargin=0.45*inch, leftMargin=0.45*inch,
+                            topMargin=1.25*inch, bottomMargin=0.6*inch)
+    elems = []
 
-    elements.append(Paragraph("RECETA MÉDICA", s['titulo']))
-    elements.append(Spacer(1, 0.15*inch))
+    elems.append(Paragraph("RECETA MÉDICA", s['titulo']))
+    elems.append(Spacer(1, 0.08*inch))
 
-    # Info paciente
-    info_data = [
-        ['Paciente:', prescription_data.get('paciente_nombre', ''), 'Fecha:', prescription_data.get('fecha', '')],
-        ['Cédula:', prescription_data.get('paciente_cedula', ''), 'Edad:', f"{prescription_data.get('paciente_edad', '')} años"],
-        ['Doctor:', prescription_data.get('doctor_nombre', ''), 'Especialidad:', prescription_data.get('doctor_especialidad', '')],
+    # Info paciente — tabla compacta
+    info = [
+        ['Paciente:', prescription_data.get('paciente_nombre',''), 'Fecha:', prescription_data.get('fecha','')],
+        ['Cédula:', prescription_data.get('paciente_cedula',''), 'Edad:', f"{prescription_data.get('paciente_edad','')} años"],
+        ['Doctor:', prescription_data.get('doctor_nombre',''), 'Especialidad:', prescription_data.get('doctor_especialidad','')],
     ]
-    info_table = Table(info_data, colWidths=[1.1*inch, 2.8*inch, 1.1*inch, 2.4*inch])
-    info_table.setStyle(TableStyle([
-        ('FONT', (0,0), (0,-1), 'Helvetica-Bold', 9),
-        ('FONT', (2,0), (2,-1), 'Helvetica-Bold', 9),
-        ('FONT', (1,0), (-1,-1), 'Helvetica', 9),
+    t_info = Table(info, colWidths=[0.7*inch, 2.1*inch, 0.7*inch, 1.8*inch])
+    t_info.setStyle(TableStyle([
+        ('FONT', (0,0), (0,-1), 'Helvetica-Bold', 7),
+        ('FONT', (2,0), (2,-1), 'Helvetica-Bold', 7),
+        ('FONT', (1,0), (-1,-1), 'Helvetica', 7),
         ('ROWBACKGROUNDS', (0,0), (-1,-1), [COLOR_FONDO, colors.white]),
-        ('BOX', (0,0), (-1,-1), 0.5, COLOR_AZUL),
-        ('INNERGRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dddddd')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOX', (0,0), (-1,-1), 0.4, COLOR_TURQUESA),
+        ('INNERGRID', (0,0), (-1,-1), 0.2, colors.HexColor('#cccccc')),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
     ]))
-    elements.append(info_table)
-    elements.append(Spacer(1, 0.15*inch))
+    elems.append(t_info)
+    elems.append(Spacer(1, 0.07*inch))
 
     # Diagnóstico
-    elements.append(Paragraph("  DIAGNÓSTICO", s['seccion']))
-    elements.append(Spacer(1, 0.06*inch))
-    diag = prescription_data.get('diagnostico', '')
-    cie = prescription_data.get('cie10_codigo', '')
-    if cie:
-        diag += f"  (CIE-10: {cie})"
-    elements.append(Paragraph(diag, s['normal']))
-    elements.append(Spacer(1, 0.12*inch))
+    diag = prescription_data.get('diagnostico','')
+    cie  = prescription_data.get('cie10_codigo','')
+    if cie: diag += f"  (CIE-10: {cie})"
+    elems.append(Paragraph("  DIAGNÓSTICO", s['sec']))
+    elems.append(Paragraph(diag, s['normal']))
+    elems.append(Spacer(1, 0.06*inch))
 
     # Prescripción + Indicaciones en 2 columnas
-    elements.append(Paragraph("  PRESCRIPCIÓN / INDICACIONES", s['seccion']))
-    elements.append(Spacer(1, 0.06*inch))
-
     meds = prescription_data.get('medicamentos', [])
     presc_lines = []
-    for i, med in enumerate(meds, 1):
-        presc_lines.append(f"<b>{i}. {med.get('nombre','')}</b> {med.get('dosis','')}")
-        presc_lines.append(f"   {med.get('frecuencia','')} por {med.get('duracion','')}")
-        if med.get('indicaciones'):
-            presc_lines.append(f"   <i>{med.get('indicaciones')}</i>")
-        presc_lines.append("")
-    presc_text = "<br/>".join(presc_lines) if presc_lines else "Sin medicamentos prescritos"
+    for i, m in enumerate(meds, 1):
+        presc_lines.append(f"<b>{i}. {m.get('nombre','')}</b> {m.get('dosis','')}")
+        presc_lines.append(f"&nbsp;&nbsp;{m.get('frecuencia','')} por {m.get('duracion','')}")
+        if m.get('indicaciones'):
+            presc_lines.append(f"&nbsp;&nbsp;<i>{m.get('indicaciones')}</i>")
+    presc_txt = "<br/>".join(presc_lines) if presc_lines else "Sin medicamentos prescritos"
+    indic_txt = prescription_data.get('indicaciones_generales','') or ""
 
-    indic = prescription_data.get('indicaciones_generales', '')
-    indic_text = f"<b>INDICACIONES:</b><br/><br/>{indic}" if indic else "<b>INDICACIONES:</b><br/>"
-
-    dual = [[Paragraph(presc_text, s['normal']), Paragraph(indic_text, s['normal'])]]
-    dual_table = Table(dual, colWidths=[3.7*inch, 3.7*inch])
-    dual_table.setStyle(TableStyle([
+    elems.append(Paragraph("  PRESCRIPCIÓN / INDICACIONES", s['sec']))
+    dual = [[Paragraph(presc_txt, s['normal']), Paragraph(f"<b>Indicaciones:</b><br/>{indic_txt}", s['normal'])]]
+    t_dual = Table(dual, colWidths=[2.7*inch, 2.7*inch])
+    t_dual.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('BOX', (0,0), (-1,-1), 0.5, COLOR_AZUL),
-        ('LINEBEFORE', (1,0), (1,0), 1, COLOR_AZUL),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 70),
+        ('BOX', (0,0), (-1,-1), 0.4, COLOR_TURQUESA),
+        ('LINEBEFORE', (1,0), (1,0), 0.8, COLOR_TURQUESA),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 40),
     ]))
-    elements.append(dual_table)
+    elems.append(t_dual)
 
     # Precauciones
-    precauc = prescription_data.get('precauciones', '')
+    precauc = prescription_data.get('precauciones','')
     if precauc:
-        elements.append(Spacer(1, 0.12*inch))
-        elements.append(Paragraph("  PRECAUCIONES", s['seccion']))
-        elements.append(Spacer(1, 0.06*inch))
-        elements.append(Paragraph(precauc, s['normal']))
+        elems.append(Spacer(1, 0.06*inch))
+        elems.append(Paragraph("  PRECAUCIONES", s['sec']))
+        elems.append(Paragraph(precauc, s['normal']))
 
-    doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+    doc.build(elems, onFirstPage=on_page, onLaterPages=on_page)
     buffer.seek(0)
     return buffer
 
 
 def generate_certificado_pdf(data: dict) -> BytesIO:
+    """Genera un certificado médico en A4 completo con branding Family Health."""
     buffer = BytesIO()
-    s = _get_styles()
+    s = _estilos()
 
     def on_page(canvas_obj, doc):
         _draw_header_footer(canvas_obj, doc)
 
     doc = SimpleDocTemplate(buffer, pagesize=A4,
-                            rightMargin=1.2*inch, leftMargin=1.2*inch,
-                            topMargin=1.8*inch, bottomMargin=1*inch)
-    elements = []
-
-    elements.append(Paragraph("CERTIFICADO MÉDICO", s['titulo']))
-    elements.append(Spacer(1, 0.4*inch))
+                            rightMargin=1.1*inch, leftMargin=1.1*inch,
+                            topMargin=1.4*inch, bottomMargin=0.8*inch)
+    elems = []
+    elems.append(Paragraph("CERTIFICADO MÉDICO", s['titulo']))
+    elems.append(Spacer(1, 0.3*inch))
 
     fecha = data.get('fecha', datetime.now().strftime('%d de %B de %Y'))
     texto = (
@@ -204,18 +198,18 @@ def generate_certificado_pdf(data: dict) -> BytesIO:
         f"<br/><br/>{data.get('contenido','')}<br/><br/>"
         f"Este certificado se extiende a petición del/la interesado/a para los fines que estime conveniente."
     )
-    cert_style = ParagraphStyle('cert', parent=s['normal'], fontSize=11, leading=20, alignment=4)
-    elements.append(Paragraph(texto, cert_style))
-    elements.append(Spacer(1, 1*inch))
+    cert_st = ParagraphStyle('cert', parent=s['normal'], fontSize=11, leading=18, alignment=4)
+    elems.append(Paragraph(texto, cert_st))
+    elems.append(Spacer(1, 0.8*inch))
 
     firma = [[
         Paragraph(f"_________________________<br/><b>{data.get('doctor_nombre','')}</b><br/>Médico Tratante", s['normal']),
-        Paragraph(f"_________________________<br/><b>Guayaquil, {fecha}</b><br/>Fecha y Lugar", s['normal'])
+        Paragraph(f"_________________________<br/><b>Guayaquil, {fecha}</b><br/>Lugar y Fecha", s['normal'])
     ]]
-    firma_t = Table(firma, colWidths=[3*inch, 3*inch])
-    firma_t.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP')]))
-    elements.append(firma_t)
+    t_firma = Table(firma, colWidths=[3*inch, 3*inch])
+    t_firma.setStyle(TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'TOP')]))
+    elems.append(t_firma)
 
-    doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+    doc.build(elems, onFirstPage=on_page, onLaterPages=on_page)
     buffer.seek(0)
     return buffer
