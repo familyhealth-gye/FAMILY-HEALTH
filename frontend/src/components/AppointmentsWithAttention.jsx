@@ -182,85 +182,86 @@ export const AppointmentsWithAttention = ({
 
    // Función para abrir el modal de pago
   const handleOpenPaymentModal = async (appointment) => {
-    console.log("🔍 ======== INICIANDO PROCESO DE COBRO ========");
-    console.log("📋 Appointment recibido:", appointment);
-    console.log("🆔 Paciente Cédula:", appointment.cedula);
-    console.log("🆔 Paciente Cédula (alt):", appointment.paciente_cedula);
-    
     try {
-      // Buscar consultas financieras
-      console.log("📡 Llamando a GET /api/financial/consultas...");
-      
-      const response = await axios.get(
-        `${API}/financial/consultas`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const cedula = appointment.cedula || appointment.paciente_cedula || "";
+      let consulta = null;
 
-      console.log("✅ Response status:", response.status);
-      console.log("✅ Response data type:", typeof response.data);
-      console.log("✅ Response data:", response.data);
-      console.log("📊 Total consultas recibidas:", Array.isArray(response.data) ? response.data.length : 'No es array');
-
-      // Buscar la consulta del paciente
-      const cedula = appointment.cedula || appointment.paciente_cedula;
-      console.log("🔎 Buscando consulta con cédula:", cedula);
-
-      const consulta = response.data?.find(
-        (c) => {
-          console.log(`  Comparando: ${c.paciente_cedula} === ${cedula} ?`, c.paciente_cedula === cedula);
-          return c.paciente_cedula === cedula || c.paciente_cedula === appointment.paciente_cedula;
+      // 1. Buscar por appointment_id (lo más exacto)
+      try {
+        const res = await axios.get(
+          `${API}/financial/consultas`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const todas = res.data || [];
+        // Primero por appointment_id exacto
+        consulta = todas.find(c => c.appointment_id === appointment.id);
+        // Si no, por cédula con el saldo pendiente más reciente
+        if (!consulta && cedula) {
+          const porCedula = todas.filter(c =>
+            c.paciente_cedula === cedula && c.estado_pago !== "pagado"
+          );
+          if (porCedula.length > 0) {
+            // Tomar la más reciente
+            consulta = porCedula.sort((a, b) =>
+              new Date(b.fecha) - new Date(a.fecha)
+            )[0];
+          }
         }
-      );
+      } catch { /* continuar */ }
 
-      console.log("🎯 Consulta encontrada:", consulta);
+      // 2. Si no existe, crearla automáticamente
+      if (!consulta) {
+        toast.info("Creando consulta financiera...");
+        try {
+          const precioDefault = 30.0;
+          const nuevaRes = await axios.post(
+            `${API}/financial/consultas/desde-cita/${appointment.id}`,
+            [{
+              servicio: `Consulta ${appointment.especialidad || "Médica"}`,
+              descripcion: appointment.observaciones || "Consulta médica",
+              precio_unitario: precioDefault,
+              cantidad: 1
+            }],
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          // Buscar la recién creada
+          const res2 = await axios.get(`${API}/financial/consultas`,
+            { headers: { Authorization: `Bearer ${token}` } });
+          consulta = (res2.data || []).find(c => c.appointment_id === appointment.id);
+          if (!consulta && cedula) {
+            consulta = (res2.data || [])
+              .filter(c => c.paciente_cedula === cedula)
+              .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+          }
+        } catch (err) {
+          if (err.response?.status === 400) {
+            // Ya existe pero no la encontramos antes — reintentar búsqueda
+            const res3 = await axios.get(`${API}/financial/consultas`,
+              { headers: { Authorization: `Bearer ${token}` } });
+            consulta = (res3.data || []).find(c => c.appointment_id === appointment.id)
+              || (res3.data || []).filter(c => c.paciente_cedula === cedula)
+                .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+          }
+        }
+      }
 
       if (!consulta) {
-        console.error("❌ No se encontró consulta financiera");
-        console.log("📝 Consultas disponibles:", response.data?.map(c => ({
-          id: c.id,
-          cedula: c.paciente_cedula,
-          nombre: c.paciente_nombre,
-          saldo: c.saldo
-        })));
-        toast.error("No se encontró consulta financiera para esta cita. El doctor debe cerrar la consulta primero.");
+        toast.error("No se pudo encontrar ni crear la consulta financiera. Verifique que la consulta médica esté cerrada.");
         return;
       }
 
-      console.log("✅ Consulta financiera encontrada:");
-      console.log("   - ID:", consulta.id);
-      console.log("   - Paciente:", consulta.paciente_nombre);
-      console.log("   - Cédula:", consulta.paciente_cedula);
-      console.log("   - Total:", consulta.total);
-      console.log("   - Total Pagado:", consulta.total_pagado);
-      console.log("   - Saldo:", consulta.saldo);
-      console.log("   - Estado Pago:", consulta.estado_pago);
-
-      // Setear datos
       setConsultaFinanciera(consulta);
       setSelectedAppointmentForPayment(appointment);
-
       setPaymentForm({
         monto: consulta.saldo?.toString() || "0",
         tipo_pago: "efectivo",
         referencia: "",
         notas: ""
       });
-
-      console.log("💰 Formulario de pago configurado con monto:", consulta.saldo);
-
       setShowPaymentModal(true);
-      console.log("🎉 Modal de pago abierto exitosamente");
-      console.log("========================================");
 
     } catch (error) {
-      console.error("❌ ======== ERROR EN PROCESO DE COBRO ========");
-      console.error("❌ Error completo:", error);
-      console.error("❌ Error message:", error.message);
-      console.error("❌ Response status:", error.response?.status);
-      console.error("❌ Response data:", error.response?.data);
-      console.error("❌ Response headers:", error.response?.headers);
-      console.error("========================================");
-      toast.error(error.response?.data?.detail || "Error al buscar información de pago. Revisa la consola.");
+      toast.error(error.response?.data?.detail || "Error al abrir el cobro");
     }
   };
 
@@ -515,47 +516,7 @@ export const AppointmentsWithAttention = ({
 
   // Si está en modo atención, mostrar la vista correspondiente
   if (vistaAtencion && selectedAppointment) {
-    // Para Odontología: Vista completa de Historia Clínica con Odontograma FDI
-    if (modoAtencion === "historia" || selectedAppointment.especialidad === "Odontología") {
-      return (
-        <div className="vista-atencion-completa">
-          <HistoriaClinicaCompleta
-            paciente={{
-              id: selectedAppointment.id,
-              cedula: selectedAppointment.cedula,
-              nombre_completo: selectedAppointment.nombre_completo,
-              nombre: selectedAppointment.nombre_completo,
-              edad: selectedAppointment.edad,
-              telefono: selectedAppointment.telefono
-            }}
-            token={token}
-            user={user}
-            onBack={() => {
-              setVistaAtencion(false);
-              setSelectedAppointment(null);
-            }}
-            especialidad={selectedAppointment.especialidad}
-          />
-          
-          {/* Panel flotante para cerrar consulta */}
-          <div className="panel-cerrar-consulta">
-            <div className="panel-info">
-              <span>Paciente: <strong>{selectedAppointment.nombre_completo}</strong></span>
-              <span>Especialidad: <strong>{selectedAppointment.especialidad}</strong></span>
-            </div>
-            <Button 
-              onClick={handleAttentionSuccess}
-              className="btn-cerrar-consulta"
-            >
-              <Check size={16} />
-              Cerrar Consulta
-            </Button>
-          </div>
-        </div>
-      );
-    }
-    
-    // Para otras especialidades: Formulario tradicional en vista amplia
+    // Para otras especialidades: Formulario en vista amplia
     return (
       <div className="vista-atencion-formulario">
         <div className="atencion-header">
@@ -582,6 +543,18 @@ export const AppointmentsWithAttention = ({
         <div className="atencion-contenido">
           {selectedAppointment.especialidad === "Medicina General" && (
             <MedicinaGeneralForm
+              appointment={selectedAppointment}
+              token={token}
+              onClose={() => {
+                setVistaAtencion(false);
+                setSelectedAppointment(null);
+              }}
+              onSuccess={handleAttentionSuccess}
+            />
+          )}
+
+          {selectedAppointment.especialidad === "Odontología" && (
+            <OdontologiaFormSimple
               appointment={selectedAppointment}
               token={token}
               onClose={() => {

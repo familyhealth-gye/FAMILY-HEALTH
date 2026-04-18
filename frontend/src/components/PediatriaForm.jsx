@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
+import { AntecedentesPanel } from "./AntecedentesPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -127,14 +128,11 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
             observaciones: history.observaciones || ""
           }));
           
-          toast.info("Consulta anterior cargada - puede continuar editando");
+          toast.info("Historia clínica cargada - puede continuar editando");
         }
       } catch (error) {
-        // 404 significa que no existe historia, es normal para consultas nuevas
-        if (error.response?.status === 404) {
-          console.log("✅ Consulta nueva - formulario inicializado vacío");
-          toast.success("Nueva consulta - formulario listo");
-        } else {
+        // 404 significa que no existe historia, es normal
+        if (error.response?.status !== 404) {
           console.error("Error cargando historia pediátrica:", error);
         }
       }
@@ -316,6 +314,26 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
 
   return (
     <form onSubmit={handleSubmit} className="medical-history-form">
+      {/* ALERTAS DE ANTECEDENTES */}
+      <div style={{ marginBottom: "12px" }}>
+        <AntecedentesPanel
+          cedula={appointment.cedula}
+          token={token}
+          especialidad="Pediatría"
+          onLoad={ant => {
+            if (ant.tiene_antecedentes) {
+              setForm(f => ({
+                ...f,
+                alergias: ant.alergias_medicamentos || ant.alergias || f.alergias,
+                medicamentos_actuales: ant.medicamentos_actuales || f.medicamentos_actuales,
+                antecedentes_familiares: ant.ant_familiares || f.antecedentes_familiares,
+              }));
+            }
+          }}
+          onChange={() => {}}
+        />
+      </div>
+
       <div className="form-section">
         <h3 className="section-title-small">Datos del Responsable</h3>
         <div className="form-grid">

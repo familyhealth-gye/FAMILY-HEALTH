@@ -10,6 +10,7 @@ import axios from "axios";
 import { CIE10Selector } from "./CIE10Selector";
 import { MedicacionRapida } from "./MedicacionRapida";
 import { HistorialLateral } from "./HistorialLateral";
+import { AntecedentesPanel } from "./AntecedentesPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -266,10 +267,32 @@ export const GinecologiaForm = ({ appointment, token, onClose, onSuccess }) => {
           </div>
         </div>
 
-        {/* ANTECEDENTES */}
-        <div style={S.seccion}>📂 ANTECEDENTES</div>
+        {/* ANTECEDENTES — panel inteligente */}
+        <div style={S.seccion}>📂 ANTECEDENTES DEL PACIENTE</div>
+        <div style={{ marginBottom: "10px" }}>
+          <AntecedentesPanel
+            cedula={appointment.cedula}
+            token={token}
+            especialidad="Ginecología"
+            onLoad={ant => setForm(f => ({
+              ...f,
+              ant_familiares_hta: ant.hipertension || f.ant_familiares_hta,
+              ant_familiares_diabetes: ant.diabetes || f.ant_familiares_diabetes,
+              ant_familiares_otros: ant.ant_familiares || f.ant_familiares_otros,
+              ant_personales_quirurgicos: ant.ant_quirurgicos || f.ant_personales_quirurgicos,
+              ant_personales_alergias: ant.alergias_medicamentos || f.ant_personales_alergias,
+              medicamentos_actuales: ant.medicamentos_actuales || f.medicamentos_actuales,
+            }))}
+            onChange={ant => setForm(f => ({
+              ...f,
+              ant_personales_alergias: ant.alergias_medicamentos || f.ant_personales_alergias,
+              medicamentos_actuales: ant.medicamentos_actuales || f.medicamentos_actuales,
+            }))}
+          />
+        </div>
+        {/* Antecedentes ginecológicos específicos */}
         <div style={{ background: "#faf5ff", borderRadius: "8px", padding: "10px", marginBottom: "10px" }}>
-          <p style={{ fontSize: "12px", fontWeight: "600", color: "#6b21a8", marginBottom: "8px" }}>Familiares:</p>
+          <p style={{ fontSize: "12px", fontWeight: "600", color: "#6b21a8", marginBottom: "8px" }}>Antecedentes familiares:</p>
           <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "8px" }}>
             {[["ant_familiares_hta","HTA"],["ant_familiares_diabetes","Diabetes"],["ant_familiares_cancer","Cáncer"]].map(([k,l]) => (
               <label key={k} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>

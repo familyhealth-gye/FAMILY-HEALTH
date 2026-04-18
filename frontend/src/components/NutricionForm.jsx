@@ -8,6 +8,7 @@ import axios from "axios";
 import { CIE10Selector } from "./CIE10Selector";
 import { MedicacionRapida } from "./MedicacionRapida";
 import { HistorialLateral } from "./HistorialLateral";
+import { AntecedentesPanel } from "./AntecedentesPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -234,8 +235,28 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
           </div>
         </div>
 
-        {/* ANTECEDENTES */}
-        <div style={S.seccion}>📂 ANTECEDENTES</div>
+        {/* ANTECEDENTES — panel inteligente */}
+        <div style={S.seccion}>📂 ANTECEDENTES DEL PACIENTE</div>
+        <div style={{ marginBottom: "10px" }}>
+          <AntecedentesPanel
+            cedula={appointment.cedula}
+            token={token}
+            especialidad="Nutrición"
+            onLoad={ant => setForm(f => ({
+              ...f,
+              ant_familiares: ant.ant_familiares || f.ant_familiares,
+              ant_personales: ant.ant_personales || f.ant_personales,
+              alergias_intolerancias: ant.alergias_medicamentos || ant.alergias || f.alergias_intolerancias,
+              medicamentos_actuales: ant.medicamentos_actuales || f.medicamentos_actuales,
+            }))}
+            onChange={ant => setForm(f => ({
+              ...f,
+              alergias_intolerancias: ant.alergias_medicamentos || ant.alergias || f.alergias_intolerancias,
+              medicamentos_actuales: ant.medicamentos_actuales || f.medicamentos_actuales,
+            }))}
+          />
+        </div>
+        {/* Antecedentes específicos nutrición */}
         <div style={{ ...S.grid3, marginBottom: "10px" }}>
           {[["ant_familiares","Familiares"],["ant_personales","Personales"],["ant_otros","Otros (cirugías, gestas, partos, abortos)"]].map(([k,l]) => (
             <div key={k} style={S.campo}>
@@ -245,18 +266,6 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
                 rows={2} style={{ fontSize: "12px", borderColor: "#b2ebf2" }} />
             </div>
           ))}
-          <div style={S.campo}>
-            <Label style={S.label}>Alergias / Intolerancias</Label>
-            <Input value={form.alergias_intolerancias}
-              onChange={e => setForm(f => ({ ...f, alergias_intolerancias: e.target.value }))}
-              style={S.input} />
-          </div>
-          <div style={{ ...S.campo, gridColumn: "2/-1" }}>
-            <Label style={S.label}>Medicamentos actuales</Label>
-            <Input value={form.medicamentos_actuales}
-              onChange={e => setForm(f => ({ ...f, medicamentos_actuales: e.target.value }))}
-              style={S.input} />
-          </div>
         </div>
 
         {/* EXAMEN FÍSICO */}
@@ -318,31 +327,96 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
           </div>
         )}
 
-        {/* LABORATORIO */}
-        <div style={S.seccion}>🔬 LABORATORIO</div>
-        <div style={{ marginBottom: "6px" }}>
-          <Label style={S.label}>Fecha del laboratorio</Label>
-          <Input type="date" value={form.laboratorio.fecha_lab}
-            onChange={e => setLab("fecha_lab", e.target.value)}
-            style={{ ...S.input, maxWidth: "180px" }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "10px" }}>
-          {[
-            ["hemoglobina","Hemoglobina","g/dL"],["plaquetas","Plaquetas","x10³"],
-            ["glucosa","Glucosa","mg/dL"],["urea","Urea","mg/dL"],
-            ["creatinina","Creatinina","mg/dL"],["acido_urico","Ácido Úrico","mg/dL"],
-            ["colesterol","Colesterol","mg/dL"],["hdl","HDL","mg/dL"],
-            ["ldl","LDL","mg/dL"],["trigliceridos","Triglicéridos","mg/dL"],
-            ["tgo","TGO","U/L"],["tgp","TGP","U/L"],
-          ].map(([k,l,u]) => (
-            <div key={k} style={S.campo}>
-              <Label style={{ ...S.label, fontSize: "11px" }}>{l}</Label>
-              <Input type="number" step="0.01" value={form.laboratorio[k]}
-                onChange={e => setLab(k, e.target.value)}
-                style={{ ...S.input, fontSize: "12px" }} />
-              <span style={S.unidad}>{u}</span>
+        {/* LABORATORIO — Opcional */}
+        <div style={{
+          border: "1.5px solid #a7f3d0", borderRadius: "8px",
+          overflow: "hidden", marginBottom: "10px"
+        }}>
+          <button type="button"
+            onClick={() => setForm(f => ({ ...f, _showLab: !f._showLab }))}
+            style={{
+              width: "100%", background: form._showLab ? "#10b981" : "#f0fdf4",
+              color: form._showLab ? "white" : "#065f46",
+              border: "none", padding: "8px 14px", cursor: "pointer",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              fontWeight: "700", fontSize: "12px"
+            }}>
+            <span>🔬 LABORATORIO (opcional — solo si el paciente trae exámenes)</span>
+            <span>{form._showLab ? "▲ Ocultar" : "▼ Agregar laboratorio"}</span>
+          </button>
+          {form._showLab && (
+            <div style={{ padding: "12px" }}>
+              <div style={{ marginBottom: "6px" }}>
+                <Label style={S.label}>Fecha del laboratorio</Label>
+                <Input type="date" value={form.laboratorio.fecha_lab}
+                  onChange={e => setLab("fecha_lab", e.target.value)}
+                  style={{ ...S.input, maxWidth: "180px" }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                {[
+                  ["hemoglobina","Hemoglobina","g/dL"],["plaquetas","Plaquetas","x10³"],
+                  ["glucosa","Glucosa","mg/dL"],["urea","Urea","mg/dL"],
+                  ["creatinina","Creatinina","mg/dL"],["acido_urico","Ácido Úrico","mg/dL"],
+                  ["colesterol","Colesterol","mg/dL"],["hdl","HDL","mg/dL"],
+                  ["ldl","LDL","mg/dL"],["trigliceridos","Triglicéridos","mg/dL"],
+                  ["tgo","TGO","U/L"],["tgp","TGP","U/L"],
+                ].map(([k,l,u]) => (
+                  <div key={k} style={S.campo}>
+                    <Label style={{ ...S.label, fontSize: "11px" }}>{l}</Label>
+                    <Input type="number" step="0.01" value={form.laboratorio[k]}
+                      onChange={e => setLab(k, e.target.value)}
+                      style={{ ...S.input, fontSize: "12px" }} />
+                    <span style={S.unidad}>{u}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
+        </div>
+
+        {/* ANTROPOMETRÍA ADICIONAL — Opcional */}
+        <div style={{
+          border: "1.5px solid #bfdbfe", borderRadius: "8px",
+          overflow: "hidden", marginBottom: "10px"
+        }}>
+          <button type="button"
+            onClick={() => setForm(f => ({ ...f, _showAntroExtra: !f._showAntroExtra }))}
+            style={{
+              width: "100%", background: form._showAntroExtra ? "#3b82f6" : "#eff6ff",
+              color: form._showAntroExtra ? "white" : "#1e40af",
+              border: "none", padding: "8px 14px", cursor: "pointer",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              fontWeight: "700", fontSize: "12px"
+            }}>
+            <span>📐 ANTROPOMETRÍA ADICIONAL (circunferencias, alturas especiales)</span>
+            <span>{form._showAntroExtra ? "▲ Ocultar" : "▼ Agregar medidas adicionales"}</span>
+          </button>
+          {form._showAntroExtra && (
+            <div style={{ padding: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                {[
+                  ["circ_cuello","Circ. Cuello","cm"],
+                  ["circ_pantorrilla","Circ. Pantorrilla","cm"],
+                  ["circ_muslo","Circ. Muslo","cm"],
+                  ["altura_rodilla","Altura de Rodilla","cm"],
+                  ["brazada","Brazada","cm"],
+                  ["pliegue_abdominal","Pliegue Abdominal","mm"],
+                ].map(([k,l,u]) => (
+                  <div key={k} style={S.campo}>
+                    <Label style={{ ...S.label, fontSize: "11px" }}>{l}</Label>
+                    <Input type="number" step="0.01"
+                      value={form.antro_extra?.[k] || ""}
+                      onChange={e => setForm(f => ({
+                        ...f,
+                        antro_extra: { ...(f.antro_extra || {}), [k]: e.target.value }
+                      }))}
+                      style={{ ...S.input, fontSize: "12px" }} />
+                    <span style={S.unidad}>{u}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* DIAGNÓSTICO */}

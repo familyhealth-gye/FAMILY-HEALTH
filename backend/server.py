@@ -170,7 +170,11 @@ async def login(credentials: UserLogin):
             "username": user.get("username"),
             "cedula": user.get("cedula"),
             "role": user["role"],
-            "nombre": user.get("nombre")
+            "nombre": user.get("nombre_completo") or user.get("nombre") or user.get("username"),
+            "nombre_completo": user.get("nombre_completo") or user.get("nombre") or user.get("username"),
+            "especialidad": user.get("especialidad", ""),
+            "doctor_id": user.get("doctor_id", ""),
+            "email": user.get("email", "")
         }
     }
 
@@ -1243,6 +1247,155 @@ async def get_historial_paciente(
 
     historial.sort(key=lambda x: x.get("fecha", ""), reverse=True)
     return historial
+
+
+# ========== ANTECEDENTES DEL PACIENTE ==========
+
+@api_router.get("/antecedentes-paciente/{cedula}")
+async def get_antecedentes_paciente(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Busca los antecedentes clínicos de un paciente en TODAS sus consultas previas.
+    Retorna los antecedentes más completos encontrados + alertas activas.
+    Solo hay que llenarlos UNA VEZ — se reutilizan en consultas futuras.
+    """
+    antecedentes = {
+        # Patologías (alertas críticas)
+        "diabetes": False,
+        "hipertension": False,
+        "cardiopatias": False,
+        "hepatitis": False,
+        "vih": False,
+        "epilepsia": False,
+        "embarazo": False,
+        "asma": False,
+        # Alergias — MUY IMPORTANTE
+        "alergias_medicamentos": "",
+        "alergias": "",
+        # Antecedentes generales
+        "ant_familiares": "",
+        "ant_personales": "",
+        "ant_quirurgicos": "",
+        "medicamentos_actuales": "",
+        # Hábitos
+        "fumador": False,
+        "alcohol": False,
+        # Ginecológicos (si aplica)
+        "menarquia": "",
+        "gestas": None,
+        "partos": None,
+        "cesareas": None,
+        "abortos": None,
+        # Meta
+        "tiene_antecedentes": False,
+        "fuente": "",  # de qué especialidad vienen
+        "fecha_registro": "",
+    }
+
+    # Buscar en todas las colecciones de historias clínicas
+    busquedas = [
+        ("medical_history_general", "Medicina General"),
+        ("medical_history_pediatric", "Pediatría"),
+        ("medical_history_odontology", "Odontología"),
+        ("medical_history_nutricion", "Nutrición"),
+        ("medical_history_ginecologia", "Ginecología"),
+    ]
+
+    for collection_name, especialidad in busquedas:
+        collection = getattr(db, collection_name)
+        # Buscar el más antiguo (primera consulta) para antecedentes base
+        docs = await collection.find(
+            {"paciente_cedula": cedula}, {"_id": 0}
+        ).sort("fecha", 1).to_list(1)
+
+        if not docs:
+            continue
+
+        doc = docs[0]
+        antecedentes["tiene_antecedentes"] = True
+        antecedentes["fuente"] = especialidad
+        antecedentes["fecha_registro"] = doc.get("fecha", "")
+
+        # Patologías — OR acumulativo (si alguna consulta dijo True, es True)
+        for campo in ["diabetes", "hipertension", "cardiopatias", "hepatitis", "vih", "epilepsia", "embarazo"]:
+            if doc.get(campo):
+                antecedentes[campo] = True
+
+        # Alergias — tomar el más completo
+        for campo_doc, campo_ant in [
+            ("alergias_medicamentos", "alergias_medicamentos"),
+            ("alergias", "alergias"),
+            ("ant_personales_alergias", "alergias"),
+        ]:
+            valor = doc.get(campo_doc, "")
+            if valor and len(valor) > len(antecedentes.get(campo_ant, "")):
+                antecedentes[campo_ant] = valor
+
+        # Antecedentes generales — tomar el más completo
+        for campo_doc, campo_ant in [
+            ("ant_familiares", "ant_familiares"),
+            ("ant_personales", "ant_personales"),
+            ("ant_personales_quirurgicos", "ant_quirurgicos"),
+            ("antecedentes_familiares", "ant_familiares"),
+            ("medicamentos_actuales", "medicamentos_actuales"),
+        ]:
+            valor = doc.get(campo_doc, "")
+            if valor and len(valor) > len(antecedentes.get(campo_ant, "")):
+                antecedentes[campo_ant] = valor
+
+        # Ginecológicos
+        if especialidad == "Ginecología":
+            datos_gine = doc.get("datos_ginecologicos", {})
+            for campo in ["menarquia", "gestas", "partos", "cesareas", "abortos"]:
+                if datos_gine.get(campo):
+                    antecedentes[campo] = datos_gine[campo]
+
+    # Construir lista de alertas
+    alertas = []
+    if antecedentes["alergias_medicamentos"] or antecedentes["alergias"]:
+        alertas.append({
+            "tipo": "ALERGIA",
+            "color": "#dc2626",
+            "icono": "⚠️",
+            "mensaje": f"ALÉRGICO: {antecedentes['alergias_medicamentos'] or antecedentes['alergias']}"
+        })
+    if antecedentes["diabetes"]:
+        alertas.append({"tipo": "DIABETES", "color": "#d97706", "icono": "🩸", "mensaje": "Paciente DIABÉTICO"})
+    if antecedentes["hipertension"]:
+        alertas.append({"tipo": "HTA", "color": "#dc2626", "icono": "❤️", "mensaje": "Paciente HIPERTENSO"})
+    if antecedentes["cardiopatias"]:
+        alertas.append({"tipo": "CARDIOPATÍA", "color": "#dc2626", "icono": "🫀", "mensaje": "Paciente con CARDIOPATÍA"})
+    if antecedentes["epilepsia"]:
+        alertas.append({"tipo": "EPILEPSIA", "color": "#7c3aed", "icono": "⚡", "mensaje": "Paciente con EPILEPSIA"})
+    if antecedentes["hepatitis"]:
+        alertas.append({"tipo": "HEPATITIS", "color": "#d97706", "icono": "🏥", "mensaje": "Paciente con HEPATITIS"})
+    if antecedentes["vih"]:
+        alertas.append({"tipo": "VIH", "color": "#dc2626", "icono": "🔴", "mensaje": "Paciente VIH+"})
+    if antecedentes["embarazo"]:
+        alertas.append({"tipo": "EMBARAZO", "color": "#ec4899", "icono": "🤱", "mensaje": "Paciente EMBARAZADA"})
+
+    antecedentes["alertas"] = alertas
+    return antecedentes
+
+
+@api_router.put("/antecedentes-paciente/{cedula}")
+async def update_antecedentes_paciente(
+    cedula: str,
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Guarda/actualiza los antecedentes del paciente en la colección de pacientes.
+    Se llama cuando el doctor llena los antecedentes por primera vez.
+    """
+    await db.pacientes.update_one(
+        {"cedula": cedula},
+        {"$set": {"antecedentes": data, "antecedentes_actualizados": datetime.now(timezone.utc).isoformat()}},
+        upsert=False
+    )
+    return {"ok": True}
 
 
 # ========== CIE-10 BÚSQUEDA ==========
