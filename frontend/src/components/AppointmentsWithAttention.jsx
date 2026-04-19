@@ -186,37 +186,54 @@ export const AppointmentsWithAttention = ({
       const cedula = appointment.cedula || appointment.paciente_cedula || "";
       let consulta = null;
 
-      // 1. Buscar directamente por appointment_id — endpoint específico
+      // 1. Buscar directamente por appointment_id
       try {
         const res = await axios.get(
           `${API}/financial/consultas/por-cita/${appointment.id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        if (res.data && res.data.id) {
-          consulta = res.data;
-        }
+        if (res.data && res.data.id) consulta = res.data;
       } catch { /* no existe, continuar */ }
 
-      // 2. Si no existe aún, crearla automáticamente
+      // 2. Si no existe, buscar precio en catálogo y crearla
       if (!consulta) {
         toast.info("Generando consulta financiera...");
+
+        // Buscar precio real del catálogo
+        let precioReal = 30.0;
+        let nombreServicio = `Consulta ${appointment.especialidad || "Médica"}`;
+        try {
+          const catRes = await axios.get(
+            `${API}/financial/catalogo?especialidad=${encodeURIComponent(appointment.especialidad || "")}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (catRes.data && catRes.data.length > 0) {
+            // Buscar el servicio de consulta básica
+            const servicioConsulta = catRes.data.find(s =>
+              s.nombre.toLowerCase().includes("consulta") && !s.nombre.toLowerCase().includes("paquete")
+            ) || catRes.data[0];
+            if (servicioConsulta) {
+              precioReal = servicioConsulta.precio_base;
+              nombreServicio = servicioConsulta.nombre;
+            }
+          }
+        } catch { /* usar precio default */ }
+
         try {
           await axios.post(
             `${API}/financial/consultas/desde-cita/${appointment.id}`,
             [{
-              servicio: `Consulta ${appointment.especialidad || "Médica"}`,
-              descripcion: appointment.observaciones || "Consulta médica",
-              precio_unitario: 30.0,
+              servicio: nombreServicio,
+              descripcion: `${appointment.especialidad || "Consulta médica"} — ${appointment.nombre_completo}`,
+              precio_unitario: precioReal,
               cantidad: 1
             }],
             { headers: { Authorization: `Bearer ${token}` } }
           );
         } catch (err) {
-          // 400 = ya existe, seguimos
           if (err.response?.status !== 400) throw err;
         }
 
-        // Buscar la recién creada (o la que ya existía)
         try {
           const res2 = await axios.get(
             `${API}/financial/consultas/por-cita/${appointment.id}`,
@@ -226,22 +243,19 @@ export const AppointmentsWithAttention = ({
         } catch { /* continuar */ }
       }
 
-      // 3. Último recurso: buscar en todas por cédula
+      // 3. Último recurso: buscar por cédula
       if (!consulta && cedula) {
         try {
-          const res3 = await axios.get(
-            `${API}/financial/consultas`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          const todas = res3.data || [];
-          consulta = todas
+          const res3 = await axios.get(`${API}/financial/consultas`,
+            { headers: { Authorization: `Bearer ${token}` } });
+          consulta = (res3.data || [])
             .filter(c => c.paciente_cedula === cedula && c.estado_pago !== "pagado")
             .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0] || null;
         } catch { /* continuar */ }
       }
 
       if (!consulta) {
-        toast.error("No se pudo crear la consulta financiera. Asegúrese de cerrar primero la consulta médica.");
+        toast.error("No se pudo crear la consulta financiera. Cierre primero la consulta médica.");
         return;
       }
 
@@ -258,6 +272,7 @@ export const AppointmentsWithAttention = ({
     } catch (error) {
       console.error("Error en cobro:", error);
       toast.error(error.response?.data?.detail || "Error al abrir el cobro");
+
     }
   };
 
@@ -631,120 +646,135 @@ export const AppointmentsWithAttention = ({
       
       {/* Modal de Registro de Pago */}
       {showPaymentModal && consultaFinanciera && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">
-                Registrar Pago
-              </h3>
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setConsultaFinanciera(null);
-                  setSelectedAppointmentForPayment(null);
-                }}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999, padding:"16px" }}>
+          <div style={{ background:"white", borderRadius:"12px", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", width:"100%", maxWidth:"520px", overflow:"hidden" }}>
+
+            {/* Header */}
+            <div style={{ background:"linear-gradient(135deg,#00a8cc,#005f73)", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <h3 style={{ color:"white", margin:0, fontSize:"16px", fontWeight:"700" }}>💰 Cobro de Consulta</h3>
+                <p style={{ color:"rgba(255,255,255,0.8)", margin:"2px 0 0", fontSize:"12px" }}>
+                  {consultaFinanciera.paciente_nombre} · {consultaFinanciera.paciente_cedula}
+                </p>
+              </div>
+              <button onClick={() => { setShowPaymentModal(false); setConsultaFinanciera(null); setSelectedAppointmentForPayment(null); }}
+                style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:"50%", width:"28px", height:"28px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center" }}>
                 ×
               </button>
             </div>
 
-            <div className="space-y-4">
-              {/* Información del paciente */}
-              <div className="p-3 bg-gray-50 rounded">
-                <p className="text-sm text-gray-600">Paciente:</p>
-                <p className="font-semibold text-gray-800">{consultaFinanciera.paciente_nombre}</p>
-                <p className="text-sm text-gray-600 mt-1">
-                  Total: <span className="font-bold text-gray-900">${consultaFinanciera.total.toFixed(2)}</span>
+            <div style={{ padding:"20px" }}>
+
+              {/* Desglose de servicios */}
+              <div style={{ marginBottom:"16px" }}>
+                <p style={{ fontSize:"12px", fontWeight:"700", color:"#005f73", marginBottom:"8px", textTransform:"uppercase" }}>
+                  📋 Detalle de Servicios
                 </p>
-                <p className="text-sm text-gray-600">
-                  Pagado: <span className="font-bold text-green-600">${consultaFinanciera.total_pagado.toFixed(2)}</span>
-                </p>
-                <p className="text-sm text-gray-600">
-                  Saldo pendiente: <span className="font-bold text-red-600">${consultaFinanciera.saldo.toFixed(2)}</span>
-                </p>
+                <div style={{ border:"1px solid #e0f7fa", borderRadius:"8px", overflow:"hidden" }}>
+                  {/* Encabezado tabla */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr auto auto", background:"#f0fbff", padding:"6px 12px", fontSize:"11px", fontWeight:"700", color:"#005f73", borderBottom:"1px solid #e0f7fa" }}>
+                    <span>Servicio</span>
+                    <span style={{ textAlign:"center", paddingRight:"12px" }}>Cant.</span>
+                    <span style={{ textAlign:"right" }}>Precio</span>
+                  </div>
+                  {/* Filas de servicios */}
+                  {(consultaFinanciera.servicios || []).map((srv, i) => (
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr auto auto", padding:"8px 12px", borderBottom: i < (consultaFinanciera.servicios||[]).length-1 ? "1px solid #f0f0f0" : "none", alignItems:"center" }}>
+                      <div>
+                        <p style={{ margin:0, fontSize:"13px", fontWeight:"600", color:"#333" }}>{srv.servicio}</p>
+                        {srv.descripcion && srv.descripcion !== srv.servicio && (
+                          <p style={{ margin:0, fontSize:"11px", color:"#666" }}>{srv.descripcion}</p>
+                        )}
+                      </div>
+                      <span style={{ textAlign:"center", fontSize:"13px", color:"#555", paddingRight:"12px" }}>{srv.cantidad || 1}</span>
+                      <span style={{ textAlign:"right", fontSize:"13px", fontWeight:"700", color:"#005f73" }}>
+                        ${(srv.precio_unitario || srv.subtotal || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                  {(!consultaFinanciera.servicios || consultaFinanciera.servicios.length === 0) && (
+                    <div style={{ padding:"12px", textAlign:"center", color:"#999", fontSize:"12px" }}>
+                      Consulta — {consultaFinanciera.especialidad}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Monto del Pago */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Monto del Pago *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={paymentForm.monto}
-                  onChange={(e) => setPaymentForm({...paymentForm, monto: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00"
-                />
+              {/* Resumen de totales */}
+              <div style={{ background:"#f8fdff", borderRadius:"8px", padding:"12px", marginBottom:"16px", border:"1.5px solid #00a8cc" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#555" }}>
+                  <span>Total consulta:</span>
+                  <span style={{ fontWeight:"700" }}>${(consultaFinanciera.total || 0).toFixed(2)}</span>
+                </div>
+                {(consultaFinanciera.total_pagado || 0) > 0 && (
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#059669" }}>
+                    <span>Ya pagado:</span>
+                    <span style={{ fontWeight:"700" }}>-${consultaFinanciera.total_pagado.toFixed(2)}</span>
+                  </div>
+                )}
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"16px", fontWeight:"800", color:"#00a8cc", borderTop:"1px solid #b2ebf2", paddingTop:"8px", marginTop:"4px" }}>
+                  <span>SALDO A COBRAR:</span>
+                  <span>${(consultaFinanciera.saldo || 0).toFixed(2)}</span>
+                </div>
               </div>
 
-              {/* Tipo de Pago */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo de Pago *
-                </label>
-                <select
-                  value={paymentForm.tipo_pago}
-                  onChange={(e) => setPaymentForm({...paymentForm, tipo_pago: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="tarjeta">Tarjeta</option>
-                  <option value="seguro">Seguro</option>
-                  <option value="otros">Otros</option>
-                </select>
+              {/* Formulario de pago */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
+                <div>
+                  <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>
+                    Monto a cobrar *
+                  </label>
+                  <input type="number" step="0.01"
+                    value={paymentForm.monto}
+                    onChange={e => setPaymentForm({...paymentForm, monto: e.target.value})}
+                    style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #00a8cc", borderRadius:"8px", fontSize:"16px", fontWeight:"700", color:"#005f73", boxSizing:"border-box" }}
+                  />
+                  <p style={{ fontSize:"10px", color:"#999", margin:"2px 0 0" }}>Puede ser abono parcial</p>
+                </div>
+                <div>
+                  <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>
+                    Forma de pago *
+                  </label>
+                  <select value={paymentForm.tipo_pago}
+                    onChange={e => setPaymentForm({...paymentForm, tipo_pago: e.target.value})}
+                    style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e5e7eb", borderRadius:"8px", fontSize:"13px", boxSizing:"border-box" }}>
+                    <option value="efectivo">💵 Efectivo</option>
+                    <option value="transferencia">🏦 Transferencia</option>
+                    <option value="tarjeta">💳 Tarjeta</option>
+                    <option value="seguro">🏥 Seguro</option>
+                    <option value="otros">📋 Otros</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Referencia */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Referencia/Nº Transacción
+              <div style={{ marginBottom:"12px" }}>
+                <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>
+                  Referencia / N° Transacción
                 </label>
-                <input
-                  type="text"
+                <input type="text"
                   value={paymentForm.referencia}
-                  onChange={(e) => setPaymentForm({...paymentForm, referencia: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Opcional"
-                />
-              </div>
-
-              {/* Notas */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notas
-                </label>
-                <textarea
-                  value={paymentForm.notas}
-                  onChange={(e) => setPaymentForm({...paymentForm, notas: e.target.value})}
-                  rows={2}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Notas adicionales..."
+                  onChange={e => setPaymentForm({...paymentForm, referencia: e.target.value})}
+                  placeholder="Opcional — Nº de transferencia, voucher..."
+                  style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e5e7eb", borderRadius:"8px", fontSize:"13px", boxSizing:"border-box" }}
                 />
               </div>
 
               {/* Botones */}
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={handleRegisterPayment}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Registrar Pago
+              <div style={{ display:"flex", gap:"10px", marginTop:"4px" }}>
+                <button onClick={handleRegisterPayment}
+                  style={{ flex:1, padding:"12px", background:"linear-gradient(135deg,#00a8cc,#005f73)", color:"white", border:"none", borderRadius:"8px", fontSize:"15px", fontWeight:"700", cursor:"pointer" }}>
+                  ✓ Confirmar Pago ${parseFloat(paymentForm.monto || 0).toFixed(2)}
                 </button>
-                <button
-                  onClick={() => {
-                    setShowPaymentModal(false);
-                    setConsultaFinanciera(null);
-                    setSelectedAppointmentForPayment(null);
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                >
+                <button onClick={() => { setShowPaymentModal(false); setConsultaFinanciera(null); setSelectedAppointmentForPayment(null); }}
+                  style={{ padding:"12px 16px", background:"#f3f4f6", color:"#374151", border:"none", borderRadius:"8px", fontSize:"13px", cursor:"pointer" }}>
                   Cancelar
                 </button>
               </div>
+
+              {/* Nota info caja */}
+              <p style={{ fontSize:"10px", color:"#9ca3af", textAlign:"center", marginTop:"8px" }}>
+                El pago quedará registrado en Caja para el cierre del día
+              </p>
             </div>
           </div>
         </div>

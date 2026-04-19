@@ -1249,6 +1249,72 @@ async def get_historial_paciente(
     return historial
 
 
+# ========== IMÁGENES CLÍNICAS (FOTOS / RX) ==========
+
+@api_router.post("/imagenes-clinicas")
+async def guardar_imagen_clinica(
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Guarda una imagen clínica (RX, foto antes/después, etc.) en base64.
+    Se asocia al paciente por cédula y opcionalmente a una cita.
+    """
+    imagen_doc = {
+        "id": str(uuid.uuid4()),
+        "paciente_cedula": data.get("paciente_cedula", ""),
+        "paciente_nombre": data.get("paciente_nombre", ""),
+        "appointment_id": data.get("appointment_id", ""),
+        "categoria": data.get("categoria", "Otro"),  # RX Panorámica, RX Periapical, Foto Antes, etc.
+        "tipo_archivo": data.get("tipo_archivo", "image/jpeg"),  # image/jpeg, image/png, application/pdf
+        "nombre_archivo": data.get("nombre_archivo", "imagen.jpg"),
+        "descripcion": data.get("descripcion", ""),
+        "archivo_base64": data.get("archivo_base64", ""),  # ← Cambio de campo
+        "especialidad": data.get("especialidad", "Odontología"),
+        "doctor_nombre": data.get("doctor_nombre", current_user.username),
+        "fecha": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": current_user.username,
+    }
+    await db.imagenes_clinicas.insert_one(imagen_doc)
+    imagen_doc.pop("archivo_base64")  # no devolver base64 en respuesta
+    return {"ok": True, "id": imagen_doc["id"], "fecha": imagen_doc["fecha"]}
+
+
+@api_router.get("/imagenes-clinicas/paciente/{cedula}")
+async def get_imagenes_paciente(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Lista las imágenes del paciente (sin base64 para que sea rápido)"""
+    docs = await db.imagenes_clinicas.find(
+        {"paciente_cedula": cedula},
+        {"_id": 0, "archivo_base64": 0}  # ← Excluir archivo_base64
+    ).sort("fecha", -1).to_list(200)
+    return docs
+
+
+@api_router.get("/imagenes-clinicas/{imagen_id}")
+async def get_imagen(
+    imagen_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Obtiene una imagen específica con su base64"""
+    doc = await db.imagenes_clinicas.find_one({"id": imagen_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+    return doc
+
+
+@api_router.delete("/imagenes-clinicas/{imagen_id}")
+async def delete_imagen(
+    imagen_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    await db.imagenes_clinicas.delete_one({"id": imagen_id})
+    return {"ok": True}
+
+
 # ========== ANTECEDENTES DEL PACIENTE ==========
 
 @api_router.get("/antecedentes-paciente/{cedula}")
@@ -1431,6 +1497,38 @@ CIE10_COMUNES = [
     {"codigo": "P00-P96", "descripcion": "Ciertas afecciones originadas en el período perinatal"},
     {"codigo": "Z00.1", "descripcion": "Examen de control de salud del niño"},
     {"codigo": "J45.9", "descripcion": "Asma, no especificada"},
+    # ── Odontología completo K00-K14 ──
+    {"codigo": "K02.0", "descripcion": "Caries limitada al esmalte (mancha blanca)"},
+    {"codigo": "K02.1", "descripcion": "Caries de la dentina"},
+    {"codigo": "K02.2", "descripcion": "Caries del cemento"},
+    {"codigo": "K02.3", "descripcion": "Caries dentaria detenida"},
+    {"codigo": "K02.5", "descripcion": "Caries con exposición pulpar"},
+    {"codigo": "K04.0", "descripcion": "Pulpitis"},
+    {"codigo": "K04.1", "descripcion": "Necrosis de la pulpa"},
+    {"codigo": "K04.4", "descripcion": "Periodontitis apical aguda originada en la pulpa"},
+    {"codigo": "K04.5", "descripcion": "Periodontitis apical crónica (granuloma apical)"},
+    {"codigo": "K04.6", "descripcion": "Absceso periapical con fístula"},
+    {"codigo": "K04.7", "descripcion": "Absceso periapical sin fístula"},
+    {"codigo": "K04.8", "descripcion": "Quiste radicular"},
+    {"codigo": "K05.0", "descripcion": "Gingivitis aguda"},
+    {"codigo": "K05.2", "descripcion": "Periodontitis aguda"},
+    {"codigo": "K05.3", "descripcion": "Periodontitis crónica"},
+    {"codigo": "K06.0", "descripcion": "Recesión gingival"},
+    {"codigo": "K06.1", "descripcion": "Agrandamiento gingival (hiperplasia gingival)"},
+    {"codigo": "K07.4", "descripcion": "Maloclusión, no especificada"},
+    {"codigo": "K07.6", "descripcion": "Trastornos de la articulación temporomandibular (ATM)"},
+    {"codigo": "K08.1", "descripcion": "Pérdida de dientes por extracción o enfermedad periodontal"},
+    {"codigo": "K08.3", "descripcion": "Raíz dental retenida"},
+    {"codigo": "K10.3", "descripcion": "Alveolitis del maxilar (alveolo seco)"},
+    {"codigo": "K01.1", "descripcion": "Dientes impactados (tercer molar incluido)"},
+    {"codigo": "K03.0", "descripcion": "Atrición excesiva de los dientes (bruxismo)"},
+    {"codigo": "K03.1", "descripcion": "Abrasión de los dientes"},
+    {"codigo": "K03.2", "descripcion": "Erosión de los dientes"},
+    {"codigo": "K03.6", "descripcion": "Depósitos en los dientes (cálculo, placa bacteriana)"},
+    {"codigo": "K12.0", "descripcion": "Estomatitis aftosa recurrente (úlcera aftosa)"},
+    {"codigo": "K12.2", "descripcion": "Celulitis y absceso de boca"},
+    {"codigo": "K13.0", "descripcion": "Queilitis (enfermedad de los labios)"},
+    {"codigo": "Z01.2", "descripcion": "Examen dental de rutina"},
 ]
 
 @api_router.get("/cie10/buscar")
@@ -3265,3 +3363,4 @@ import uvicorn
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+    
