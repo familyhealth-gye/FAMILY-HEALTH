@@ -349,3 +349,59 @@
     grid-column: span 1;
   }
 }
+
+/* ══ RESPONSIVE adicional odontograma ══ */
+@media (max-width: 768px) {
+  .odontograma-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.5rem;
+  }
+
+  .dientes-arcada {
+    min-width: 520px; /* fuerza scroll si no cabe */
+  }
+
+  .diente-container {
+    gap: 0.1rem;
+  }
+
+  .diente-numero {
+    font-size: 0.6rem;
+  }
+
+  .leyenda-odontograma {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .leyenda-items {
+    gap: 0.5rem;
+  }
+
+  .herramientas-diagnostico {
+    gap: 0.5rem;
+  }
+
+  .herramientas-diagnostico button,
+  .herramientas-diagnostico select {
+    font-size: 0.78rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .modal-diente {
+    max-width: calc(100vw - 1rem) !important;
+    margin: 0.5rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .diente-svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .dientes-arcada {
+    min-width: 460px;
+  }
+}

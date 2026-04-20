@@ -808,3 +808,441 @@ body {
     padding: 0.75rem 0.5rem;
   }
 }
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE COMPLETO — Tablet (768px) y Móvil (480px)
+   ═══════════════════════════════════════════════════ */
+
+/* ── TABLET (hasta 1024px) ── */
+@media (max-width: 1024px) {
+  .main-container {
+    padding: 0 0.75rem;
+    margin: 0.75rem auto;
+  }
+
+  .tab-content {
+    padding: 1rem;
+  }
+
+  /* Tabs principales: scroll horizontal si no caben */
+  .tabs-list,
+  .tabs-list-extended {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .tabs-list::-webkit-scrollbar,
+  .tabs-list-extended::-webkit-scrollbar { display: none; }
+
+  .tabs-list button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Tablas: scroll horizontal */
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Grid forms: 2 columnas */
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Checkboxes: 2 columnas */
+  .checkboxes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── MÓVIL (hasta 768px) ── */
+@media (max-width: 768px) {
+
+  /* Header compacto */
+  .medical-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .header-content {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .logo-image {
+    width: 40px;
+    height: 40px;
+  }
+
+  .clinic-name {
+    font-size: 1.1rem;
+  }
+
+  .clinic-location {
+    display: none;
+  }
+
+  .user-section {
+    flex-shrink: 0;
+    gap: 0.5rem;
+  }
+
+  .user-name {
+    font-size: 0.75rem;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .logout-button span {
+    display: none; /* Ocultar texto "Salir", dejar solo el ícono */
+  }
+
+  /* Contenido principal */
+  .main-container {
+    padding: 0 0.5rem;
+    margin: 0.5rem auto;
+  }
+
+  .tab-content {
+    padding: 0.75rem 0.5rem;
+  }
+
+  /* Tabs: scroll horizontal sin texto de ícono si hay muchos */
+  .tabs-list,
+  .tabs-list-extended {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    gap: 0.25rem;
+    padding: 0.375rem;
+  }
+
+  .tabs-list button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    padding: 0.6rem 0.75rem;
+    gap: 0.25rem;
+  }
+
+  .tab-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Formularios: 1 columna */
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .checkboxes-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  /* Secciones */
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+  }
+
+  .section-subtitle {
+    font-size: 0.8rem;
+  }
+
+  /* Tablas: scroll horizontal + fuente más chica */
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+  }
+
+  .data-table {
+    min-width: 600px; /* Fuerza scroll si pantalla chica */
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  /* Ocultar columnas menos importantes en móvil */
+  .data-table .col-opcional {
+    display: none;
+  }
+
+  /* Acciones en columna */
+  .actions-cell {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .actions-cell button {
+    width: 100%;
+    font-size: 0.75rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  /* Vista consulta: full screen con scroll */
+  .vista-atencion-formulario,
+  .vista-atencion-completa {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 200;
+  }
+
+  .atencion-header {
+    padding: 0.75rem 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .atencion-header .atencion-titulo h2 {
+    font-size: 1.1rem;
+  }
+
+  .patient-info-inline {
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+
+  .atencion-contenido {
+    padding: 0.75rem;
+    padding-bottom: 120px; /* Espacio para botones fijos */
+  }
+
+  /* Historia clínica en móvil */
+  .medical-history-form {
+    max-height: none; /* Sin límite en móvil, usa scroll nativo */
+    overflow-y: visible;
+    padding: 0.5rem;
+  }
+
+  .form-section {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .section-title-small {
+    font-size: 0.9rem;
+  }
+
+  /* Botones de acción */
+  .form-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+
+  /* Panel cerrar consulta */
+  .panel-cerrar-consulta {
+    padding: 0.75rem 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .panel-cerrar-consulta .panel-info {
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+
+  .btn-cerrar-consulta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Badges */
+  .badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Dialogs */
+  [role="dialog"] > div {
+    margin: 0.5rem;
+    max-width: calc(100vw - 1rem) !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Stats cards */
+  .stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem;
+  }
+
+  .stat-card {
+    padding: 0.75rem;
+  }
+
+  /* Formulario de cita */
+  .appointment-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Buscador */
+  .search-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .search-container input,
+  .search-container select,
+  .search-container button {
+    width: 100%;
+  }
+}
+
+/* ── MÓVIL PEQUEÑO (hasta 480px) ── */
+@media (max-width: 480px) {
+  .clinic-name {
+    font-size: 0.95rem;
+  }
+
+  .logo-image {
+    width: 32px;
+    height: 32px;
+  }
+
+  .tabs-list button {
+    font-size: 0.72rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  /* Ocultar iconos de tabs si hay demasiados */
+  .tab-icon {
+    display: none;
+  }
+
+  .checkboxes-grid {
+    grid-template-columns: 1fr 1fr;
+    font-size: 0.8rem;
+  }
+
+  .stat-card .stat-number {
+    font-size: 1.5rem;
+  }
+
+  /* Modal de pago: full width */
+  div[style*="max-width: 520px"],
+  div[style*="maxWidth: 520px"] {
+    max-width: calc(100vw - 1rem) !important;
+    margin: 0.5rem;
+  }
+}
+
+/* ── UTILIDADES RESPONSIVE GLOBALES ── */
+
+/* Cualquier grid de 2+ columnas → 1 en móvil */
+@media (max-width: 640px) {
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="gridTemplateColumns: '1fr 1fr'"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Formularios inline */
+  [style*="display: grid"][style*="repeat(2"],
+  [style*="display: grid"][style*="repeat(3"],
+  [style*="display: grid"][style*="repeat(4"],
+  [style*="display: grid"][style*="repeat(5"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  [style*="display: grid"][style*="repeat(4"],
+  [style*="display: grid"][style*="repeat(5"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Historial lateral: ocultar en móvil para ganar espacio */
+  /* Se puede revelar con un botón si se necesita */
+  .historial-lateral-mobile-hide {
+    display: none;
+  }
+}
+
+/* ── TOUCH: mejorar áreas de tap ── */
+@media (pointer: coarse) {
+  button, input[type="checkbox"], input[type="radio"], select {
+    min-height: 44px; /* Mínimo recomendado por Apple/Google */
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 20px;
+    min-height: 20px;
+  }
+
+  /* Inputs más grandes en táctil */
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="email"],
+  input[type="tel"],
+  textarea,
+  select {
+    font-size: 16px !important; /* Evita zoom automático en iOS */
+  }
+}
+
+/* ── SCROLL suave en todo el sistema ── */
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Contenedores con scroll: mostrar barra solo cuando se necesita */
+.table-container,
+.medical-history-form,
+.vista-atencion-formulario,
+.vista-atencion-completa,
+.tabs-list,
+.tabs-list-extended {
+  scrollbar-width: thin;
+  scrollbar-color: #00a8cc transparent;
+}
+
+.table-container::-webkit-scrollbar,
+.tabs-list::-webkit-scrollbar,
+.tabs-list-extended::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+
+.table-container::-webkit-scrollbar-track,
+.tabs-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-container::-webkit-scrollbar-thumb,
+.tabs-list::-webkit-scrollbar-thumb {
+  background: #00a8cc;
+  border-radius: 4px;
+}

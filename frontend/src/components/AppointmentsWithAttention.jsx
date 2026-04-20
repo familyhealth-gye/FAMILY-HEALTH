@@ -405,109 +405,72 @@ export const AppointmentsWithAttention = ({
         </span>
       </div>
 
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Estado</th>
-            <th>Paciente</th>
-            <th>Cédula</th>
-            <th>Edad</th>
-            <th>Teléfono</th>
-            <th>Especialidad</th>
-            <th>Doctor</th>
-            <th>Fecha</th>
-            <th>Hora</th>
-            <th className="actions-column">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedAppointments.map((appointment) => (
-            <tr key={appointment.id} data-testid={`appointment-row-${appointment.id}`}>
-              <td>
-                <span className={`status-badge status-${(appointment.estado || 'Programada').toLowerCase().replace(/ /g, '-')}`}>
-                  {appointment.estado || "Programada"}
-                </span>
-              </td>
-              <td><strong>{appointment.nombre_completo}</strong></td>
-              <td>{appointment.cedula}</td>
-              <td>{appointment.edad}</td>
-              <td>
-                <div className="phone-cell">
-                  {appointment.telefono}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => openWhatsApp(appointment.telefono)}
-                    className="whatsapp-button"
-                    data-testid={`whatsapp-${appointment.id}`}
-                  >
-                    <Phone className="whatsapp-icon" />
-                  </Button>
-                </div>
-              </td>
-              <td><span className="badge">{appointment.especialidad}</span></td>
-              <td>{appointment.doctor_nombre}</td>
-              <td>{appointment.fecha}</td>
-              <td>{appointment.hora}</td>
-              <td className="actions-cell">
-                {/* Permitir iniciar, continuar o reanudar atención */}
-                {(appointment.estado === "Programada" || appointment.estado === "En Atención" || !appointment.estado) && user?.role === "Doctor" && (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => handleStartAttention(appointment)}
-                    className="attention-button"
-                    data-testid={`start-attention-${appointment.id}`}
-                  >
-                    <Play className="button-icon" size={14} />
-                    {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
-                  </Button>
-                )}
-                
-                {/* Permitir reanudar consulta "Pendiente de Pago" si el doctor necesita completarla */}
-                {appointment.estado === "Pendiente de Pago" && user?.role === "Doctor" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleStartAttention(appointment)}
-                    className="resume-button"
-                    data-testid={`resume-attention-${appointment.id}`}
-                    title="Reanudar para completar historia clínica"
-                  >
-                    <Play className="button-icon" size={14} />
-                    Reanudar
-                  </Button>
-                )}
-                
-                {appointment.estado === "Pendiente de Pago" && user?.role === "Recepcion" && (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => handleOpenPaymentModal(appointment)}
-                    className="payment-button"
-                  >
-                    <Check className="button-icon" size={14} />
-                    Cobrar
-                  </Button>
-                )}
-                
-                {appointment.estado !== "En Atención" && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditAppointment(appointment)}
-                      data-testid={`edit-appointment-${appointment.id}`}
-                    >
-                      <Edit className="action-icon" />
+      <div className="table-container">
+        {/* Vista tabla — escritorio y tablet */}
+        <table className="data-table" style={{ display:"var(--table-display, table)" }}>
+          <thead>
+            <tr>
+              <th>Estado</th>
+              <th>Paciente</th>
+              <th className="col-opcional">Cédula</th>
+              <th className="col-opcional">Edad</th>
+              <th className="col-opcional">Teléfono</th>
+              <th>Especialidad</th>
+              <th className="col-opcional">Doctor</th>
+              <th>Fecha</th>
+              <th className="col-opcional">Hora</th>
+              <th className="actions-column">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedAppointments.map((appointment) => (
+              <tr key={appointment.id} data-testid={`appointment-row-${appointment.id}`}>
+                <td>
+                  <span className={`status-badge status-${(appointment.estado || 'Programada').toLowerCase().replace(/ /g, '-')}`}>
+                    {appointment.estado || "Programada"}
+                  </span>
+                </td>
+                <td><strong>{appointment.nombre_completo}</strong></td>
+                <td className="col-opcional">{appointment.cedula}</td>
+                <td className="col-opcional">{appointment.edad}</td>
+                <td className="col-opcional">
+                  <div className="phone-cell">
+                    {appointment.telefono}
+                    <Button size="sm" variant="ghost" onClick={() => openWhatsApp(appointment.telefono)} className="whatsapp-button" data-testid={`whatsapp-${appointment.id}`}>
+                      <Phone className="whatsapp-icon" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteAppointment(appointment.id)}
-                      data-testid={`delete-appointment-${appointment.id}`}
-                    >
-                      <Trash2 className="action-icon delete-icon" />
+                  </div>
+                </td>
+                <td><span className="badge">{appointment.especialidad}</span></td>
+                <td className="col-opcional">{appointment.doctor_nombre}</td>
+                <td>{appointment.fecha}</td>
+                <td className="col-opcional">{appointment.hora}</td>
+                <td className="actions-cell">
+                  {(appointment.estado === "Programada" || appointment.estado === "En Atención" || !appointment.estado) && user?.role === "Doctor" && (
+                    <Button size="sm" variant="default" onClick={() => handleStartAttention(appointment)} className="attention-button" data-testid={`start-attention-${appointment.id}`}>
+                      <Play className="button-icon" size={14} />
+                      {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
+                    </Button>
+                  )}
+                  {appointment.estado === "Pendiente de Pago" && user?.role === "Doctor" && (
+                    <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={`resume-attention-${appointment.id}`} title="Reanudar para completar historia clínica">
+                      <Play className="button-icon" size={14} />
+                      Reanudar
+                    </Button>
+                  )}
+                  {appointment.estado === "Pendiente de Pago" && user?.role === "Recepcion" && (
+                    <Button size="sm" variant="default" onClick={() => handleOpenPaymentModal(appointment)} className="payment-button">
+                      <Check className="button-icon" size={14} />
+                      Cobrar
+                    </Button>
+                  )}
+                  {appointment.estado !== "En Atención" && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditAppointment(appointment)} data-testid={`edit-appointment-${appointment.id}`}>
+                        <Edit className="action-icon" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAppointment(appointment.id)} data-testid={`delete-appointment-${appointment.id}`}>
+                        <Trash2 className="action-icon delete-icon" />
                     </Button>
                   </>
                 )}
@@ -516,6 +479,7 @@ export const AppointmentsWithAttention = ({
           ))}
         </tbody>
       </table>
+      </div>
 
       {sortedAppointments.length === 0 && (
         <div className="empty-state">
@@ -530,23 +494,49 @@ export const AppointmentsWithAttention = ({
     // Para otras especialidades: Formulario en vista amplia
     return (
       <div className="vista-atencion-formulario">
-        <div className="atencion-header">
-          <Button 
-            variant="ghost" 
-            onClick={() => {
-              setVistaAtencion(false);
-              setSelectedAppointment(null);
-            }}
-          >
-            <ArrowLeft size={20} />
-            Volver a Citas
-          </Button>
-          <div className="atencion-titulo">
-            <h2>Atención Médica - {selectedAppointment.especialidad}</h2>
-            <div className="patient-info-inline">
-              <span><strong>Paciente:</strong> {selectedAppointment.nombre_completo}</span>
-              <span><strong>Edad:</strong> {selectedAppointment.edad} años</span>
-              <span><strong>Cédula:</strong> {selectedAppointment.cedula}</span>
+        <div className="atencion-header" style={{ position:"sticky", top:0, zIndex:50 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setVistaAtencion(false);
+                setSelectedAppointment(null);
+              }}
+              style={{ color:"white", border:"1px solid rgba(255,255,255,0.3)", flexShrink:0 }}
+            >
+              <ArrowLeft size={16} />
+              <span style={{ display:"var(--back-text-display, inline)" }}>Volver</span>
+            </Button>
+            <div className="atencion-titulo" style={{ flex:1, minWidth:0 }}>
+              <h2 style={{ fontSize:"clamp(0.9rem, 3vw, 1.4rem)", margin:0 }}>
+                🏥 {selectedAppointment.especialidad} — {selectedAppointment.nombre_completo}
+              </h2>
+              <div className="patient-info-inline" style={{ flexWrap:"wrap", gap:"0.5rem", marginTop:"2px" }}>
+                <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
+                  <strong>Cédula:</strong> {selectedAppointment.cedula}
+                </span>
+                {selectedAppointment.fecha_nacimiento ? (
+                  <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
+                    <strong>Edad:</strong> {(() => {
+                      const hoy = new Date();
+                      const nac = new Date(selectedAppointment.fecha_nacimiento + "T12:00:00");
+                      let edad = hoy.getFullYear() - nac.getFullYear();
+                      if (hoy.getMonth() < nac.getMonth() || (hoy.getMonth() === nac.getMonth() && hoy.getDate() < nac.getDate())) edad--;
+                      return `${edad} años`;
+                    })()}
+                  </span>
+                ) : selectedAppointment.edad > 0 ? (
+                  <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
+                    <strong>Edad:</strong> {selectedAppointment.edad} años
+                  </span>
+                ) : null}
+                {selectedAppointment.telefono && (
+                  <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
+                    <strong>Tel:</strong> {selectedAppointment.telefono}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -1789,6 +1789,19 @@ async def create_appointment(input: AppointmentCreate):
     print(f"   Fecha Nacimiento: {input.fecha_nacimiento}")
     print(f"   Especialidad: {input.especialidad}")
     
+    # ✅ CALCULAR EDAD DESDE FECHA_NACIMIENTO
+    if input.fecha_nacimiento:
+        try:
+            fn = datetime.fromisoformat(input.fecha_nacimiento)
+            hoy = datetime.now()
+            edad_calculada = hoy.year - fn.year
+            if hoy.month < fn.month or (hoy.month == fn.month and hoy.day < fn.day):
+                edad_calculada -= 1
+            input.edad = max(0, edad_calculada)
+            print(f"   ✅ Edad calculada: {input.edad} años")
+        except Exception as e:
+            print(f"   ⚠️ Error calculando edad: {e}")
+    
     # Verificar que el doctor existe
     doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
     if not doctor:
