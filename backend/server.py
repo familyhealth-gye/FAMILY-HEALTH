@@ -1332,7 +1332,7 @@ async def delete_imagen(
 
 # ========== IA MÉDICA — GEMINI FLASH (GRATUITO) ==========
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 
 async def get_gemini_key() -> str:
     """Lee la API key de MongoDB. Fallback a variable de entorno."""
