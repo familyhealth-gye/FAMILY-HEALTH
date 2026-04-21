@@ -1332,7 +1332,7 @@ async def delete_imagen(
 
 # ========== IA MÉDICA — GEMINI FLASH (GRATUITO) ==========
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
 
 async def get_gemini_key() -> str:
     """Lee la API key de MongoDB. Fallback a variable de entorno."""
@@ -1550,6 +1550,22 @@ async def delete_config_ia(current_user: TokenData = Depends(get_current_user)):
 
 # ========== MIGRACIÓN: RECALCULAR EDAD PACIENTES EXISTENTES ==========
 
+def calcular_edad_desde_fecha(fecha_nacimiento: str) -> int:
+    """
+    Calcula la edad a partir de una fecha de nacimiento en formato ISO (YYYY-MM-DD).
+    Retorna la edad en años o 0 si hay error.
+    """
+    try:
+        fn = datetime.fromisoformat(fecha_nacimiento)
+        hoy = datetime.now()
+        edad = hoy.year - fn.year
+        # Si el cumpleaños no ha llegado este año, restar 1
+        if hoy.month < fn.month or (hoy.month == fn.month and hoy.day < fn.day):
+            edad -= 1
+        return max(0, edad)
+    except Exception:
+        return 0
+
 @api_router.post("/admin/migrar-edades")
 async def migrar_edades_pacientes(
     current_user: TokenData = Depends(get_current_user)
@@ -1565,6 +1581,8 @@ async def migrar_edades_pacientes(
     appointments = await db.appointments.find({}, {"_id": 0}).to_list(10000)
     actualizados = 0
     sin_fecha = 0
+    print(f"\n🔄 INICIANDO MIGRACIÓN DE EDADES")
+    print(f"   Total citas a procesar: {len(appointments)}")
 
     for apt in appointments:
         fecha = apt.get("fecha_nacimiento", "")
@@ -1572,15 +1590,21 @@ async def migrar_edades_pacientes(
         
         if fecha:
             nueva_edad = calcular_edad_desde_fecha(fecha)
-            if nueva_edad > 0 and nueva_edad != edad_actual:
+            # Actualizar si la edad es diferente (incluyendo edad=0 con fecha válida)
+            if nueva_edad != edad_actual:
                 await db.appointments.update_one(
                     {"id": apt["id"]},
                     {"$set": {"edad": nueva_edad}}
                 )
                 actualizados += 1
+                print(f"   ✅ {apt.get('nombre_completo', 'N/A')}: {edad_actual} → {nueva_edad} años")
         else:
             sin_fecha += 1
 
+    print(f"\n✅ MIGRACIÓN COMPLETADA")
+    print(f"   Actualizados: {actualizados}")
+    print(f"   Sin fecha: {sin_fecha}")
+    
     return {
         "ok": True,
         "total_procesados": len(appointments),
