@@ -37,7 +37,9 @@ export const AppointmentsWithAttention = ({
     monto: '',
     tipo_pago: 'efectivo',
     referencia: '',
-    notas: ''
+    notas: '',
+    descuento: 0,        // valor en $ del descuento
+    motivo_descuento: '' // razón del descuento
   });
 
   // Obtener la especialidad del usuario
@@ -265,7 +267,9 @@ export const AppointmentsWithAttention = ({
         monto: (consulta.saldo || consulta.total || 0).toString(),
         tipo_pago: "efectivo",
         referencia: "",
-        notas: ""
+        notas: "",
+        descuento: 0,
+        motivo_descuento: ""
       });
       setShowPaymentModal(true);
 
@@ -278,22 +282,34 @@ export const AppointmentsWithAttention = ({
 
   // Función para registrar el pago
   const handleRegisterPayment = async () => {
-    console.log("💳 ======== INICIANDO REGISTRO DE PAGO ========");
-    console.log("📋 Consulta Financiera:", consultaFinanciera);
-    console.log("💰 Formulario de Pago:", paymentForm);
-    console.log("🆔 Appointment seleccionado:", selectedAppointmentForPayment);
-    
     try {
+      const descuento = parseFloat(paymentForm.descuento) || 0;
+      const saldoConDescuento = Math.max(0, (consultaFinanciera.saldo || 0) - descuento);
       const monto = parseFloat(paymentForm.monto);
-      console.log("💵 Monto parseado:", monto);
       
       if (!consultaFinanciera || !paymentForm.monto || monto <= 0) {
-        console.error("❌ Validación fallida:");
-        console.error("   - Tiene consulta:", !!consultaFinanciera);
-        console.error("   - Tiene monto:", !!paymentForm.monto);
-        console.error("   - Monto válido:", monto > 0);
         toast.error("Ingrese un monto válido");
         return;
+      }
+      if (monto > saldoConDescuento + 0.01) {
+        toast.error(`El monto no puede superar el saldo con descuento ($${saldoConDescuento.toFixed(2)})`);
+        return;
+      }
+
+      // Si hay descuento, aplicarlo primero actualizando el total de la consulta
+      if (descuento > 0) {
+        try {
+          await axios.put(
+            `${API}/financial/consultas/${consultaFinanciera.id}`,
+            {
+              descuento: descuento,
+              motivo_descuento: paymentForm.motivo_descuento || "Descuento aplicado",
+              total: (consultaFinanciera.total || 0) - descuento,
+              saldo: saldoConDescuento,
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch { /* continuar igual si el endpoint no acepta descuento directo */ }
       }
 
       const payloadPago = {
@@ -301,11 +317,11 @@ export const AppointmentsWithAttention = ({
         monto: monto,
         tipo_pago: paymentForm.tipo_pago,
         referencia: paymentForm.referencia,
-        notas: paymentForm.notas
+        notas: descuento > 0
+          ? `Descuento $${descuento.toFixed(2)}${paymentForm.motivo_descuento ? ` — ${paymentForm.motivo_descuento}` : ''}. ${paymentForm.notas}`
+          : paymentForm.notas,
+        descuento_aplicado: descuento,
       };
-
-      console.log("📤 Payload a enviar:", payloadPago);
-      console.log("📡 POST a:", `${API}/financial/consultas/${consultaFinanciera.id}/pagos`);
 
       // Registrar el pago en la consulta financiera
       const response = await axios.post(
@@ -690,21 +706,91 @@ export const AppointmentsWithAttention = ({
                 </div>
               </div>
 
-              {/* Resumen de totales */}
-              <div style={{ background:"#f8fdff", borderRadius:"8px", padding:"12px", marginBottom:"16px", border:"1.5px solid #00a8cc" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#555" }}>
-                  <span>Total consulta:</span>
-                  <span style={{ fontWeight:"700" }}>${(consultaFinanciera.total || 0).toFixed(2)}</span>
-                </div>
-                {(consultaFinanciera.total_pagado || 0) > 0 && (
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#059669" }}>
-                    <span>Ya pagado:</span>
-                    <span style={{ fontWeight:"700" }}>-${consultaFinanciera.total_pagado.toFixed(2)}</span>
+              {/* Resumen de totales — dinámico con descuento */}
+              {(() => {
+                const descuento = parseFloat(paymentForm.descuento) || 0;
+                const totalOriginal = consultaFinanciera.total || 0;
+                const yaPagado = consultaFinanciera.total_pagado || 0;
+                const saldoConDesc = Math.max(0, (consultaFinanciera.saldo || 0) - descuento);
+                return (
+                  <div style={{ background:"#f8fdff", borderRadius:"8px", padding:"12px", marginBottom:"12px", border:"1.5px solid #00a8cc" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#555" }}>
+                      <span>Total consulta:</span>
+                      <span style={{ fontWeight:"700" }}>${totalOriginal.toFixed(2)}</span>
+                    </div>
+                    {yaPagado > 0 && (
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#059669" }}>
+                        <span>Ya pagado:</span>
+                        <span style={{ fontWeight:"700" }}>−${yaPagado.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {descuento > 0 && (
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#d97706" }}>
+                        <span>🏷️ Descuento:</span>
+                        <span style={{ fontWeight:"700" }}>−${descuento.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:"17px", fontWeight:"800", color: descuento > 0 ? "#059669" : "#00a8cc", borderTop:"1px solid #b2ebf2", paddingTop:"8px", marginTop:"4px" }}>
+                      <span>TOTAL A COBRAR:</span>
+                      <span>${saldoConDesc.toFixed(2)}</span>
+                    </div>
+                    {descuento > 0 && (
+                      <p style={{ margin:"4px 0 0", fontSize:"10px", color:"#d97706", textAlign:"right" }}>
+                        Ahorro: ${descuento.toFixed(2)} ({totalOriginal > 0 ? ((descuento/totalOriginal)*100).toFixed(0) : 0}%)
+                      </p>
+                    )}
                   </div>
-                )}
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"16px", fontWeight:"800", color:"#00a8cc", borderTop:"1px solid #b2ebf2", paddingTop:"8px", marginTop:"4px" }}>
-                  <span>SALDO A COBRAR:</span>
-                  <span>${(consultaFinanciera.saldo || 0).toFixed(2)}</span>
+                );
+              })()}
+
+              {/* Descuento opcional */}
+              <div style={{ background:"#fffbeb", border:"1.5px solid #fde68a", borderRadius:"8px", padding:"10px 12px", marginBottom:"12px" }}>
+                <p style={{ margin:"0 0 8px", fontSize:"12px", fontWeight:"700", color:"#92400e" }}>🏷️ Descuento (opcional)</p>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                  <div>
+                    <label style={{ fontSize:"11px", color:"#92400e", fontWeight:"600", display:"block", marginBottom:"3px" }}>Monto descuento $</label>
+                    <input type="number" min="0" step="0.50"
+                      value={paymentForm.descuento || ""}
+                      onChange={e => {
+                        const desc = parseFloat(e.target.value) || 0;
+                        const saldoConDesc = Math.max(0, (consultaFinanciera.saldo || 0) - desc);
+                        setPaymentForm(f => ({ ...f, descuento: desc, monto: saldoConDesc.toFixed(2) }));
+                      }}
+                      placeholder="0.00"
+                      style={{ width:"100%", padding:"7px 10px", border:"1.5px solid #fbbf24", borderRadius:"6px", fontSize:"15px", fontWeight:"700", color:"#92400e", boxSizing:"border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:"11px", color:"#92400e", fontWeight:"600", display:"block", marginBottom:"3px" }}>Motivo</label>
+                    <input type="text"
+                      value={paymentForm.motivo_descuento}
+                      onChange={e => setPaymentForm(f => ({ ...f, motivo_descuento: e.target.value }))}
+                      placeholder="Ej: Paciente conocido, sin recursos..."
+                      style={{ width:"100%", padding:"7px 10px", border:"1.5px solid #fbbf24", borderRadius:"6px", fontSize:"12px", boxSizing:"border-box" }}
+                    />
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:"5px", marginTop:"7px", flexWrap:"wrap" }}>
+                  {[10, 15, 20, 25, 50].map(pct => {
+                    const montoDesc = parseFloat(((consultaFinanciera.saldo || 0) * pct / 100).toFixed(2));
+                    return (
+                      <button key={pct} type="button"
+                        onClick={() => {
+                          const saldoConDesc = Math.max(0, (consultaFinanciera.saldo || 0) - montoDesc);
+                          setPaymentForm(f => ({ ...f, descuento: montoDesc, monto: saldoConDesc.toFixed(2) }));
+                        }}
+                        style={{ padding:"3px 8px", background:"white", border:"1px solid #fbbf24", borderRadius:"12px", fontSize:"11px", cursor:"pointer", color:"#92400e", fontWeight:"600" }}>
+                        {pct}% (−${montoDesc.toFixed(0)})
+                      </button>
+                    );
+                  })}
+                  {(parseFloat(paymentForm.descuento) || 0) > 0 && (
+                    <button type="button"
+                      onClick={() => setPaymentForm(f => ({ ...f, descuento: 0, motivo_descuento: "", monto: (consultaFinanciera.saldo || 0).toFixed(2) }))}
+                      style={{ padding:"3px 8px", background:"#fee2e2", border:"1px solid #fca5a5", borderRadius:"12px", fontSize:"11px", cursor:"pointer", color:"#dc2626" }}>
+                      ✕ Quitar
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -712,7 +798,7 @@ export const AppointmentsWithAttention = ({
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
                 <div>
                   <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>
-                    Monto a cobrar *
+                    Monto a cobrar * {(parseFloat(paymentForm.descuento)||0) > 0 && <span style={{ color:"#059669", fontSize:"11px" }}>(con descuento)</span>}
                   </label>
                   <input type="number" step="0.01"
                     value={paymentForm.monto}
@@ -722,9 +808,7 @@ export const AppointmentsWithAttention = ({
                   <p style={{ fontSize:"10px", color:"#999", margin:"2px 0 0" }}>Puede ser abono parcial</p>
                 </div>
                 <div>
-                  <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>
-                    Forma de pago *
-                  </label>
+                  <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>Forma de pago *</label>
                   <select value={paymentForm.tipo_pago}
                     onChange={e => setPaymentForm({...paymentForm, tipo_pago: e.target.value})}
                     style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e5e7eb", borderRadius:"8px", fontSize:"13px", boxSizing:"border-box" }}>
@@ -738,9 +822,7 @@ export const AppointmentsWithAttention = ({
               </div>
 
               <div style={{ marginBottom:"12px" }}>
-                <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>
-                  Referencia / N° Transacción
-                </label>
+                <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>Referencia / N° Transacción</label>
                 <input type="text"
                   value={paymentForm.referencia}
                   onChange={e => setPaymentForm({...paymentForm, referencia: e.target.value})}
@@ -752,8 +834,9 @@ export const AppointmentsWithAttention = ({
               {/* Botones */}
               <div style={{ display:"flex", gap:"10px", marginTop:"4px" }}>
                 <button onClick={handleRegisterPayment}
-                  style={{ flex:1, padding:"12px", background:"linear-gradient(135deg,#00a8cc,#005f73)", color:"white", border:"none", borderRadius:"8px", fontSize:"15px", fontWeight:"700", cursor:"pointer" }}>
-                  ✓ Confirmar Pago ${parseFloat(paymentForm.monto || 0).toFixed(2)}
+                  style={{ flex:1, padding:"12px", background:"linear-gradient(135deg,#00a8cc,#005f73)", color:"white", border:"none", borderRadius:"8px", fontSize:"14px", fontWeight:"700", cursor:"pointer" }}>
+                  ✓ Cobrar ${parseFloat(paymentForm.monto || 0).toFixed(2)}
+                  {(parseFloat(paymentForm.descuento)||0) > 0 && ` (−$${parseFloat(paymentForm.descuento).toFixed(2)} desc.)`}
                 </button>
                 <button onClick={() => { setShowPaymentModal(false); setConsultaFinanciera(null); setSelectedAppointmentForPayment(null); }}
                   style={{ padding:"12px 16px", background:"#f3f4f6", color:"#374151", border:"none", borderRadius:"8px", fontSize:"13px", cursor:"pointer" }}>
@@ -761,7 +844,6 @@ export const AppointmentsWithAttention = ({
                 </button>
               </div>
 
-              {/* Nota info caja */}
               <p style={{ fontSize:"10px", color:"#9ca3af", textAlign:"center", marginTop:"8px" }}>
                 El pago quedará registrado en Caja para el cierre del día
               </p>

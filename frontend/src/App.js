@@ -23,6 +23,7 @@ import { ProformasTab } from "@/components/ProformasTab";
 import CajaTab from "@/components/CajaTab";
 import { PacientesTab } from "@/components/PacientesTab";
 import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
+import { ConfiguracionIA } from "@/components/ConfiguracionIA";
 import { OdontogramaClinicoTab } from "@/components/OdontogramaClinicoTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
@@ -463,6 +464,15 @@ function App() {
                   Caja
                 </TabsTrigger>
               </>
+            )}
+            {user.role === "Administrador" && (
+              <TabsTrigger value="config-ia"
+                data-testid="config-ia-tab"
+                className="tabs-list button"
+              >
+                <span className="tab-icon">🤖</span>
+                <span>Config. IA</span>
+              </TabsTrigger>
             )}
             {user.role === "Administrador" && (
               <TabsTrigger value="catalogo" data-testid="catalogo-tab">
@@ -957,6 +967,29 @@ function App() {
           {/* Users Tab - Admin Only */}
           {user.role === "Administrador" && (
             <TabsContent value="users">
+              {/* Botón de migración — corregir edades de pacientes viejos */}
+              <div style={{ background:"#fffbeb", border:"1.5px solid #fbbf24", borderRadius:"10px", padding:"14px 16px", marginBottom:"16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <p style={{ margin:0, fontWeight:"700", color:"#92400e", fontSize:"13px" }}>🔧 Migración: Corregir edades (pacientes anteriores)</p>
+                  <p style={{ margin:"2px 0 0", color:"#b45309", fontSize:"12px" }}>Recalcula la edad de todos los pacientes que tienen edad=0 pero sí tienen fecha de nacimiento registrada.</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/migrar-edades`, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+                      });
+                      const data = await res.json();
+                      alert(`✅ ${data.mensaje}\n\nTotal procesados: ${data.total_procesados}\nActualizados: ${data.actualizados}\nSin fecha de nacimiento: ${data.sin_fecha_nacimiento}`);
+                    } catch (e) {
+                      alert("Error al ejecutar la migración: " + e.message);
+                    }
+                  }}
+                  style={{ padding:"8px 16px", background:"#d97706", color:"white", border:"none", borderRadius:"8px", fontSize:"13px", fontWeight:"700", cursor:"pointer", flexShrink:0, marginLeft:"12px" }}>
+                  ▶ Ejecutar migración
+                </button>
+              </div>
               <UsersTab 
                 users={users}
                 fetchData={fetchData}
@@ -983,6 +1016,12 @@ function App() {
           {user.role === "Administrador" && (
             <TabsContent value="catalogo">
               <CatalogoServiciosTab token={token} />
+            </TabsContent>
+          )}
+
+          {user.role === "Administrador" && (
+            <TabsContent value="config-ia">
+              <ConfiguracionIA token={token} />
             </TabsContent>
           )}
 

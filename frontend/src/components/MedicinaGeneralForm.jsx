@@ -9,6 +9,7 @@ import axios from "axios";
 import { AntecedentesPanel } from "./AntecedentesPanel";
 import { CIE10Selector } from "./CIE10Selector";
 import { MedicacionRapida } from "./MedicacionRapida";
+import { IAMedicaPanel } from "./IAMedicaPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -292,6 +293,26 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
       </div>
 
       {/* DIAGNÓSTICO */}
+      {/* ASISTENTE IA — antes del diagnóstico */}
+      <IAMedicaPanel
+        especialidad="Medicina General"
+        token={token}
+        contexto={{
+          nombre: appointment.nombre_completo,
+          edad: appointment.edad || (appointment.fecha_nacimiento ? (() => { const h=new Date(),n=new Date(appointment.fecha_nacimiento+"T12:00:00"); let e=h.getFullYear()-n.getFullYear(); if((h.getMonth(),h.getDate())<(n.getMonth(),n.getDate()))e--; return e; })() : ""),
+          sexo: appointment.sexo || "",
+          motivo_consulta: form.motivo_consulta,
+          antecedentes: `${form.antecedentes_familiares} | Alergias: ${form.alergias} | HTA: ${form.ant_hta} | Diabetes: ${form.ant_diabetes}`,
+          alergias: form.alergias,
+          medicamentos_actuales: form.medicamentos_actuales || "",
+          diagnostico_previo: form.diagnostico || "",
+        }}
+        onUsarSugerencia={texto => setForm(f => ({
+          ...f,
+          diagnostico: f.diagnostico ? f.diagnostico + "\n\n[IA]: " + texto : "[IA sugerencia]: " + texto
+        }))}
+      />
+
       <div style={S.sec}>🩺 DIAGNÓSTICO</div>
       <div style={{ marginBottom:"10px" }}>
         <CIE10Selector token={token}

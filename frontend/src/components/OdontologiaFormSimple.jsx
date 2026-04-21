@@ -15,6 +15,7 @@ import { AntecedentesPanel } from "./AntecedentesPanel";
 import { PlanTratamientoTab } from "./PlanTratamientoTab";
 import { EvolucionesTab } from "./EvolucionesTab";
 import { FotosRXTab } from "./FotosRXTab";
+import { IAMedicaPanel } from "./IAMedicaPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -333,6 +334,26 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
                   </Select></div>
               ))}
             </div>
+
+            {/* ASISTENTE IA ODONTOLÓGICO */}
+            <IAMedicaPanel
+              especialidad="Odontología"
+              token={token}
+              contexto={{
+                nombre: appointment.nombre_completo,
+                edad: appointment.edad || "",
+                sexo: appointment.sexo || "",
+                motivo_consulta: form.motivo_consulta,
+                antecedentes: `Última visita: ${form.ultima_visita_odonto} | Alergias: ${form.alergias_medicamentos} | HTA: ${form.hipertension} | Diabetes: ${form.diabetes}`,
+                alergias: form.alergias_medicamentos,
+                medicamentos_actuales: form.medicamentos_actuales || "",
+                diagnostico_previo: form.diagnostico || "",
+              }}
+              onUsarSugerencia={texto => setForm(f => ({
+                ...f,
+                diagnostico: f.diagnostico ? f.diagnostico + "\n[IA]: " + texto : texto,
+              }))}
+            />
 
             <div style={S.sec}>🩺 DIAGNÓSTICO CIE-10</div>
             <div style={{marginBottom:"10px"}}>

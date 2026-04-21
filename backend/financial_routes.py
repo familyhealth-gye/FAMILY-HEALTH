@@ -1249,52 +1249,76 @@ async def reporte_por_doctor(
     current_user: TokenData = Depends(get_current_user)
 ):
     """
-    Reporte de ingresos agrupados por doctor
+    Reporte de ingresos por doctor con cálculo de % ganancia.
+    Cruza con la colección de doctores para obtener el porcentaje real.
     """
     from datetime import datetime as dt
     from collections import defaultdict
-    
+
     if not fecha_inicio:
         fecha_inicio = dt.now().strftime("%Y-%m-%d")
     if not fecha_fin:
         fecha_fin = fecha_inicio
-    
+
+    # Cargar todos los doctores para obtener sus porcentajes
+    doctores_db = await db.doctors.find({}, {"_id": 0}).to_list(500)
+    porcentaje_por_id = {d.get("id", ""): d.get("porcentaje", 50.0) for d in doctores_db}
+    porcentaje_por_nombre = {d.get("nombre", ""): d.get("porcentaje", 50.0) for d in doctores_db}
+
     query = {"fecha": {"$gte": fecha_inicio, "$lte": fecha_fin}}
     consultas = await db.consultas_financieras.find(query, {"_id": 0}).to_list(1000)
-    
-    por_doctor = defaultdict(lambda: {"total_facturado": 0, "total_cobrado": 0, "num_consultas": 0, "especialidad": ""})
-    
+
+    por_doctor = defaultdict(lambda: {
+        "total_facturado": 0, "total_cobrado": 0,
+        "num_consultas": 0, "especialidad": "",
+        "doctor_id": "", "porcentaje": 50.0
+    })
+
     for consulta in consultas:
-        doctor = consulta.get('doctor_nombre', 'Sin Doctor')
-        doctor_id = consulta.get('doctor_id', '')
+        doctor = consulta.get("doctor_nombre", "Sin Doctor")
+        doctor_id = consulta.get("doctor_id", "")
+        # Buscar porcentaje real
+        pct = porcentaje_por_id.get(doctor_id) or porcentaje_por_nombre.get(doctor) or 50.0
+
         por_doctor[doctor]["doctor_id"] = doctor_id
-        por_doctor[doctor]["total_facturado"] += consulta.get('total', 0)
-        por_doctor[doctor]["total_cobrado"] += consulta.get('total_pagado', 0)
+        por_doctor[doctor]["porcentaje"] = pct
+        por_doctor[doctor]["total_facturado"] += consulta.get("total", 0)
+        por_doctor[doctor]["total_cobrado"] += consulta.get("total_pagado", 0)
         por_doctor[doctor]["num_consultas"] += 1
         if not por_doctor[doctor]["especialidad"]:
-            por_doctor[doctor]["especialidad"] = consulta.get('especialidad', '')
-    
+            por_doctor[doctor]["especialidad"] = consulta.get("especialidad", "")
+
     resultado = []
     for doctor, datos in por_doctor.items():
+        cobrado = datos["total_cobrado"]
+        pct = datos["porcentaje"]
+        ganancia_doctor = round(cobrado * pct / 100, 2)
+        ganancia_clinica = round(cobrado * (100 - pct) / 100, 2)
         resultado.append({
             "doctor_nombre": doctor,
             "doctor_id": datos["doctor_id"],
             "especialidad": datos["especialidad"],
+            "porcentaje": pct,
             "num_consultas": datos["num_consultas"],
             "total_facturado": round(datos["total_facturado"], 2),
-            "total_cobrado": round(datos["total_cobrado"], 2),
-            "saldo_pendiente": round(datos["total_facturado"] - datos["total_cobrado"], 2)
+            "total_cobrado": round(cobrado, 2),
+            "saldo_pendiente": round(datos["total_facturado"] - cobrado, 2),
+            "ganancia_doctor": ganancia_doctor,
+            "ganancia_clinica": ganancia_clinica,
         })
-    
+
     resultado.sort(key=lambda x: x["total_cobrado"], reverse=True)
-    
+
     return {
         "fecha_inicio": fecha_inicio,
         "fecha_fin": fecha_fin,
         "doctores": resultado,
         "total_facturado": round(sum(r["total_facturado"] for r in resultado), 2),
-        "total_cobrado": round(sum(r["total_cobrado"] for r in resultado), 2)
+        "total_cobrado": round(sum(r["total_cobrado"] for r in resultado), 2),
+        "total_ganancia_doctores": round(sum(r["ganancia_doctor"] for r in resultado), 2),
+        "total_ganancia_clinica": round(sum(r["ganancia_clinica"] for r in resultado), 2),
     }
+
 
 
 @financial_router.get("/reportes/por-tipo-pago")
