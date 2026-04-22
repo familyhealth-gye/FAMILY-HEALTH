@@ -7,7 +7,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
-import { CIE10Selector } from "./CIE10Selector";
 import { MedicacionRapida } from "./MedicacionRapida";
 import { HistorialLateral } from "./HistorialLateral";
 import { OdontogramaClinicoTab } from "./OdontogramaClinicoTab";

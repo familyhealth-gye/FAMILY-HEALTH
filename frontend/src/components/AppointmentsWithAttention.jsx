@@ -7,7 +7,6 @@ import axios from "axios";
 import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
-import { HistoriaClinicaCompleta } from "./HistoriaClinicaCompleta";
 import { NutricionForm } from "./NutricionForm";
 import { GinecologiaForm } from "./GinecologiaForm";
 import { EcografiaForm } from "./EcografiaForm";

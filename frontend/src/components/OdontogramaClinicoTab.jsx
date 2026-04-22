@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -19,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
-import { Save, RotateCcw, Plus, User, Calendar } from "lucide-react";
+import { Save, User } from "lucide-react";
 import "./OdontogramaClinico.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;

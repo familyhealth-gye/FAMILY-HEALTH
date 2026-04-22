@@ -9,7 +9,6 @@ import { CIE10Selector } from "./CIE10Selector";
 import { MedicacionRapida } from "./MedicacionRapida";
 import { HistorialLateral } from "./HistorialLateral";
 import { AntecedentesPanel } from "./AntecedentesPanel";
-import { IAMedicaPanel } from "./IAMedicaPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
