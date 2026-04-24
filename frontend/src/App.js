@@ -24,6 +24,8 @@ import CajaTab from "@/components/CajaTab";
 import { PacientesTab } from "@/components/PacientesTab";
 import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
 import { ConfiguracionIA } from "@/components/ConfiguracionIA";
+import { ConfiguracionSRI } from "@/components/ConfiguracionSRI";
+import { FacturacionTab } from "@/components/FacturacionTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
 import { formatearEdad, validarFechaNacimiento } from "@/lib/edadUtils";
@@ -474,6 +476,15 @@ function App() {
               </TabsTrigger>
             )}
             {user.role === "Administrador" && (
+              <TabsTrigger value="config-sri"
+                data-testid="config-sri-tab"
+                className="tabs-list button"
+              >
+                <span className="tab-icon">🔏</span>
+                <span>Config. SRI</span>
+              </TabsTrigger>
+            )}
+            {user.role === "Administrador" && (
               <TabsTrigger value="catalogo" data-testid="catalogo-tab">
                 <ListChecks className="tab-icon" />
                 Catálogo
@@ -700,7 +711,12 @@ function App() {
                           </SelectTrigger>
                           <SelectContent>
                             {doctors
-                              .filter(d => !appointmentForm.especialidad || d.especialidad === appointmentForm.especialidad)
+                              .filter(d => {
+                if (!appointmentForm.especialidad) return true;
+                // Comparación sin distinción de acentos
+                const normalize = s => s?.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() || '';
+                return normalize(d.especialidad) === normalize(appointmentForm.especialidad);
+              })
                               .map((doctor) => (
                                 <SelectItem key={doctor.id} value={doctor.id}>
                                   {doctor.nombre} - {doctor.especialidad}
@@ -997,6 +1013,13 @@ function App() {
             </TabsContent>
           )}
 
+          {/* Facturación Tab */}
+          {(user.role === "Administrador" || user.role === "Recepcion") && (
+            <TabsContent value="facturacion">
+              <FacturacionTab token={token} user={user} />
+            </TabsContent>
+          )}
+
           {/* Proformas Tab - Admin & Recepcion */}
           {(user.role === "Administrador" || user.role === "Recepcion") && (
             <TabsContent value="proformas">
@@ -1021,6 +1044,12 @@ function App() {
           {user.role === "Administrador" && (
             <TabsContent value="config-ia">
               <ConfiguracionIA token={token} />
+            </TabsContent>
+          )}
+
+          {user.role === "Administrador" && (
+            <TabsContent value="config-sri">
+              <ConfiguracionSRI token={token} />
             </TabsContent>
           )}
 

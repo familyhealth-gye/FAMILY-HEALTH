@@ -239,10 +239,10 @@ class AppointmentCreate(BaseModel):
     edad: int = 0  # DEPRECADO - opcional para compatibilidad
     telefono: str
     especialidad: str
-    doctor_id: str
+    doctor_id: str = ""  # Opcional — puede venir vacío si la especialidad no tiene doctor asignado
     fecha: str
     hora: str
-    tipo_pago: str
+    tipo_pago: str = "efectivo"
     observaciones: str = ""
 
 
@@ -261,45 +261,115 @@ class AppointmentUpdate(BaseModel):
     estado: Optional[str] = None
 
 
+class DetalleFactura(BaseModel):
+    """Línea de detalle en la factura"""
+    descripcion: str
+    cantidad: float = 1.0
+    precio_unitario: float
+    descuento: float = 0.0
+    subtotal: float  # precio_unitario * cantidad - descuento
+
+
 class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    numero_factura: str
+
+    # Numeración SRI
+    numero_factura: str            # Ej: 001-001-000000123
+    numero_autorizacion: str = ""  # 49 dígitos del SRI (manual por ahora)
+    clave_acceso: str = ""         # 49 dígitos generados
+
+    # Emisor (Family Health)
+    emisor_ruc: str = ""
+    emisor_razon_social: str = "CENTRO DE ESPECIALIDADES FAMILY HEALTH"
+    emisor_nombre_comercial: str = "FAMILY HEALTH"
+    emisor_direccion: str = "Mucho Lote 2 MZ 2833 Villa 15, Guayaquil"
+    emisor_telefono: str = "096-291-2170"
+    emisor_email: str = "centrodeespecialidadesfamilyhe@gmail.com"
+
+    # Receptor (Paciente)
     paciente_nombre: str
-    paciente_cedula: str
-    doctor_id: str
-    doctor_nombre: str
-    especialidad: str
-    servicio: str
-    valor: float
-    fecha: str
-    tipo_pago: str
+    paciente_cedula: str           # cédula o RUC del paciente
+    paciente_direccion: str = ""
+    paciente_email: str = ""
+    paciente_telefono: str = ""
+
+    # Médico
+    doctor_id: str = ""
+    doctor_nombre: str = ""
+    especialidad: str = ""
+
+    # Detalle de servicios
+    detalles: List[DetalleFactura] = []
+
+    # Totales
+    subtotal: float = 0.0
+    descuento_total: float = 0.0
+    subtotal_con_descuento: float = 0.0
+    iva_porcentaje: float = 0.0    # Ecuador: 0% para servicios médicos (exentos)
+    iva_valor: float = 0.0
+    total: float = 0.0
+
+    # Pago
+    tipo_pago: str = "efectivo"    # efectivo | transferencia | tarjeta | seguro
+    referencia_pago: str = ""
+
+    # Vínculo con consulta
+    consulta_financiera_id: str = ""
+    appointment_id: str = ""
+
+    # Estado
+    estado: str = "emitida"        # emitida | anulada
+    observaciones: str = ""
+    fecha: str = ""                # YYYY-MM-DD
+    fecha_autorizacion: str = ""
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: str = ""
 
 
 class InvoiceCreate(BaseModel):
-    numero_factura: str
+    # Receptor
     paciente_nombre: str
     paciente_cedula: str
-    doctor_id: str
-    especialidad: str
-    servicio: str
-    valor: float
-    fecha: str
-    tipo_pago: str
+    paciente_direccion: str = ""
+    paciente_email: str = ""
+    paciente_telefono: str = ""
+
+    # Médico
+    doctor_id: str = ""
+    doctor_nombre: str = ""
+    especialidad: str = ""
+
+    # Detalle
+    detalles: List[DetalleFactura] = []
+
+    # Pago
+    tipo_pago: str = "efectivo"
+    referencia_pago: str = ""
+
+    # Vínculo
+    consulta_financiera_id: str = ""
+    appointment_id: str = ""
+
+    # Opcionales
+    numero_autorizacion: str = ""
+    observaciones: str = ""
+    fecha: str = ""
+    iva_porcentaje: float = 0.0
 
 
 class InvoiceUpdate(BaseModel):
-    numero_factura: Optional[str] = None
-    paciente_nombre: Optional[str] = None
-    paciente_cedula: Optional[str] = None
-    doctor_id: Optional[str] = None
-    especialidad: Optional[str] = None
-    servicio: Optional[str] = None
-    valor: Optional[float] = None
-    fecha: Optional[str] = None
-    tipo_pago: Optional[str] = None
+    numero_autorizacion: Optional[str] = None
+    clave_acceso: Optional[str] = None
+    estado: Optional[str] = None
+    observaciones: Optional[str] = None
+    fecha_autorizacion: Optional[str] = None
+    paciente_direccion: Optional[str] = None
+    paciente_email: Optional[str] = None
+    referencia_pago: Optional[str] = None
+
 
 
 class InventoryItem(BaseModel):
@@ -774,4 +844,3 @@ class ProcedimientoUpdate(BaseModel):
     fecha_programada: Optional[str] = None
     fecha_realizado: Optional[str] = None
     notas: Optional[str] = None
-
