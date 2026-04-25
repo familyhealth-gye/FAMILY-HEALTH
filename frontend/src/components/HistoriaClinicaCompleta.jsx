@@ -68,52 +68,66 @@ export const HistoriaClinicaCompleta = ({
         apt.cedula === paciente.cedula && apt.estado !== "Cancelada"
       );
 
+      // Mapeo especialidad -> endpoint slug
+      const especialidadEndpointMap = {
+        "Medicina General": "general",
+        "Pediatría": "pediatric",
+        "Pediatria": "pediatric",
+        "Odontología": "odontology",
+        "Odontologia": "odontology",
+        "Nutrición": "nutricion",
+        "Nutricion": "nutricion",
+        "Ginecología": "ginecologia",
+        "Ginecologia": "ginecologia",
+        "Ecografía": "ecografia",
+        "Ecografia": "ecografia",
+      };
+
+      // Orden de fallback (todas las especialidades) si la cita no tiene
+      // especialidad o el endpoint específico devuelve 404
+      const fallbackOrder = ["general", "pediatric", "odontology", "nutricion", "ginecologia", "ecografia"];
+
+      const fetchHistoriaPorTipo = async (citaId, tipo) => {
+        try {
+          const res = await axios.get(
+            `${API}/medical-history/${tipo}/appointment/${citaId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          return res.data || null;
+        } catch (e) {
+          return null;
+        }
+      };
+
       // Obtener historias clínicas de cada cita
       const consultasConHistoria = await Promise.all(
         citasPaciente.map(async (cita) => {
           let historia = null;
           let tipoHistoria = null;
-          
-          // Buscar historia de medicina general
-          try {
-            const res = await axios.get(
-              `${API}/medical-history/general/appointment/${cita.id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            if (res.data) {
-              historia = res.data;
-              tipoHistoria = "general";
+
+          // 1) Intentar con la especialidad de la cita
+          const tipoPreferido = especialidadEndpointMap[cita.especialidad];
+          if (tipoPreferido) {
+            const data = await fetchHistoriaPorTipo(cita.id, tipoPreferido);
+            if (data) {
+              historia = data;
+              tipoHistoria = tipoPreferido;
             }
-          } catch (e) {}
-          
-          // Buscar historia pediátrica
-          if (!historia) {
-            try {
-              const res = await axios.get(
-                `${API}/medical-history/pediatric/appointment/${cita.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              if (res.data) {
-                historia = res.data;
-                tipoHistoria = "pediatric";
-              }
-            } catch (e) {}
           }
-          
-          // Buscar historia odontológica
+
+          // 2) Fallback: probar todos los demás tipos
           if (!historia) {
-            try {
-              const res = await axios.get(
-                `${API}/medical-history/odontology/appointment/${cita.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              if (res.data) {
-                historia = res.data;
-                tipoHistoria = "odontology";
+            for (const tipo of fallbackOrder) {
+              if (tipo === tipoPreferido) continue;
+              const data = await fetchHistoriaPorTipo(cita.id, tipo);
+              if (data) {
+                historia = data;
+                tipoHistoria = tipo;
+                break;
               }
-            } catch (e) {}
+            }
           }
-          
+
           return {
             ...cita,
             historia,
@@ -164,6 +178,211 @@ export const HistoriaClinicaCompleta = ({
       "Atendida": { bg: "#D1FAE5", color: "#065F46" }
     };
     return estilos[estado] || { bg: "#F3F4F6", color: "#374151" };
+  };
+
+  // ----- Renderizadores específicos por especialidad -----
+  const Campo = ({ label, value }) => {
+    if (value === null || value === undefined || value === "" || value === false) return null;
+    return (
+      <div className="historia-campo">
+        <span className="campo-label">{label}:</span>
+        <p style={{ whiteSpace: "pre-wrap" }}>{String(value)}</p>
+      </div>
+    );
+  };
+
+  const TablaCampos = ({ titulo, datos = {}, etiquetas = {} }) => {
+    const entries = Object.entries(datos).filter(
+      ([k, v]) => v !== null && v !== undefined && v !== "" && etiquetas[k]
+    );
+    if (entries.length === 0) return null;
+    return (
+      <div className="historia-campo">
+        <span className="campo-label">{titulo}:</span>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: "8px", marginTop: "6px" }}>
+          {entries.map(([k, v]) => (
+            <div key={k} style={{ background: "#F9FAFB", padding: "6px 10px", borderRadius: "6px", fontSize: "13px" }}>
+              <div style={{ color: "#6B7280", fontSize: "11px" }}>{etiquetas[k]}</div>
+              <div style={{ fontWeight: 600 }}>{String(v)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderNutricion = (h) => (
+    <>
+      <Campo label="Motivo de Consulta" value={h.motivo_consulta} />
+      <Campo label="Evolución de la Enfermedad" value={h.evolucion_enfermedad} />
+      <Campo label="Antecedentes Familiares" value={h.ant_familiares} />
+      <Campo label="Antecedentes Personales" value={h.ant_personales} />
+      <Campo label="Otros Antecedentes" value={h.ant_otros} />
+      <Campo label="Alergias / Intolerancias" value={h.alergias_intolerancias} />
+      <Campo label="Medicamentos Actuales" value={h.medicamentos_actuales} />
+      <TablaCampos
+        titulo="Examen Físico / Antropometría"
+        datos={h.examen_fisico || {}}
+        etiquetas={{
+          peso: "Peso (kg)", talla: "Talla (cm)", imc: "IMC",
+          porcentaje_grasa: "% Grasa", porcentaje_musculo: "% Músculo",
+          edad_corporal: "Edad corporal",
+          pliegue_suprailiaco: "P. Suprailíaco", pliegue_tricipital: "P. Tricipital",
+          pliegue_bicipital: "P. Bicipital", pliegue_subescapular: "P. Subescapular",
+          cintura: "Cintura (cm)", cadera: "Cadera (cm)", icc: "ICC",
+          muneca: "Muñeca", circunferencia_brazo: "Brazo"
+        }}
+      />
+      <Campo label="Diagnóstico" value={h.diagnostico_texto} />
+      {(h.cie10_codigo || h.cie10_descripcion) && (
+        <Campo label="CIE-10" value={`${h.cie10_codigo || ""} - ${h.cie10_descripcion || ""}`} />
+      )}
+      <TablaCampos
+        titulo="Laboratorio"
+        datos={h.laboratorio || {}}
+        etiquetas={{
+          fecha_lab: "Fecha", hemoglobina: "Hemoglobina", plaquetas: "Plaquetas",
+          glucosa: "Glucosa", urea: "Urea", creatinina: "Creatinina",
+          acido_urico: "Ácido úrico", colesterol: "Colesterol", hdl: "HDL",
+          ldl: "LDL", trigliceridos: "Triglicéridos", tgo: "TGO", tgp: "TGP"
+        }}
+      />
+      <Campo label="Plan Alimentario" value={h.plan_alimentario} />
+      <Campo label="Anamnesis" value={h.anamnesis} />
+      <Campo label="Notas" value={h.notas} />
+      <Campo label="Receta" value={h.receta} />
+      {Array.isArray(h.medicamentos) && h.medicamentos.length > 0 && (
+        <div className="historia-campo">
+          <span className="campo-label">Medicamentos:</span>
+          <ul style={{ margin: "6px 0", paddingLeft: "18px" }}>
+            {h.medicamentos.map((m, i) => (
+              <li key={i}>
+                <strong>{m.nombre}</strong>
+                {m.dosis ? ` - ${m.dosis}` : ""}
+                {m.frecuencia ? ` (${m.frecuencia})` : ""}
+                {m.duracion ? ` x ${m.duracion}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {Array.isArray(h.controles) && h.controles.length > 0 && (
+        <div className="historia-campo">
+          <span className="campo-label">Controles de Seguimiento:</span>
+          <table style={{ width: "100%", marginTop: "6px", fontSize: "12px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F3F4F6" }}>
+                <th style={{ padding: "6px", textAlign: "left" }}>#</th>
+                <th style={{ padding: "6px", textAlign: "left" }}>Fecha</th>
+                <th style={{ padding: "6px", textAlign: "left" }}>Peso</th>
+                <th style={{ padding: "6px", textAlign: "left" }}>IMC</th>
+                <th style={{ padding: "6px", textAlign: "left" }}>%Grasa</th>
+                <th style={{ padding: "6px", textAlign: "left" }}>Cintura</th>
+                <th style={{ padding: "6px", textAlign: "left" }}>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {h.controles.map((c, i) => (
+                <tr key={i} style={{ borderTop: "1px solid #E5E7EB" }}>
+                  <td style={{ padding: "6px" }}>{c.numero || i + 1}</td>
+                  <td style={{ padding: "6px" }}>{c.fecha || "-"}</td>
+                  <td style={{ padding: "6px" }}>{c.peso ?? "-"}</td>
+                  <td style={{ padding: "6px" }}>{c.imc ?? "-"}</td>
+                  <td style={{ padding: "6px" }}>{c.porcentaje_grasa ?? "-"}</td>
+                  <td style={{ padding: "6px" }}>{c.cintura ?? "-"}</td>
+                  <td style={{ padding: "6px" }}>{c.observaciones || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+
+  const renderGinecologia = (h) => (
+    <>
+      <Campo label="Motivo de Consulta" value={h.motivo_consulta} />
+      <Campo label="Enfermedad Actual" value={h.enfermedad_actual} />
+      <Campo label="Antecedentes Quirúrgicos" value={h.ant_personales_quirurgicos} />
+      <Campo label="Alergias" value={h.ant_personales_alergias} />
+      <Campo label="Medicamentos Actuales" value={h.medicamentos_actuales} />
+      <TablaCampos
+        titulo="Datos Ginecológicos"
+        datos={h.datos_ginecologicos || {}}
+        etiquetas={{
+          menarquia: "Menarquia", ritmo_menstrual: "Ritmo menstrual",
+          inicio_actividad_sexual: "Inicio actividad sexual", menopausia: "Menopausia",
+          partos: "Partos", abortos: "Abortos", cesareas: "Cesáreas", gestas: "Gestas",
+          metodo_anticonceptivo: "Anticonceptivo",
+          ultimo_papanicolaou: "Último Papanicolaou", resultado_papanicolaou: "Resultado",
+          ultima_mamografia: "Última mamografía", resultado_mamografia: "Resultado mamografía"
+        }}
+      />
+      {h.datos_embarazo?.esta_embarazada && (
+        <TablaCampos
+          titulo="Embarazo"
+          datos={h.datos_embarazo || {}}
+          etiquetas={{
+            fur: "FUR", fpp: "FPP", semanas_gestacion: "Semanas",
+            trimestre: "Trimestre", numero_embarazo: "Nº Embarazo",
+            presion_arterial: "PA", peso_actual: "Peso",
+            altura_uterina: "Altura uterina", frecuencia_cardiaca_fetal: "FCF",
+            presentacion_fetal: "Presentación", grupo_sanguineo: "Grupo sang.",
+            factor_rh: "RH"
+          }}
+        />
+      )}
+      <TablaCampos
+        titulo="Examen Físico"
+        datos={{
+          peso: h.peso, talla: h.talla, imc: h.imc,
+          presion_arterial: h.presion_arterial, frecuencia_cardiaca: h.frecuencia_cardiaca,
+          temperatura: h.temperatura
+        }}
+        etiquetas={{
+          peso: "Peso", talla: "Talla", imc: "IMC",
+          presion_arterial: "PA", frecuencia_cardiaca: "FC", temperatura: "T°"
+        }}
+      />
+      <Campo label="Examen Ginecológico" value={h.examen_ginecologico} />
+      <Campo label="Diagnóstico" value={h.diagnostico_texto} />
+      {(h.cie10_codigo || h.cie10_descripcion) && (
+        <Campo label="CIE-10" value={`${h.cie10_codigo || ""} - ${h.cie10_descripcion || ""}`} />
+      )}
+      <Campo label="Tratamiento" value={h.tratamiento} />
+      <Campo label="Receta" value={h.receta} />
+      <Campo label="Indicaciones" value={h.indicaciones} />
+      <Campo label="Próximo Control" value={h.proximo_control} />
+      <Campo label="Notas" value={h.notas} />
+    </>
+  );
+
+  const renderGenerico = (h) => (
+    <>
+      <Campo label="Motivo de Consulta" value={h.motivo_consulta} />
+      <Campo label="Enfermedad Actual" value={h.enfermedad_actual} />
+      <Campo label="Diagnóstico" value={h.diagnostico || h.diagnostico_texto} />
+      {(h.cie10_codigo || h.cie10_descripcion) && (
+        <Campo label="CIE-10" value={`${h.cie10_codigo || ""} - ${h.cie10_descripcion || ""}`} />
+      )}
+      <Campo label="Tratamiento" value={h.tratamiento_realizado || h.tratamiento} />
+      <Campo label="Indicaciones" value={h.indicaciones} />
+      <Campo label="Receta" value={h.receta} />
+      <Campo label="Observaciones" value={h.observaciones || h.notas} />
+    </>
+  );
+
+  const renderHistoriaCompleta = (consulta) => {
+    const h = consulta.historia || {};
+    switch (consulta.tipoHistoria) {
+      case "nutricion":
+        return renderNutricion(h);
+      case "ginecologia":
+        return renderGinecologia(h);
+      default:
+        return renderGenerico(h);
+    }
   };
 
   return (
@@ -327,41 +546,7 @@ export const HistoriaClinicaCompleta = ({
                     {selectedConsulta.historia ? (
                       <div className="detalle-historia">
                         <h4>Historia Clínica</h4>
-                        
-                        {selectedConsulta.historia.motivo_consulta && (
-                          <div className="historia-campo">
-                            <span className="campo-label">Motivo de Consulta:</span>
-                            <p>{selectedConsulta.historia.motivo_consulta}</p>
-                          </div>
-                        )}
-                        
-                        {selectedConsulta.historia.diagnostico && (
-                          <div className="historia-campo">
-                            <span className="campo-label">Diagnóstico:</span>
-                            <p>{selectedConsulta.historia.diagnostico}</p>
-                          </div>
-                        )}
-                        
-                        {selectedConsulta.historia.tratamiento_realizado && (
-                          <div className="historia-campo">
-                            <span className="campo-label">Tratamiento:</span>
-                            <p>{selectedConsulta.historia.tratamiento_realizado}</p>
-                          </div>
-                        )}
-                        
-                        {selectedConsulta.historia.indicaciones && (
-                          <div className="historia-campo">
-                            <span className="campo-label">Indicaciones:</span>
-                            <p>{selectedConsulta.historia.indicaciones}</p>
-                          </div>
-                        )}
-                        
-                        {selectedConsulta.historia.observaciones && (
-                          <div className="historia-campo">
-                            <span className="campo-label">Observaciones:</span>
-                            <p>{selectedConsulta.historia.observaciones}</p>
-                          </div>
-                        )}
+                        {renderHistoriaCompleta(selectedConsulta)}
                       </div>
                     ) : (
                       <div className="sin-historia">
