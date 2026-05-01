@@ -210,36 +210,75 @@ class DoctorUpdate(BaseModel):
 
 class Appointment(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    # Identificación del paciente (cédula es la principal)
-    paciente_cedula: str = ""  # IDENTIFICADOR PRINCIPAL (opcional durante migración)
-    paciente_id: str = ""  # Referencia interna al registro unificado de paciente
+
+    # ── Identificación ──
+    tipo_documento: str = "cedula"  # cedula | ruc | pasaporte | extranjero
+    cedula: str = ""
+    paciente_cedula: str = ""      # alias compatibilidad
+    paciente_id: str = ""
     nombre_completo: str
-    cedula: str  # Mantener por compatibilidad
-    fecha_nacimiento: str = ""  # CAMPO PRINCIPAL para edad (calculada automáticamente en frontend)
-    edad: int = 0  # DEPRECADO - Solo para compatibilidad con datos antiguos
-    telefono: str
-    # Cita
+    fecha_nacimiento: str = ""
+    edad: int = 0
+    sexo: str = ""
+    email: str = ""
+    telefono: str = ""
+    whatsapp: str = ""
+    tiene_whatsapp: bool = True
+
+    # ── Representante (menores de edad) ──
+    es_menor: bool = False
+    representante_nombre: str = ""
+    representante_cedula: str = ""
+    representante_telefono: str = ""
+    representante_whatsapp: str = ""
+    representante_email: str = ""
+    representante_parentesco: str = ""
+
+    # ── Datos facturación alternativos ──
+    factura_nombre: str = ""
+    factura_cedula_ruc: str = ""
+    factura_email: str = ""
+    factura_direccion: str = ""
+
+    # ── Cita ──
     especialidad: str
-    doctor_id: str
-    doctor_nombre: str
+    doctor_id: str = ""
+    doctor_nombre: str = ""
     fecha: str
     hora: str
-    tipo_pago: str
+    tipo_pago: str = "efectivo"
     observaciones: str = ""
-    estado: str = "Programada"  # Programada, Atendida, Cancelada
+    estado: str = "Programada"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AppointmentCreate(BaseModel):
+    tipo_documento: str = "cedula"
     nombre_completo: str
-    cedula: str
-    fecha_nacimiento: str = ""  # CAMPO PRINCIPAL
-    edad: int = 0  # DEPRECADO - opcional para compatibilidad
-    telefono: str
+    cedula: str = ""
+    fecha_nacimiento: str = ""
+    edad: int = 0
+    sexo: str = ""
+    email: str = ""
+    telefono: str = ""
+    whatsapp: str = ""
+    tiene_whatsapp: bool = True
+    es_menor: bool = False
+    representante_nombre: str = ""
+    representante_cedula: str = ""
+    representante_telefono: str = ""
+    representante_whatsapp: str = ""
+    representante_email: str = ""
+    representante_parentesco: str = ""
+    factura_nombre: str = ""
+    factura_cedula_ruc: str = ""
+    factura_email: str = ""
+    factura_direccion: str = ""
     especialidad: str
-    doctor_id: str = ""  # Opcional — puede venir vacío si la especialidad no tiene doctor asignado
+    doctor_id: str = ""
+    doctor_nombre: str = ""
     fecha: str
     hora: str
     tipo_pago: str = "efectivo"
@@ -262,12 +301,11 @@ class AppointmentUpdate(BaseModel):
 
 
 class DetalleFactura(BaseModel):
-    """Línea de detalle en la factura"""
     descripcion: str
     cantidad: float = 1.0
     precio_unitario: float
     descuento: float = 0.0
-    subtotal: float  # precio_unitario * cantidad - descuento
+    subtotal: float = 0.0
 
 
 class Invoice(BaseModel):
@@ -276,11 +314,12 @@ class Invoice(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
     # Numeración SRI
-    numero_factura: str            # Ej: 001-001-000000123
-    numero_autorizacion: str = ""  # 49 dígitos del SRI (manual por ahora)
-    clave_acceso: str = ""         # 49 dígitos generados
+    numero_factura: str = ""
+    clave_acceso: str = ""
+    numero_autorizacion: str = ""
+    fecha_autorizacion: str = ""
 
-    # Emisor (Family Health)
+    # Emisor
     emisor_ruc: str = ""
     emisor_razon_social: str = "CENTRO DE ESPECIALIDADES FAMILY HEALTH"
     emisor_nombre_comercial: str = "FAMILY HEALTH"
@@ -288,51 +327,9 @@ class Invoice(BaseModel):
     emisor_telefono: str = "096-291-2170"
     emisor_email: str = "centrodeespecialidadesfamilyhe@gmail.com"
 
-    # Receptor (Paciente)
-    paciente_nombre: str
-    paciente_cedula: str           # cédula o RUC del paciente
-    paciente_direccion: str = ""
-    paciente_email: str = ""
-    paciente_telefono: str = ""
-
-    # Médico
-    doctor_id: str = ""
-    doctor_nombre: str = ""
-    especialidad: str = ""
-
-    # Detalle de servicios
-    detalles: List[DetalleFactura] = []
-
-    # Totales
-    subtotal: float = 0.0
-    descuento_total: float = 0.0
-    subtotal_con_descuento: float = 0.0
-    iva_porcentaje: float = 0.0    # Ecuador: 0% para servicios médicos (exentos)
-    iva_valor: float = 0.0
-    total: float = 0.0
-
-    # Pago
-    tipo_pago: str = "efectivo"    # efectivo | transferencia | tarjeta | seguro
-    referencia_pago: str = ""
-
-    # Vínculo con consulta
-    consulta_financiera_id: str = ""
-    appointment_id: str = ""
-
-    # Estado
-    estado: str = "emitida"        # emitida | anulada
-    observaciones: str = ""
-    fecha: str = ""                # YYYY-MM-DD
-    fecha_autorizacion: str = ""
-
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    created_by: str = ""
-
-
-class InvoiceCreate(BaseModel):
     # Receptor
-    paciente_nombre: str
-    paciente_cedula: str
+    paciente_nombre: str = ""
+    paciente_cedula: str = ""
     paciente_direccion: str = ""
     paciente_email: str = ""
     paciente_telefono: str = ""
@@ -345,31 +342,58 @@ class InvoiceCreate(BaseModel):
     # Detalle
     detalles: List[DetalleFactura] = []
 
+    # Totales
+    subtotal: float = 0.0
+    descuento_total: float = 0.0
+    subtotal_con_descuento: float = 0.0
+    iva_porcentaje: float = 0.0
+    iva_valor: float = 0.0
+    total: float = 0.0
+    valor: float = 0.0  # compatibilidad
+
     # Pago
     tipo_pago: str = "efectivo"
     referencia_pago: str = ""
 
-    # Vínculo
+    # Vínculos
     consulta_financiera_id: str = ""
     appointment_id: str = ""
 
-    # Opcionales
-    numero_autorizacion: str = ""
+    # Estado
+    estado: str = "emitida"
+    sri_estado: str = ""
+    sri_xml_b64: str = ""
+    sri_ambiente: str = ""
+    sri_mensaje: str = ""
     observaciones: str = ""
     fecha: str = ""
-    iva_porcentaje: float = 0.0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: str = ""
+    ride_enviado_a: str = ""
+
+
+class InvoiceCreate(BaseModel):
+    numero_factura: str = ""
+    paciente_nombre: str
+    paciente_cedula: str
+    doctor_id: str
+    especialidad: str
+    servicio: str
+    valor: float
+    fecha: str
+    tipo_pago: str
 
 
 class InvoiceUpdate(BaseModel):
-    numero_autorizacion: Optional[str] = None
-    clave_acceso: Optional[str] = None
-    estado: Optional[str] = None
-    observaciones: Optional[str] = None
-    fecha_autorizacion: Optional[str] = None
-    paciente_direccion: Optional[str] = None
-    paciente_email: Optional[str] = None
-    referencia_pago: Optional[str] = None
-
+    numero_factura: Optional[str] = None
+    paciente_nombre: Optional[str] = None
+    paciente_cedula: Optional[str] = None
+    doctor_id: Optional[str] = None
+    especialidad: Optional[str] = None
+    servicio: Optional[str] = None
+    valor: Optional[float] = None
+    fecha: Optional[str] = None
+    tipo_pago: Optional[str] = None
 
 
 class InventoryItem(BaseModel):

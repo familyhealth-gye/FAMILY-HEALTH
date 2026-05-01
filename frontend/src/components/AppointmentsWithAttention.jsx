@@ -351,15 +351,74 @@ export const AppointmentsWithAttention = ({
         toast.success(`Pago registrado - Saldo restante: $${response.data.saldo.toFixed(2)}`);
       }
 
+      // ── AUTO-FACTURACIÓN SRI ──────────────────────────────
+      const apt = selectedAppointmentForPayment;
+      const montoFinal = parseFloat(paymentForm.monto);
+      const descuentoFinal = parseFloat(paymentForm.descuento) || 0;
+
+      const quiereFactura = window.confirm(
+        `¿Emitir factura electrónica al SRI?\n\nPaciente: ${apt.nombre_completo}\nCédula: ${apt.cedula}\nTotal: $${montoFinal.toFixed(2)}${descuentoFinal > 0 ? ` (descuento $${descuentoFinal.toFixed(2)})` : ''}\n\nSi dice NO, puede facturar después desde la pestaña Facturación.`
+      );
+
+      if (quiereFactura) {
+        try {
+          const factNombre = apt.factura_nombre || (apt.es_menor && apt.representante_nombre ? apt.representante_nombre : apt.nombre_completo);
+          const factCedula = apt.factura_cedula_ruc || (apt.es_menor && apt.representante_cedula ? apt.representante_cedula : apt.cedula);
+          const factEmail = apt.factura_email || (apt.es_menor && apt.representante_email ? apt.representante_email : apt.email || "");
+          const serviciosConsulta = (consultaFinanciera?.servicios || []).length > 0
+            ? consultaFinanciera.servicios.map(s => ({
+                descripcion: s.servicio || s.nombre || "Servicio médico",
+                cantidad: s.cantidad || 1, precio_unitario: s.precio_unitario || 0,
+                descuento: 0, subtotal: (s.precio_unitario || 0) * (s.cantidad || 1),
+              }))
+            : [{ descripcion: `Consulta ${apt.especialidad || "Médica"}`, cantidad: 1,
+                precio_unitario: montoFinal + descuentoFinal, descuento: descuentoFinal, subtotal: montoFinal }];
+
+          const facturaRes = await axios.post(`${API}/invoices`, {
+            paciente_nombre: factNombre, paciente_cedula: factCedula,
+            paciente_telefono: apt.representante_telefono || apt.telefono || "",
+            paciente_email: factEmail, paciente_direccion: apt.factura_direccion || "",
+            doctor_id: apt.doctor_id || "", doctor_nombre: apt.doctor_nombre || "",
+            especialidad: apt.especialidad || "", tipo_pago: paymentForm.tipo_pago,
+            referencia_pago: paymentForm.referencia || "",
+            consulta_financiera_id: consultaFinanciera?.id || "", appointment_id: apt.id,
+            iva_porcentaje: 0,
+            observaciones: [paymentForm.motivo_descuento ? `Descuento: ${paymentForm.motivo_descuento}` : "", apt.es_menor ? `Paciente: ${apt.nombre_completo} (menor de edad)` : ""].filter(Boolean).join(" | "),
+            detalles: serviciosConsulta,
+          }, { headers: { Authorization: `Bearer ${token}` } });
+
+          const facturaId = facturaRes.data.id;
+          const numeroFactura = facturaRes.data.numero_factura;
+          toast.success(`📄 Factura ${numeroFactura} creada`);
+
+          try {
+            const sriRes = await axios.post(`${API}/sri/emitir/${facturaId}`, {},
+              { headers: { Authorization: `Bearer ${token}` } });
+            if (sriRes.data.ok) {
+              toast.success(`✅ Factura AUTORIZADA por el SRI`);
+              if (factEmail) {
+                try {
+                  await axios.post(`${API}/sri/enviar-ride/${facturaId}`, { email: factEmail },
+                    { headers: { Authorization: `Bearer ${token}` } });
+                  toast.success(`📧 RIDE enviado a ${factEmail}`);
+                } catch {}
+              }
+            } else {
+              toast.warning(`Factura creada. SRI: ${sriRes.data.sri_estado || "Pendiente"} — ve a Facturación → 📤 para reintentar.`);
+            }
+          } catch {
+            toast.warning(`Factura ${numeroFactura} creada. Emite al SRI desde Facturación → botón 📤`);
+          }
+        } catch (factErr) {
+          toast.error("Error al crear la factura: " + (factErr.response?.data?.detail || factErr.message));
+        }
+      }
+
       // Cerrar modal y refrescar datos
-      console.log("🔄 Cerrando modal y refrescando datos...");
       setShowPaymentModal(false);
       setConsultaFinanciera(null);
       setSelectedAppointmentForPayment(null);
       fetchData();
-      
-      console.log("🎉 Proceso de pago completado exitosamente");
-      console.log("========================================");
 
     } catch (error) {
       console.error("❌ ======== ERROR AL REGISTRAR PAGO ========");

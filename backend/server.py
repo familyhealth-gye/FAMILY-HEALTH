@@ -63,7 +63,7 @@ from models import (
     Prescription, PrescriptionCreate, Medication,
     Doctor, DoctorCreate, DoctorUpdate,
     Appointment, AppointmentCreate, AppointmentUpdate,
-    Invoice, InvoiceCreate, InvoiceUpdate, DetalleFactura,
+    Invoice, InvoiceCreate, InvoiceUpdate,
     InventoryItem, InventoryItemCreate, InventoryItemUpdate,
     InventoryMovement, InventoryMovementCreate,
     DoctorPayment, DoctorPaymentCreate, DoctorPaymentUpdate,
@@ -1549,440 +1549,92 @@ async def delete_config_ia(current_user: TokenData = Depends(get_current_user)):
 
 
 
-
-# ========== FACTURACIÓN ELECTRÓNICA SRI ==========
-
-@api_router.post("/sri/configurar-firma")
-async def configurar_firma_electronica(
-    data: dict,
+@api_router.get("/paciente/{cedula}/historial-consultas")
+async def get_historial_consultas_paciente(
+    cedula: str,
+    especialidad: Optional[str] = None,
     current_user: TokenData = Depends(get_current_user)
 ):
     """
-    Guarda el certificado .p12 en MongoDB (en base64).
-    El .p12 viene como base64 desde el frontend.
-    Solo Administrador puede configurarlo.
+    Retorna el historial de consultas de un paciente por cédula.
+    Útil para detectar si es primera cita o cita subsecuente.
     """
-    if current_user.role != "Administrador":
-        raise HTTPException(status_code=403, detail="Solo el Administrador puede configurar la firma")
-    
-    p12_b64 = data.get("p12_base64", "")
-    password = data.get("password", "")
-    ambiente = data.get("ambiente", "produccion")  # pruebas | produccion
-    
-    if not p12_b64 or not password:
-        raise HTTPException(status_code=400, detail="Se requiere el archivo .p12 y la contraseña")
-    
-    # Verificar que el .p12 y contraseña son válidos
-    import base64
-    from cryptography.hazmat.primitives.serialization import pkcs12
-    from cryptography.hazmat.backends import default_backend
-    try:
-        p12_bytes = base64.b64decode(p12_b64)
-        pk, cert, chain = pkcs12.load_key_and_certificates(
-            p12_bytes, password.encode(), default_backend()
+    query = {"cedula": cedula}
+    if especialidad:
+        norm = especialidad.lower()
+        query["especialidad"] = {"$regex": norm, "$options": "i"}
+
+    citas = await db.appointments.find(query, {"_id": 0}).sort("fecha", -1).to_list(100)
+
+    # Para cada cita pagada/atendida, buscar si tiene historia clínica
+    resultado = []
+    for cita in citas:
+        if cita.get("estado") in ("Pagada", "Atendida", "Pagado"):
+            resultado.append({
+                "id": cita.get("id"),
+                "fecha": cita.get("fecha"),
+                "especialidad": cita.get("especialidad"),
+                "doctor_nombre": cita.get("doctor_nombre"),
+                "estado": cita.get("estado"),
+            })
+
+    return {
+        "cedula": cedula,
+        "total_consultas": len(resultado),
+        "es_primera_cita": len(resultado) == 0,
+        "ultima_consulta": resultado[0] if resultado else None,
+        "consultas": resultado,
+    }
+
+
+@api_router.get("/paciente/{cedula}/medidas-nutricion")
+async def get_medidas_nutricion(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Retorna el historial de medidas antropométricas de nutrición para
+    mostrar el comparativo entre citas (peso, IMC, ICC, etc.)
+    """
+    # Buscar citas de nutrición del paciente
+    citas = await db.appointments.find(
+        {"cedula": cedula, "especialidad": {"$regex": "nutri", "$options": "i"}},
+        {"_id": 0}
+    ).sort("fecha", -1).to_list(50)
+
+    medidas = []
+    for cita in citas:
+        # Buscar historia clínica de nutrición (colección correcta)
+        hist = await db.medical_history_nutricion.find_one(
+            {"appointment_id": cita["id"]}, {"_id": 0}
         )
-        titular = cert.subject.rfc4514_string()
-        valido_hasta = cert.not_valid_after_utc.strftime("%Y-%m-%d")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Certificado inválido o contraseña incorrecta: {e}")
-    
-    await db.configuracion.update_one(
-        {"clave": "firma_electronica"},
-        {"$set": {
-            "clave": "firma_electronica",
-            "valor": {
-                "p12_base64": p12_b64,
-                "password": password,
-                "ambiente": ambiente,
-                "titular": titular,
-                "valido_hasta": valido_hasta,
-            },
-            "actualizado": datetime.now(timezone.utc).isoformat(),
-            "actualizado_por": current_user.username,
-        }},
-        upsert=True
-    )
-    
-    return {
-        "ok": True,
-        "titular": titular,
-        "valido_hasta": valido_hasta,
-        "ambiente": ambiente,
-        "mensaje": f"✅ Certificado de {titular} configurado correctamente"
-    }
+        if not hist:
+            continue
+        ef = hist.get("examen_fisico") or {}
+        # Solo agregar si tiene al menos una medida antropométrica
+        if any(ef.get(k) is not None for k in ("peso", "talla", "imc", "porcentaje_grasa", "cintura", "cadera")):
+            medidas.append({
+                "fecha": cita.get("fecha"),
+                "appointment_id": cita.get("id"),
+                "peso": ef.get("peso"),
+                "talla": ef.get("talla"),
+                "imc": ef.get("imc"),
+                "icc": ef.get("icc"),
+                "masa_grasa": ef.get("porcentaje_grasa"),
+                "masa_muscular": ef.get("porcentaje_musculo"),
+                "edad_corporal": ef.get("edad_corporal"),
+                "circunferencia_cintura": ef.get("cintura"),
+                "circunferencia_cadera": ef.get("cadera"),
+                "pliegue_suprailiaco": ef.get("pliegue_suprailiaco"),
+                "pliegue_tricipital": ef.get("pliegue_tricipital"),
+                "pliegue_bicipital": ef.get("pliegue_bicipital"),
+                "pliegue_subescapular": ef.get("pliegue_subescapular"),
+                "motivo_consulta": hist.get("motivo_consulta"),
+                "diagnostico_texto": hist.get("diagnostico_texto"),
+                "plan_alimentario": hist.get("plan_alimentario"),
+            })
 
-
-@api_router.get("/sri/configuracion")
-async def get_sri_configuracion(current_user: TokenData = Depends(get_current_user)):
-    """Lee la configuración del certificado (sin devolver el .p12)."""
-    if current_user.role != "Administrador":
-        raise HTTPException(status_code=403, detail="Solo Administrador")
-    cfg = await db.configuracion.find_one({"clave": "firma_electronica"}, {"_id": 0})
-    if not cfg or not cfg.get("valor"):
-        return {"configurado": False}
-    val = cfg["valor"]
-    return {
-        "configurado": True,
-        "titular": val.get("titular", ""),
-        "valido_hasta": val.get("valido_hasta", ""),
-        "ambiente": val.get("ambiente", "produccion"),
-        "actualizado": cfg.get("actualizado", ""),
-    }
-
-
-@api_router.post("/sri/emitir/{invoice_id}")
-async def emitir_factura_sri(
-    invoice_id: str,
-    current_user: TokenData = Depends(get_current_user)
-):
-    """
-    Emite una factura al SRI:
-    1. Carga el invoice de MongoDB
-    2. Genera el XML SRI 2.1.0
-    3. Firma con el .p12
-    4. Envía al webservice SRI
-    5. Consulta la autorización
-    6. Actualiza el invoice con la clave y número de autorización
-    """
-    from sri_facturacion import (
-        generar_clave_acceso, generar_xml_factura, firmar_xml,
-        enviar_al_sri, autorizar_en_sri, get_p12_desde_mongo
-    )
-    import base64
-    
-    # Cargar factura
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
-    if invoice.get("estado") == "anulada":
-        raise HTTPException(status_code=400, detail="No se puede emitir una factura anulada")
-    if invoice.get("sri_estado") == "AUTORIZADO":
-        raise HTTPException(status_code=400, detail="Esta factura ya fue autorizada por el SRI")
-    
-    # Cargar certificado
-    p12_bytes, password, ambiente = await get_p12_desde_mongo(db)
-    if not p12_bytes:
-        raise HTTPException(status_code=503, detail="Certificado .p12 no configurado. Ve a Admin → Config. SRI")
-    
-    # Leer config clínica (RUC, establecimiento)
-    cfg_clinica = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
-    clinica = cfg_clinica.get("valor", {}) if cfg_clinica else {}
-    ruc = clinica.get("ruc", invoice.get("emisor_ruc", ""))
-    if not ruc:
-        raise HTTPException(status_code=400, detail="RUC no configurado. Ve a Admin → Facturación → Config. Clínica")
-    
-    # Parsear número de factura para extraer serie y secuencial
-    partes = invoice.get("numero_factura", "001-001-000000001").split("-")
-    establecimiento = partes[0] if len(partes) > 0 else "001"
-    punto_emision = partes[1] if len(partes) > 1 else "001"
-    secuencial = partes[2] if len(partes) > 2 else "000000001"
-    serie = establecimiento + punto_emision
-    
-    # Generar fecha en formato DD/MM/YYYY
-    fecha_raw = invoice.get("fecha", datetime.now().strftime("%Y-%m-%d"))
-    try:
-        from datetime import datetime as dt2
-        fecha_dt = dt2.strptime(fecha_raw, "%Y-%m-%d")
-        fecha_ddmmyyyy = fecha_dt.strftime("%d/%m/%Y")
-    except Exception:
-        fecha_ddmmyyyy = datetime.now().strftime("%d/%m/%Y")
-    
-    ambiente_codigo = "1" if ambiente == "pruebas" else "2"
-    
-    # Generar clave de acceso
-    clave_acceso = generar_clave_acceso(
-        fecha=fecha_ddmmyyyy,
-        tipo_comprobante="01",
-        ruc=ruc,
-        ambiente=ambiente_codigo,
-        serie=serie,
-        numero=secuencial,
-    )
-    
-    # Enriquecer invoice con RUC del emisor
-    invoice_completo = {**invoice, "emisor_ruc": ruc}
-    
-    # Generar XML
-    try:
-        xml_bytes = generar_xml_factura(invoice_completo, clave_acceso, ambiente_codigo)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generando XML: {e}")
-    
-    # Firmar XML
-    try:
-        xml_firmado = firmar_xml(xml_bytes, p12_bytes, password)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error firmando XML: {e}")
-    
-    # Guardar XML firmado (base64) en MongoDB
-    xml_b64 = base64.b64encode(xml_firmado).decode()
-    
-    # Enviar al SRI
-    resultado_envio = await enviar_al_sri(xml_firmado, ambiente)
-    
-    # Si fue recibido, consultar autorización
-    resultado_autorizacion = {"ok": False, "estado": "PENDIENTE"}
-    if resultado_envio.get("ok"):
-        import asyncio
-        await asyncio.sleep(2)  # Esperar procesamiento SRI
-        resultado_autorizacion = await autorizar_en_sri(clave_acceso, ambiente)
-    
-    # Actualizar invoice en MongoDB
-    update_data = {
-        "clave_acceso": clave_acceso,
-        "sri_estado_envio": resultado_envio.get("estado", "ERROR"),
-        "sri_mensaje_envio": resultado_envio.get("mensaje", ""),
-        "sri_xml_b64": xml_b64,
-        "sri_ambiente": ambiente,
-        "sri_fecha_envio": datetime.now(timezone.utc).isoformat(),
-    }
-    
-    if resultado_autorizacion.get("ok"):
-        update_data["sri_estado"] = "AUTORIZADO"
-        update_data["numero_autorizacion"] = resultado_autorizacion.get("numero_autorizacion", clave_acceso)
-        update_data["fecha_autorizacion"] = resultado_autorizacion.get("fecha_autorizacion", "")
-        update_data["sri_mensaje"] = resultado_autorizacion.get("mensaje", "")
-    else:
-        update_data["sri_estado"] = resultado_envio.get("estado", "ERROR")
-        update_data["sri_mensaje"] = resultado_envio.get("mensaje", "")
-    
-    await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
-    
-    return {
-        "ok": resultado_autorizacion.get("ok") or resultado_envio.get("ok"),
-        "clave_acceso": clave_acceso,
-        "sri_estado": update_data.get("sri_estado"),
-        "numero_autorizacion": update_data.get("numero_autorizacion", ""),
-        "fecha_autorizacion": update_data.get("fecha_autorizacion", ""),
-        "envio": resultado_envio,
-        "autorizacion": resultado_autorizacion,
-    }
-
-
-@api_router.get("/sri/estado/{invoice_id}")
-async def consultar_estado_sri(
-    invoice_id: str,
-    current_user: TokenData = Depends(get_current_user)
-):
-    """Consulta el estado actual de una factura en el SRI."""
-    from sri_facturacion import autorizar_en_sri, get_p12_desde_mongo
-    
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
-    
-    clave = invoice.get("clave_acceso", "")
-    if not clave:
-        raise HTTPException(status_code=400, detail="Esta factura no tiene clave de acceso SRI")
-    
-    _, _, ambiente = await get_p12_desde_mongo(db)
-    resultado = await autorizar_en_sri(clave, ambiente)
-    
-    if resultado.get("ok"):
-        await db.invoices.update_one({"id": invoice_id}, {"$set": {
-            "sri_estado": "AUTORIZADO",
-            "numero_autorizacion": resultado.get("numero_autorizacion", clave),
-            "fecha_autorizacion": resultado.get("fecha_autorizacion", ""),
-        }})
-    
-    return resultado
-
-
-@api_router.get("/sri/descargar-xml/{invoice_id}")
-async def descargar_xml_sri(
-    invoice_id: str,
-    current_user: TokenData = Depends(get_current_user)
-):
-    """Descarga el XML firmado de una factura."""
-    import base64
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not invoice or not invoice.get("sri_xml_b64"):
-        raise HTTPException(status_code=404, detail="XML no disponible para esta factura")
-    
-    xml_bytes = base64.b64decode(invoice["sri_xml_b64"])
-    numero = invoice.get("numero_factura", "factura").replace("-", "_")
-    
-    return StreamingResponse(
-        iter([xml_bytes]),
-        media_type="application/xml",
-        headers={"Content-Disposition": f"attachment; filename=factura_{numero}.xml"}
-    )
-
-
-
-
-# ========== CORREO ELECTRÓNICO ==========
-
-@api_router.post("/sri/enviar-ride/{invoice_id}")
-async def enviar_ride_por_correo(
-    invoice_id: str,
-    data: dict = {},
-    current_user: TokenData = Depends(get_current_user)
-):
-    """
-    Envía el RIDE (PDF de factura) por correo al paciente.
-    Usa Gmail SMTP con cuenta institucional configurada.
-    """
-    import smtplib
-    import base64
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-    from email.mime.base import MIMEBase
-    from email import encoders
-    from pdf_generator import generate_factura_pdf
-    
-    # Cargar factura
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
-    
-    # Email destino
-    email_destino = data.get("email") or invoice.get("paciente_email", "")
-    if not email_destino:
-        raise HTTPException(status_code=400, detail="No hay email del paciente. Ingresa el correo manualmente.")
-    
-    # Leer config de correo
-    cfg_email = await db.configuracion.find_one({"clave": "email_config"}, {"_id": 0})
-    if not cfg_email or not cfg_email.get("valor"):
-        raise HTTPException(status_code=503, 
-            detail="Correo no configurado. Ve a Admin → Config. Correo y configura tu Gmail institucional.")
-    
-    email_cfg = cfg_email["valor"]
-    smtp_user = email_cfg.get("email", "")
-    smtp_pass = email_cfg.get("app_password", "")  # Gmail App Password (no la contraseña normal)
-    
-    if not smtp_user or not smtp_pass:
-        raise HTTPException(status_code=503, detail="Configuración de correo incompleta")
-    
-    # Generar PDF
-    pdf_buffer = generate_factura_pdf(invoice)
-    pdf_bytes = pdf_buffer.read()
-    
-    # Construir correo
-    numero_factura = invoice.get("numero_factura", "")
-    autorizacion = invoice.get("numero_autorizacion", "")
-    sri_estado = invoice.get("sri_estado", "pendiente")
-    
-    msg = MIMEMultipart()
-    msg["From"] = f"Family Health <{smtp_user}>"
-    msg["To"] = email_destino
-    msg["Subject"] = f"Factura {numero_factura} - Centro de Especialidades Family Health"
-    
-    # Cuerpo del correo
-    estado_sri_texto = (
-        f"✅ Autorizada por el SRI\nN° Autorización: {autorizacion}"
-        if sri_estado == "AUTORIZADO"
-        else "⏳ Pendiente de autorización SRI (comprobante interno adjunto)"
-    )
-    
-    cuerpo = f"""
-<html><body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto">
-<div style="background:linear-gradient(135deg,#005f73,#00a8cc);padding:20px;border-radius:10px 10px 0 0;text-align:center">
-  <h2 style="color:white;margin:0">🧾 Factura Electrónica</h2>
-  <p style="color:rgba(255,255,255,0.8);margin:5px 0 0">Centro de Especialidades Family Health</p>
-</div>
-<div style="background:#f8fdff;padding:20px;border:1px solid #e0f7fa">
-  <p>Estimado/a <strong>{invoice.get("paciente_nombre", "Paciente")}</strong>,</p>
-  <p>Adjuntamos su comprobante de atención médica.</p>
-  
-  <div style="background:white;border:1px solid #b2ebf2;border-radius:8px;padding:15px;margin:15px 0">
-    <table style="width:100%;font-size:14px">
-      <tr><td style="color:#666">N° Factura:</td><td><strong>{numero_factura}</strong></td></tr>
-      <tr><td style="color:#666">Fecha:</td><td>{invoice.get("fecha", "")}</td></tr>
-      <tr><td style="color:#666">Doctor:</td><td>{invoice.get("doctor_nombre", "")} — {invoice.get("especialidad", "")}</td></tr>
-      <tr><td style="color:#666">Total:</td><td><strong style="color:#005f73">${invoice.get("total", 0):.2f}</strong></td></tr>
-      <tr><td style="color:#666">Estado SRI:</td><td>{estado_sri_texto}</td></tr>
-    </table>
-  </div>
-  
-  <p style="color:#555;font-size:13px">
-    Los servicios médicos están exentos de IVA según la Ley de Régimen Tributario Interno del Ecuador.
-  </p>
-</div>
-<div style="background:#005f73;padding:15px;border-radius:0 0 10px 10px;text-align:center">
-  <p style="color:white;margin:0;font-size:13px">
-    Centro de Especialidades Family Health | Mucho Lote 2 MZ 2833 Villa 15, Guayaquil<br>
-    📞 096-291-2170 | centrodeespecialidadesfamilyhe@gmail.com | @familyhealth.gye
-  </p>
-</div>
-</body></html>
-"""
-    
-    msg.attach(MIMEText(cuerpo, "html"))
-    
-    # Adjuntar PDF
-    part = MIMEBase("application", "octet-stream")
-    part.set_payload(pdf_bytes)
-    encoders.encode_base64(part)
-    part.add_header("Content-Disposition", f"attachment; filename=factura_{numero_factura.replace('-','_')}.pdf")
-    msg.attach(part)
-    
-    # Adjuntar XML si está disponible
-    if invoice.get("sri_xml_b64") and sri_estado == "AUTORIZADO":
-        xml_bytes = base64.b64decode(invoice["sri_xml_b64"])
-        part_xml = MIMEBase("application", "xml")
-        part_xml.set_payload(xml_bytes)
-        encoders.encode_base64(part_xml)
-        part_xml.add_header("Content-Disposition", f"attachment; filename=factura_{numero_factura.replace('-','_')}.xml")
-        msg.attach(part_xml)
-    
-    # Enviar por Gmail SMTP
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-        
-        # Registrar envío
-        await db.invoices.update_one({"id": invoice_id}, {"$set": {
-            "ride_enviado_a": email_destino,
-            "ride_enviado_fecha": datetime.now(timezone.utc).isoformat(),
-        }})
-        
-        return {"ok": True, "mensaje": f"✅ Factura enviada a {email_destino}"}
-    
-    except smtplib.SMTPAuthenticationError:
-        raise HTTPException(status_code=401, 
-            detail="Error de autenticación Gmail. Verifica que usas una App Password, no la contraseña normal.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al enviar correo: {e}")
-
-
-@api_router.post("/configuracion/email")
-async def save_config_email(data: dict, current_user: TokenData = Depends(get_current_user)):
-    """Guarda configuración de correo Gmail para envío de facturas."""
-    if current_user.role != "Administrador":
-        raise HTTPException(status_code=403, detail="Solo Administrador")
-    await db.configuracion.update_one(
-        {"clave": "email_config"},
-        {"$set": {
-            "clave": "email_config",
-            "valor": {
-                "email": data.get("email", ""),
-                "app_password": data.get("app_password", ""),
-                "nombre": data.get("nombre", "Family Health"),
-            },
-            "actualizado": datetime.now(timezone.utc).isoformat(),
-        }},
-        upsert=True
-    )
-    return {"ok": True, "mensaje": "✅ Configuración de correo guardada"}
-
-
-@api_router.get("/configuracion/email")
-async def get_config_email(current_user: TokenData = Depends(get_current_user)):
-    """Lee si el correo está configurado."""
-    if current_user.role != "Administrador":
-        raise HTTPException(status_code=403, detail="Solo Administrador")
-    cfg = await db.configuracion.find_one({"clave": "email_config"}, {"_id": 0})
-    if not cfg or not cfg.get("valor"):
-        return {"configurado": False}
-    val = cfg["valor"]
-    return {
-        "configurado": bool(val.get("email") and val.get("app_password")),
-        "email": val.get("email", ""),
-        "nombre": val.get("nombre", "Family Health"),
-    }
-
+    return {"cedula": cedula, "medidas": medidas}
 
 # ========== MIGRACIÓN: RECALCULAR EDAD PACIENTES EXISTENTES ==========
 
@@ -2516,65 +2168,72 @@ async def delete_doctor(doctor_id: str):
 @api_router.post("/appointments", response_model=Appointment)
 async def create_appointment(input: AppointmentCreate):
     """
-    Crear cita con unificación automática de paciente por cédula
+    Crear cita con unificación automática de paciente por cédula.
+    Si la cédula ya existe, actualiza datos vacíos del paciente (no sobreescribe).
     """
-    print(f"📝 Creando appointment - Input recibido:")
-    print(f"   Nombre: {input.nombre_completo}")
-    print(f"   Cédula: {input.cedula}")
-    print(f"   Fecha Nacimiento: {input.fecha_nacimiento}")
-    print(f"   Especialidad: {input.especialidad}")
-    
-    # ✅ CALCULAR EDAD DESDE FECHA_NACIMIENTO
+    # Calcular edad desde fecha_nacimiento
     if input.fecha_nacimiento:
         try:
             fn = datetime.fromisoformat(input.fecha_nacimiento)
-            hoy = datetime.now()
-            edad_calculada = hoy.year - fn.year
-            if hoy.month < fn.month or (hoy.month == fn.month and hoy.day < fn.day):
-                edad_calculada -= 1
-            input.edad = max(0, edad_calculada)
-            print(f"   ✅ Edad calculada: {input.edad} años")
-        except Exception as e:
-            print(f"   ⚠️ Error calculando edad: {e}")
-    
-    # Verificar que el doctor existe (doctor_id es opcional)
+            hoy_dt = datetime.now()
+            edad_calc = hoy_dt.year - fn.year
+            if (hoy_dt.month, hoy_dt.day) < (fn.month, fn.day):
+                edad_calc -= 1
+            input.edad = max(0, edad_calc)
+        except Exception:
+            pass
+
+    # Detectar menor de edad automáticamente
+    if input.edad > 0 and input.edad < 18:
+        input.es_menor = True
+
+    # Buscar doctor (opcional — no bloquea si no se especifica)
     doctor = None
     if input.doctor_id:
         doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
         if not doctor:
-            # Fallback: buscar por nombre si viene el nombre
+            # Fallback: buscar por nombre
             if input.doctor_nombre:
                 doctor = await db.doctors.find_one(
                     {"nombre": {"$regex": input.doctor_nombre, "$options": "i"}}, {"_id": 0}
                 )
-            if not doctor:
-                raise HTTPException(status_code=404, detail=f"Doctor no encontrado (id: {input.doctor_id})")
-    
-    # UNIFICACIÓN DE PACIENTE POR CÉDULA
-    # Esta es la clave: primero unificamos al paciente usando la cédula
-    paciente = await unificar_paciente_por_cedula(
-        cedula=input.cedula,
-        datos_adicionales={
-            "nombre": input.nombre_completo,
-            "telefono": input.telefono,
-            "fecha_nacimiento": input.fecha_nacimiento,
-        }
-    )
-    
-    # Crear la cita vinculada al paciente unificado
+
+    # Unificar paciente por cédula (evita duplicados)
+    cedula_principal = input.cedula or input.paciente_cedula or ""
+    datos_adicionales = {
+        "nombre": input.nombre_completo,
+        "telefono": input.telefono,
+        "email": input.email or "",
+        "whatsapp": input.whatsapp or "",
+        "fecha_nacimiento": input.fecha_nacimiento,
+        "sexo": input.sexo or "",
+        "tipo_documento": input.tipo_documento or "cedula",
+    }
+    if cedula_principal:
+        try:
+            paciente = await unificar_paciente_por_cedula(
+                cedula=cedula_principal,
+                datos_adicionales=datos_adicionales
+            )
+            paciente_id = paciente.id
+            paciente_cedula = paciente.cedula
+        except Exception:
+            paciente_id = str(uuid.uuid4())
+            paciente_cedula = cedula_principal
+    else:
+        paciente_id = str(uuid.uuid4())
+        paciente_cedula = cedula_principal
+
     appointment_dict = input.model_dump()
     appointment_dict['doctor_nombre'] = doctor['nombre'] if doctor else (input.doctor_nombre or "")
-    
-    # IMPORTANTE: Guardar paciente_cedula como referencia principal
-    # El paciente_id también se guarda pero la cédula es el identificador primario
-    appointment_dict['paciente_cedula'] = paciente.cedula
-    appointment_dict['paciente_id'] = paciente.id  # Referencia interna
-    
+    appointment_dict['paciente_cedula'] = paciente_cedula
+    appointment_dict['paciente_id'] = paciente_id
+
     appointment_obj = Appointment(**appointment_dict)
-    
     doc = appointment_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
-    
+    doc['detalles'] = []  # asegurar campo limpio
+
     await db.appointments.insert_one(doc)
     return appointment_obj
 
@@ -2619,283 +2278,77 @@ async def delete_appointment(appointment_id: str):
     return {"message": "Cita eliminada exitosamente"}
 
 # Invoice endpoints  
-# ========== FACTURACIÓN ==========
-
-async def _siguiente_numero_factura(establecimiento: str = "001", punto_emision: str = "001") -> str:
-    """Genera el siguiente número de factura secuencial."""
-    last = await db.invoices.find_one(
-        {"numero_factura": {"$regex": f"^{establecimiento}-{punto_emision}-"}},
-        {"_id": 0, "numero_factura": 1},
-        sort=[("numero_factura", -1)]
-    )
-    if last:
-        try:
-            seq = int(last["numero_factura"].split("-")[-1]) + 1
-        except Exception:
-            seq = 1
-    else:
-        seq = 1
-    return f"{establecimiento}-{punto_emision}-{str(seq).zfill(9)}"
-
-
-def _calcular_totales(detalles: list, iva_pct: float = 0.0, descuento_extra: float = 0.0) -> dict:
-    subtotal = sum(d.get("precio_unitario", 0) * d.get("cantidad", 1) for d in detalles)
-    desc_detalles = sum(d.get("descuento", 0) for d in detalles)
-    desc_total = desc_detalles + descuento_extra
-    subtotal_desc = subtotal - desc_total
-    iva_val = round(subtotal_desc * iva_pct / 100, 2)
-    total = round(subtotal_desc + iva_val, 2)
-    return {
-        "subtotal": round(subtotal, 2),
-        "descuento_total": round(desc_total, 2),
-        "subtotal_con_descuento": round(subtotal_desc, 2),
-        "iva_porcentaje": iva_pct,
-        "iva_valor": iva_val,
-        "total": total,
-    }
-
-
 @api_router.post("/invoices", response_model=Invoice)
-async def create_invoice(
-    input: InvoiceCreate,
-    current_user: TokenData = Depends(get_current_user)
-):
-    """Crea una factura con numeración automática SRI."""
-    # Leer configuración de la clínica
-    cfg = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0}) or {}
-    clinica = cfg.get("valor", {})
-
-    numero = await _siguiente_numero_factura(
-        clinica.get("establecimiento", "001"),
-        clinica.get("punto_emision", "001")
-    )
-
-    # Calcular totales automáticamente desde detalles
-    detalles_dict = [d.model_dump() for d in input.detalles]
-    totales = _calcular_totales(detalles_dict, input.iva_porcentaje)
-
-    # Construir detalles con subtotal calculado
-    detalles_final = []
-    for d in input.detalles:
-        det = d.model_dump()
-        det["subtotal"] = round(d.precio_unitario * d.cantidad - d.descuento, 2)
-        detalles_final.append(DetalleFactura(**det))
-
-    fecha = input.fecha or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    invoice = Invoice(
-        numero_factura=numero,
-        emisor_ruc=clinica.get("ruc", ""),
-        emisor_razon_social=clinica.get("razon_social", "CENTRO DE ESPECIALIDADES FAMILY HEALTH"),
-        emisor_nombre_comercial=clinica.get("nombre_comercial", "FAMILY HEALTH"),
-        emisor_direccion=clinica.get("direccion", "Mucho Lote 2 MZ 2833 Villa 15, Guayaquil"),
-        emisor_telefono=clinica.get("telefono", "096-291-2170"),
-        emisor_email=clinica.get("email", "centrodeespecialidadesfamilyhe@gmail.com"),
-        paciente_nombre=input.paciente_nombre,
-        paciente_cedula=input.paciente_cedula,
-        paciente_direccion=input.paciente_direccion,
-        paciente_email=input.paciente_email,
-        paciente_telefono=input.paciente_telefono,
-        doctor_id=input.doctor_id,
-        doctor_nombre=input.doctor_nombre,
-        especialidad=input.especialidad,
-        detalles=detalles_final,
-        tipo_pago=input.tipo_pago,
-        referencia_pago=input.referencia_pago,
-        consulta_financiera_id=input.consulta_financiera_id,
-        appointment_id=input.appointment_id,
-        numero_autorizacion=input.numero_autorizacion,
-        observaciones=input.observaciones,
-        fecha=fecha,
-        estado="emitida",
-        created_by=current_user.username,
-        **totales,
-    )
-
-    doc = invoice.model_dump()
-    doc["created_at"] = doc["created_at"].isoformat()
-    doc["detalles"] = [d.model_dump() for d in invoice.detalles]
+async def create_invoice(input: InvoiceCreate):
+    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor no encontrado")
+    
+    invoice_dict = input.model_dump()
+    invoice_dict['doctor_nombre'] = doctor['nombre']
+    invoice_obj = Invoice(**invoice_dict)
+    
+    doc = invoice_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
     await db.invoices.insert_one(doc)
-    return invoice
-
-
-@api_router.get("/invoices/monthly-totals")
-async def get_monthly_totals(current_user: TokenData = Depends(get_current_user)):
-    invoices = await db.invoices.find({"estado": {"$ne": "anulada"}}, {"_id": 0}).to_list(5000)
-    monthly_totals = defaultdict(float)
-    for inv in invoices:
-        if inv.get("fecha"):
-            ym = inv["fecha"][:7]
-            monthly_totals[ym] += inv.get("total", inv.get("valor", 0))
-    return {"monthly_totals": dict(monthly_totals)}
-
-
-@api_router.get("/invoices/stats")
-async def get_invoice_stats(current_user: TokenData = Depends(get_current_user)):
-    """Estadísticas rápidas de facturación."""
-    from datetime import date
-    hoy = date.today().isoformat()
-    mes = hoy[:7]
-    all_inv = await db.invoices.find({"estado": {"$ne": "anulada"}}, {"_id": 0}).to_list(5000)
-    total_hoy = sum(i.get("total", 0) for i in all_inv if i.get("fecha", "") == hoy)
-    total_mes = sum(i.get("total", 0) for i in all_inv if i.get("fecha", "")[:7] == mes)
-    total_general = sum(i.get("total", 0) for i in all_inv)
-    return {
-        "total_hoy": round(total_hoy, 2),
-        "total_mes": round(total_mes, 2),
-        "total_general": round(total_general, 2),
-        "num_facturas_hoy": sum(1 for i in all_inv if i.get("fecha", "") == hoy),
-        "num_facturas_mes": sum(1 for i in all_inv if i.get("fecha", "")[:7] == mes),
-        "num_facturas_total": len(all_inv),
-    }
-
-
-@api_router.get("/invoices/export")
-async def export_invoices(current_user: TokenData = Depends(get_current_user)):
-    invoices = await db.invoices.find({}, {"_id": 0}).to_list(5000)
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "N° Factura", "Fecha", "Estado", "Paciente", "Cédula/RUC",
-        "Doctor", "Especialidad", "Subtotal", "Descuento", "IVA", "TOTAL",
-        "Forma Pago", "N° Autorización", "Observaciones"
-    ])
-    for inv in invoices:
-        writer.writerow([
-            inv.get("numero_factura", ""),
-            inv.get("fecha", ""),
-            inv.get("estado", ""),
-            inv.get("paciente_nombre", ""),
-            inv.get("paciente_cedula", ""),
-            inv.get("doctor_nombre", ""),
-            inv.get("especialidad", ""),
-            inv.get("subtotal_con_descuento", inv.get("valor", 0)),
-            inv.get("descuento_total", 0),
-            inv.get("iva_valor", 0),
-            inv.get("total", inv.get("valor", 0)),
-            inv.get("tipo_pago", ""),
-            inv.get("numero_autorizacion", ""),
-            inv.get("observaciones", ""),
-        ])
-    output.seek(0)
-    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=facturas_family_health.csv"})
-
-
-@api_router.get("/invoices/{invoice_id}/pdf")
-async def get_invoice_pdf(invoice_id: str, current_user: TokenData = Depends(get_current_user)):
-    """Genera el PDF de la factura."""
-    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not inv:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
-    from pdf_generator import generate_factura_pdf
-    pdf_buffer = generate_factura_pdf(inv)
-    filename = f"factura_{inv.get('numero_factura','').replace('-','_')}.pdf"
-    return StreamingResponse(pdf_buffer, media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename={filename}"})
-
+    return invoice_obj
 
 @api_router.get("/invoices", response_model=List[Invoice])
-async def get_invoices(
-    paciente_cedula: Optional[str] = None,
-    fecha_inicio: Optional[str] = None,
-    fecha_fin: Optional[str] = None,
-    estado: Optional[str] = None,
-    current_user: TokenData = Depends(get_current_user)
-):
-    query = {}
-    if paciente_cedula:
-        query["paciente_cedula"] = paciente_cedula
-    if estado:
-        query["estado"] = estado
-    if fecha_inicio and fecha_fin:
-        query["fecha"] = {"$gte": fecha_inicio, "$lte": fecha_fin}
-    invoices = await db.invoices.find(query, {"_id": 0}).sort("fecha", -1).to_list(2000)
-    result = []
-    for inv in invoices:
-        if isinstance(inv.get("created_at"), str):
-            inv["created_at"] = datetime.fromisoformat(inv["created_at"])
-        # Compat: si viene con campo "valor" viejo, mapear a total
-        if "valor" in inv and "total" not in inv:
-            inv["total"] = inv["valor"]
-        if "detalles" not in inv or not inv["detalles"]:
-            inv["detalles"] = []
-        try:
-            result.append(Invoice(**inv))
-        except Exception:
-            pass
-    return result
+async def get_invoices():
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    for invoice in invoices:
+        if isinstance(invoice['created_at'], str):
+            invoice['created_at'] = datetime.fromisoformat(invoice['created_at'])
+    return invoices
 
+@api_router.get("/invoices/monthly-totals")
+async def get_monthly_totals():
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    monthly_totals = defaultdict(float)
+    for invoice in invoices:
+        year_month = invoice['fecha'][:7]
+        monthly_totals[year_month] += invoice['valor']
+    return {"monthly_totals": dict(monthly_totals)}
+
+@api_router.get("/invoices/export")
+async def export_invoices():
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Número Factura', 'Paciente', 'Cédula', 'Doctor', 'Especialidad', 'Servicio', 'Valor', 'Fecha', 'Tipo Pago'])
+    for invoice in invoices:
+        writer.writerow([invoice['numero_factura'], invoice['paciente_nombre'], invoice['paciente_cedula'],
+                        invoice['doctor_nombre'], invoice['especialidad'], invoice['servicio'],
+                        invoice['valor'], invoice['fecha'], invoice['tipo_pago']])
+    output.seek(0)
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
+                           headers={"Content-Disposition": "attachment; filename=facturas_family_health.csv"})
 
 @api_router.put("/invoices/{invoice_id}", response_model=Invoice)
-async def update_invoice(
-    invoice_id: str,
-    input: InvoiceUpdate,
-    current_user: TokenData = Depends(get_current_user)
-):
+async def update_invoice(invoice_id: str, input: InvoiceUpdate):
     existing = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    if 'doctor_id' in update_data and update_data['doctor_id']:
+        doctor = await db.doctors.find_one({"id": update_data['doctor_id']}, {"_id": 0})
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Doctor no encontrado")
+        update_data['doctor_nombre'] = doctor['nombre']
     if update_data:
         await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
     updated = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if isinstance(updated.get("created_at"), str):
-        updated["created_at"] = datetime.fromisoformat(updated["created_at"])
-    if "detalles" not in updated:
-        updated["detalles"] = []
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
     return Invoice(**updated)
 
-
-@api_router.post("/invoices/{invoice_id}/anular")
-async def anular_invoice(
-    invoice_id: str,
-    data: dict,
-    current_user: TokenData = Depends(get_current_user)
-):
-    """Anula una factura (no se elimina, queda con estado 'anulada')."""
-    existing = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
-    if existing.get("estado") == "anulada":
-        raise HTTPException(status_code=400, detail="La factura ya está anulada")
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
-        "estado": "anulada",
-        "observaciones": data.get("motivo", "Anulada") + " | " + existing.get("observaciones", ""),
-        "anulada_por": current_user.username,
-        "fecha_anulacion": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-    }})
-    return {"ok": True, "mensaje": "Factura anulada correctamente"}
-
-
 @api_router.delete("/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: str, current_user: TokenData = Depends(get_current_user)):
-    if current_user.role != "Administrador":
-        raise HTTPException(status_code=403, detail="Solo el Administrador puede eliminar facturas")
+async def delete_invoice(invoice_id: str):
     result = await db.invoices.delete_one({"id": invoice_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
-    return {"message": "Factura eliminada"}
-
-
-@api_router.post("/configuracion/clinica")
-async def save_config_clinica(data: dict, current_user: TokenData = Depends(get_current_user)):
-    """Guarda configuración de la clínica (RUC, establecimiento, etc.)"""
-    if current_user.role != "Administrador":
-        raise HTTPException(status_code=403, detail="Solo Administrador")
-    await db.configuracion.update_one(
-        {"clave": "clinica_config"},
-        {"$set": {"clave": "clinica_config", "valor": data,
-                  "actualizado": datetime.now(timezone.utc).isoformat()}},
-        upsert=True
-    )
-    return {"ok": True}
-
-
-@api_router.get("/configuracion/clinica")
-async def get_config_clinica(current_user: TokenData = Depends(get_current_user)):
-    cfg = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
-    return cfg.get("valor", {}) if cfg else {}
+    return {"message": "Factura eliminada exitosamente"}
 
 # Inventory endpoints
 @api_router.post("/inventory", response_model=InventoryItem)
@@ -4311,6 +3764,466 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# ========== FACTURACIÓN ELECTRÓNICA SRI ==========
+
+@api_router.post("/sri/configurar-firma")
+async def configurar_firma_electronica(data: dict, current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede configurar la firma")
+    p12_b64 = data.get("p12_base64", "")
+    password = data.get("password", "")
+    ambiente = data.get("ambiente", "produccion")
+    if not p12_b64 or not password:
+        raise HTTPException(status_code=400, detail="Se requiere el archivo .p12 y la contraseña")
+    import base64
+    from cryptography.hazmat.primitives.serialization import pkcs12
+    from cryptography.hazmat.backends import default_backend
+    try:
+        p12_bytes = base64.b64decode(p12_b64)
+        pk, cert, chain = pkcs12.load_key_and_certificates(p12_bytes, password.encode(), default_backend())
+        titular = cert.subject.rfc4514_string()
+        valido_hasta = cert.not_valid_after_utc.strftime("%Y-%m-%d")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Certificado inválido o contraseña incorrecta: {e}")
+    await db.configuracion.update_one(
+        {"clave": "firma_electronica"},
+        {"$set": {"clave": "firma_electronica", "valor": {"p12_base64": p12_b64, "password": password, "ambiente": ambiente, "titular": titular, "valido_hasta": valido_hasta}, "actualizado": datetime.now(timezone.utc).isoformat(), "actualizado_por": current_user.username}},
+        upsert=True
+    )
+    return {"ok": True, "titular": titular, "valido_hasta": valido_hasta, "ambiente": ambiente, "mensaje": f"✅ Certificado configurado correctamente"}
+
+
+@api_router.get("/sri/configuracion")
+async def get_sri_configuracion(current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    cfg = await db.configuracion.find_one({"clave": "firma_electronica"}, {"_id": 0})
+    if not cfg or not cfg.get("valor"):
+        return {"configurado": False}
+    val = cfg["valor"]
+    return {"configurado": True, "titular": val.get("titular", ""), "valido_hasta": val.get("valido_hasta", ""), "ambiente": val.get("ambiente", "produccion"), "actualizado": cfg.get("actualizado", "")}
+
+
+@api_router.post("/sri/emitir/{invoice_id}")
+async def emitir_factura_sri(invoice_id: str, current_user: TokenData = Depends(get_current_user)):
+    from sri_facturacion import generar_clave_acceso, generar_xml_factura, firmar_xml, enviar_al_sri, autorizar_en_sri, get_p12_desde_mongo
+    import base64, asyncio
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    if invoice.get("estado") == "anulada":
+        raise HTTPException(status_code=400, detail="No se puede emitir una factura anulada")
+    if invoice.get("sri_estado") == "AUTORIZADO":
+        raise HTTPException(status_code=400, detail="Esta factura ya fue autorizada por el SRI")
+    p12_bytes, password, ambiente = await get_p12_desde_mongo(db)
+    if not p12_bytes:
+        raise HTTPException(status_code=503, detail="Certificado .p12 no configurado. Ve a Admin → Config. SRI")
+    cfg_clinica = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+    clinica = cfg_clinica.get("valor", {}) if cfg_clinica else {}
+    ruc = clinica.get("ruc", invoice.get("emisor_ruc", ""))
+    if not ruc:
+        raise HTTPException(status_code=400, detail="RUC no configurado. Ve a Facturación → Config. Clínica")
+    partes = invoice.get("numero_factura", "001-001-000000001").split("-")
+    est = partes[0] if len(partes) > 0 else "001"
+    pto = partes[1] if len(partes) > 1 else "001"
+    seq = partes[2] if len(partes) > 2 else "000000001"
+    serie = est + pto
+    fecha_raw = invoice.get("fecha", datetime.now().strftime("%Y-%m-%d"))
+    try:
+        from datetime import datetime as dt2
+        fecha_str = dt2.strptime(fecha_raw, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except:
+        fecha_str = datetime.now().strftime("%d/%m/%Y")
+    amb_codigo = "1" if ambiente == "pruebas" else "2"
+    clave_acceso = generar_clave_acceso(fecha_str, "01", ruc, amb_codigo, serie, seq)
+    invoice_completo = {**invoice, "emisor_ruc": ruc}
+    try:
+        xml_bytes = generar_xml_factura(invoice_completo, clave_acceso, amb_codigo)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando XML: {e}")
+    try:
+        xml_firmado = firmar_xml(xml_bytes, p12_bytes, password)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error firmando XML: {e}")
+    xml_b64 = base64.b64encode(xml_firmado).decode()
+    resultado_envio = await enviar_al_sri(xml_firmado, ambiente)
+    resultado_autorizacion = {"ok": False, "estado": "PENDIENTE"}
+    if resultado_envio.get("ok"):
+        await asyncio.sleep(2)
+        resultado_autorizacion = await autorizar_en_sri(clave_acceso, ambiente)
+    update_data = {"clave_acceso": clave_acceso, "sri_estado_envio": resultado_envio.get("estado", "ERROR"), "sri_mensaje_envio": resultado_envio.get("mensaje", ""), "sri_xml_b64": xml_b64, "sri_ambiente": ambiente, "sri_fecha_envio": datetime.now(timezone.utc).isoformat()}
+    if resultado_autorizacion.get("ok"):
+        update_data["sri_estado"] = "AUTORIZADO"
+        update_data["numero_autorizacion"] = resultado_autorizacion.get("numero_autorizacion", clave_acceso)
+        update_data["fecha_autorizacion"] = resultado_autorizacion.get("fecha_autorizacion", "")
+    else:
+        update_data["sri_estado"] = resultado_envio.get("estado", "ERROR")
+        update_data["sri_mensaje"] = resultado_envio.get("mensaje", "")
+    await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+    return {"ok": resultado_autorizacion.get("ok") or resultado_envio.get("ok"), "clave_acceso": clave_acceso, "sri_estado": update_data.get("sri_estado"), "numero_autorizacion": update_data.get("numero_autorizacion", ""), "envio": resultado_envio, "autorizacion": resultado_autorizacion}
+
+
+@api_router.get("/sri/estado/{invoice_id}")
+async def consultar_estado_sri(invoice_id: str, current_user: TokenData = Depends(get_current_user)):
+    from sri_facturacion import autorizar_en_sri, get_p12_desde_mongo
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    clave = invoice.get("clave_acceso", "")
+    if not clave:
+        raise HTTPException(status_code=400, detail="Esta factura no tiene clave de acceso SRI")
+    _, _, ambiente = await get_p12_desde_mongo(db)
+    resultado = await autorizar_en_sri(clave, ambiente)
+    if resultado.get("ok"):
+        await db.invoices.update_one({"id": invoice_id}, {"$set": {"sri_estado": "AUTORIZADO", "numero_autorizacion": resultado.get("numero_autorizacion", clave), "fecha_autorizacion": resultado.get("fecha_autorizacion", "")}})
+    return resultado
+
+
+@api_router.get("/sri/descargar-xml/{invoice_id}")
+async def descargar_xml_sri(invoice_id: str, current_user: TokenData = Depends(get_current_user)):
+    import base64
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice or not invoice.get("sri_xml_b64"):
+        raise HTTPException(status_code=404, detail="XML no disponible para esta factura")
+    xml_bytes = base64.b64decode(invoice["sri_xml_b64"])
+    numero = invoice.get("numero_factura", "factura").replace("-", "_")
+    return StreamingResponse(iter([xml_bytes]), media_type="application/xml", headers={"Content-Disposition": f"attachment; filename=factura_{numero}.xml"})
+
+
+# ========== CORREO ELECTRÓNICO ==========
+
+@api_router.post("/sri/enviar-ride/{invoice_id}")
+async def enviar_ride_por_correo(invoice_id: str, data: dict = {}, current_user: TokenData = Depends(get_current_user)):
+    import smtplib, base64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders
+    from pdf_generator import generate_factura_pdf
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    email_destino = data.get("email") or invoice.get("paciente_email", "")
+    if not email_destino:
+        raise HTTPException(status_code=400, detail="No hay email del paciente")
+    cfg_email = await db.configuracion.find_one({"clave": "email_config"}, {"_id": 0})
+    if not cfg_email or not cfg_email.get("valor"):
+        raise HTTPException(status_code=503, detail="Correo no configurado. Ve a Admin → Config. SRI → sección Gmail")
+    email_cfg = cfg_email["valor"]
+    smtp_user = email_cfg.get("email", "")
+    smtp_pass = email_cfg.get("app_password", "")
+    if not smtp_user or not smtp_pass:
+        raise HTTPException(status_code=503, detail="Configuración de correo incompleta")
+    pdf_buffer = generate_factura_pdf(invoice)
+    pdf_bytes = pdf_buffer.read()
+    numero_factura = invoice.get("numero_factura", "")
+    autorizacion = invoice.get("numero_autorizacion", "")
+    sri_estado = invoice.get("sri_estado", "pendiente")
+    msg = MIMEMultipart()
+    msg["From"] = f"Family Health <{smtp_user}>"
+    msg["To"] = email_destino
+    msg["Subject"] = f"Factura {numero_factura} - Family Health"
+    estado_texto = f"✅ Autorizada por el SRI — N°: {autorizacion}" if sri_estado == "AUTORIZADO" else "⏳ Pendiente de autorización SRI"
+    cuerpo = f"""<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+<div style="background:linear-gradient(135deg,#005f73,#00a8cc);padding:20px;border-radius:10px 10px 0 0;text-align:center">
+<h2 style="color:white;margin:0">🧾 Factura Electrónica</h2>
+<p style="color:rgba(255,255,255,0.8);margin:5px 0 0">Centro de Especialidades Family Health</p></div>
+<div style="background:#f8fdff;padding:20px;border:1px solid #e0f7fa">
+<p>Estimado/a <strong>{invoice.get("paciente_nombre","Paciente")}</strong>,</p>
+<p>Adjuntamos su comprobante de atención médica.</p>
+<div style="background:white;border:1px solid #b2ebf2;border-radius:8px;padding:15px;margin:15px 0">
+<table style="width:100%;font-size:14px">
+<tr><td style="color:#666">N° Factura:</td><td><strong>{numero_factura}</strong></td></tr>
+<tr><td style="color:#666">Fecha:</td><td>{invoice.get("fecha","")}</td></tr>
+<tr><td style="color:#666">Doctor:</td><td>{invoice.get("doctor_nombre","")} — {invoice.get("especialidad","")}</td></tr>
+<tr><td style="color:#666">Total:</td><td><strong style="color:#005f73">${invoice.get("total",0):.2f}</strong></td></tr>
+<tr><td style="color:#666">Estado SRI:</td><td>{estado_texto}</td></tr>
+</table></div>
+<p style="color:#555;font-size:13px">Los servicios médicos están exentos de IVA según la Ley de Régimen Tributario Interno del Ecuador.</p>
+</div>
+<div style="background:#005f73;padding:15px;border-radius:0 0 10px 10px;text-align:center">
+<p style="color:white;margin:0;font-size:13px">Family Health | Mucho Lote 2 MZ 2833 Villa 15, Guayaquil | 096-291-2170</p>
+</div></body></html>"""
+    msg.attach(MIMEText(cuerpo, "html"))
+    part = MIMEBase("application", "octet-stream")
+    part.set_payload(pdf_bytes)
+    encoders.encode_base64(part)
+    part.add_header("Content-Disposition", f"attachment; filename=factura_{numero_factura.replace('-','_')}.pdf")
+    msg.attach(part)
+    if invoice.get("sri_xml_b64") and sri_estado == "AUTORIZADO":
+        xml_bytes = base64.b64decode(invoice["sri_xml_b64"])
+        part_xml = MIMEBase("application", "xml")
+        part_xml.set_payload(xml_bytes)
+        encoders.encode_base64(part_xml)
+        part_xml.add_header("Content-Disposition", f"attachment; filename=factura_{numero_factura.replace('-','_')}.xml")
+        msg.attach(part_xml)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        await db.invoices.update_one({"id": invoice_id}, {"$set": {"ride_enviado_a": email_destino, "ride_enviado_fecha": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True, "mensaje": f"✅ Factura enviada a {email_destino}"}
+    except smtplib.SMTPAuthenticationError:
+        raise HTTPException(status_code=401, detail="Error de autenticación Gmail. Usa una App Password de 16 caracteres.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al enviar correo: {e}")
+
+
+@api_router.post("/configuracion/email")
+async def save_config_email(data: dict, current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    await db.configuracion.update_one({"clave": "email_config"}, {"$set": {"clave": "email_config", "valor": {"email": data.get("email",""), "app_password": data.get("app_password",""), "nombre": data.get("nombre","Family Health")}, "actualizado": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    return {"ok": True, "mensaje": "✅ Configuración de correo guardada"}
+
+
+@api_router.get("/configuracion/email")
+async def get_config_email(current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    cfg = await db.configuracion.find_one({"clave": "email_config"}, {"_id": 0})
+    if not cfg or not cfg.get("valor"):
+        return {"configurado": False}
+    val = cfg["valor"]
+    return {"configurado": bool(val.get("email") and val.get("app_password")), "email": val.get("email",""), "nombre": val.get("nombre","Family Health")}
+
+
+# ========== CONFIGURACIÓN CLÍNICA ==========
+
+@api_router.post("/configuracion/clinica")
+async def save_config_clinica(data: dict, current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    await db.configuracion.update_one({"clave": "clinica_config"}, {"$set": {"clave": "clinica_config", "valor": data, "actualizado": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    return {"ok": True}
+
+
+@api_router.get("/configuracion/clinica")
+async def get_config_clinica(current_user: TokenData = Depends(get_current_user)):
+    cfg = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+    return cfg.get("valor", {}) if cfg else {}
+
+
+# ========== IA MÉDICA — GEMINI FLASH ==========
+
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+
+async def get_gemini_key() -> str:
+    try:
+        cfg = await db.configuracion.find_one({"clave": "gemini_api_key"}, {"_id": 0})
+        if cfg and cfg.get("valor"): return cfg["valor"]
+    except: pass
+    return os.environ.get("GEMINI_API_KEY", "")
+
+
+@api_router.post("/ia/consulta-medica")
+async def consulta_ia_medica(data: dict, current_user: TokenData = Depends(get_current_user)):
+    GEMINI_API_KEY = await get_gemini_key()
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="IA no configurada. Ve a Admin → Config. IA y guarda tu API key de Gemini.")
+    mensaje = data.get("mensaje", "").strip()
+    especialidad = data.get("especialidad", "Medicina General")
+    ctx = data.get("contexto_paciente", {})
+    historial = data.get("historial", [])
+    if not mensaje:
+        raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
+    contexto_str = f"PACIENTE: {ctx.get('nombre','?')}, {ctx.get('edad','?')} años, {ctx.get('sexo','')}, Especialidad: {especialidad}, Motivo: {ctx.get('motivo_consulta','?')}, Antecedentes: {ctx.get('antecedentes','Sin antecedentes')}, Alergias: {ctx.get('alergias','Ninguna')}"
+    system_prompt = "Eres un asistente médico de apoyo clínico para Family Health, Guayaquil, Ecuador. Responde en español, conciso y clínico. Provee diagnósticos diferenciales con CIE-10, tratamientos con dosis, signos de alarma. Siempre aclara que tus sugerencias requieren validación del médico tratante."
+    contents = [
+        {"role": "user", "parts": [{"text": system_prompt + "\n\n" + contexto_str}]},
+        {"role": "model", "parts": [{"text": "Entendido. ¿En qué puedo apoyar al médico?"}]},
+    ]
+    for h in historial[-10:]:
+        contents.append({"role": "user" if h.get("rol") == "user" else "model", "parts": [{"text": h.get("texto", "")}]})
+    contents.append({"role": "user", "parts": [{"text": mensaje}]})
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json={"contents": contents, "generationConfig": {"temperature": 0.3, "maxOutputTokens": 800, "topP": 0.8}, "safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}]}, headers={"Content-Type": "application/json"})
+        if response.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Error Gemini API: {response.status_code}")
+        result = response.json()
+        return {"respuesta": result["candidates"][0]["content"]["parts"][0]["text"], "modelo": "gemini-flash-latest"}
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout — Gemini tardó demasiado")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error IA: {str(e)}")
+
+
+@api_router.get("/configuracion/ia")
+async def get_config_ia(current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    cfg = await db.configuracion.find_one({"clave": "gemini_api_key"}, {"_id": 0})
+    tiene_key = bool(cfg and cfg.get("valor"))
+    key_preview = ""
+    if tiene_key:
+        val = cfg["valor"]
+        key_preview = val[:8] + "..." + val[-4:]
+    return {"configurada": tiene_key, "key_preview": key_preview, "modelo": "gemini-flash-latest", "actualizado": cfg.get("actualizado","") if cfg else ""}
+
+
+@api_router.post("/configuracion/ia")
+async def save_config_ia(data: dict, current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    api_key = data.get("api_key", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="La API key no puede estar vacía")
+    if not api_key.startswith("AIza"):
+        raise HTTPException(status_code=400, detail="API key inválida — debe empezar con 'AIza'")
+    await db.configuracion.update_one({"clave": "gemini_api_key"}, {"$set": {"clave": "gemini_api_key", "valor": api_key, "actualizado": datetime.now(timezone.utc).isoformat(), "actualizado_por": current_user.username}}, upsert=True)
+    return {"ok": True, "mensaje": "✅ API key guardada correctamente"}
+
+
+@api_router.delete("/configuracion/ia")
+async def delete_config_ia(current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    await db.configuracion.delete_one({"clave": "gemini_api_key"})
+    return {"ok": True, "mensaje": "API key eliminada"}
+
+
+# ========== EGRESOS DE CAJA ==========
+
+@api_router.post("/caja/egresos")
+async def registrar_egreso(data: dict, current_user: TokenData = Depends(get_current_user)):
+    egreso = {"id": str(uuid.uuid4()), "concepto": data.get("concepto",""), "monto": float(data.get("monto",0)), "tipo": data.get("tipo","otro"), "referencia": data.get("referencia",""), "fecha": data.get("fecha", datetime.now(timezone.utc).strftime("%Y-%m-%d")), "notas": data.get("notas",""), "registrado_por": current_user.username, "created_at": datetime.now(timezone.utc).isoformat()}
+    if egreso["monto"] <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    await db.egresos_caja.insert_one(egreso)
+    egreso.pop("_id", None)
+    return egreso
+
+
+@api_router.get("/caja/egresos")
+async def get_egresos(fecha: Optional[str] = None, fecha_inicio: Optional[str] = None, fecha_fin: Optional[str] = None, current_user: TokenData = Depends(get_current_user)):
+    query = {}
+    if fecha: query["fecha"] = fecha
+    elif fecha_inicio and fecha_fin: query["fecha"] = {"$gte": fecha_inicio, "$lte": fecha_fin}
+    egresos = await db.egresos_caja.find(query, {"_id": 0}).sort("fecha", -1).to_list(1000)
+    return {"egresos": egresos, "total": round(sum(e.get("monto",0) for e in egresos), 2)}
+
+
+@api_router.delete("/caja/egresos/{egreso_id}")
+async def delete_egreso(egreso_id: str, current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador puede eliminar egresos")
+    result = await db.egresos_caja.delete_one({"id": egreso_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Egreso no encontrado")
+    return {"ok": True}
+
+
+# ========== PAGO A DOCTORES ==========
+
+@api_router.get("/doctor-payments/calcular")
+async def calcular_pago_doctor(doctor_id: Optional[str] = None, fecha_inicio: Optional[str] = None, fecha_fin: Optional[str] = None, current_user: TokenData = Depends(get_current_user)):
+    from datetime import date as date_type
+    fi = fecha_inicio or date_type.today().replace(day=1).isoformat()
+    ff = fecha_fin or date_type.today().isoformat()
+    query = {"fecha": {"$gte": fi, "$lte": ff}}
+    if doctor_id: query["doctor_id"] = doctor_id
+    consultas = await db.consultas_financieras.find(query, {"_id": 0}).to_list(5000)
+    doctores_db = {d["id"]: d for d in await db.doctors.find({}, {"_id": 0}).to_list(500)}
+    resumen = {}
+    for c in consultas:
+        did = c.get("doctor_id","")
+        cobrado = c.get("total_pagado", 0)
+        if cobrado <= 0: continue
+        if did not in resumen:
+            pct = doctores_db.get(did, {}).get("porcentaje", 50.0) if did else 50.0
+            resumen[did] = {"doctor_id": did, "doctor_nombre": c.get("doctor_nombre","Sin Doctor"), "especialidad": doctores_db.get(did,{}).get("especialidad",""), "porcentaje": pct, "total_cobrado": 0, "ganancia_doctor": 0, "ganancia_clinica": 0, "num_consultas": 0, "consultas": []}
+        resumen[did]["total_cobrado"] += cobrado
+        resumen[did]["num_consultas"] += 1
+        resumen[did]["consultas"].append({"fecha": c.get("fecha",""), "paciente": c.get("paciente_nombre",""), "monto": cobrado})
+    for did in resumen:
+        tc = resumen[did]["total_cobrado"]
+        pct = resumen[did]["porcentaje"]
+        resumen[did]["ganancia_doctor"] = round(tc * pct / 100, 2)
+        resumen[did]["ganancia_clinica"] = round(tc * (100 - pct) / 100, 2)
+        resumen[did]["total_cobrado"] = round(tc, 2)
+    resultado = sorted(resumen.values(), key=lambda x: x["total_cobrado"], reverse=True)
+    return {"fecha_inicio": fi, "fecha_fin": ff, "doctores": resultado, "total_cobrado": round(sum(r["total_cobrado"] for r in resultado), 2), "total_pagar_doctores": round(sum(r["ganancia_doctor"] for r in resultado), 2), "total_clinica": round(sum(r["ganancia_clinica"] for r in resultado), 2)}
+
+
+@api_router.post("/doctor-payments/registrar")
+async def registrar_pago_doctor(data: dict, current_user: TokenData = Depends(get_current_user)):
+    if current_user.role not in ("Administrador", "Recepcion"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    monto = float(data.get("monto", 0))
+    if monto <= 0:
+        raise HTTPException(status_code=400, detail="Monto debe ser mayor a 0")
+    pago = {"id": str(uuid.uuid4()), "doctor_id": data.get("doctor_id",""), "doctor_nombre": data.get("doctor_nombre",""), "monto": monto, "fecha_inicio_periodo": data.get("fecha_inicio",""), "fecha_fin_periodo": data.get("fecha_fin",""), "forma_pago": data.get("forma_pago","efectivo"), "referencia": data.get("referencia",""), "notas": data.get("notas",""), "registrado_por": current_user.username, "fecha_pago": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.pagos_doctores.insert_one(pago)
+    pago.pop("_id", None)
+    # Registrar como egreso de caja automáticamente
+    egreso = {"id": str(uuid.uuid4()), "concepto": f"Pago Dr/Dra. {data.get('doctor_nombre','')} — período {data.get('fecha_inicio','')} al {data.get('fecha_fin','')}", "monto": monto, "tipo": "nomina", "referencia": data.get("referencia",""), "fecha": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "notas": data.get("notas",""), "registrado_por": current_user.username, "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.egresos_caja.insert_one(egreso)
+    return {"ok": True, "pago": pago}
+
+
+@api_router.get("/doctor-payments/historial")
+async def historial_pagos_doctores(doctor_id: Optional[str] = None, current_user: TokenData = Depends(get_current_user)):
+    query = {}
+    if doctor_id: query["doctor_id"] = doctor_id
+    pagos = await db.pagos_doctores.find(query, {"_id": 0}).sort("fecha_pago", -1).to_list(1000)
+    return pagos
+
+
+# ========== FACTURACIÓN — NUEVOS ENDPOINTS ==========
+
+async def _siguiente_numero_factura(establecimiento="001", punto_emision="001"):
+    last = await db.invoices.find_one({"numero_factura": {"$regex": f"^{establecimiento}-{punto_emision}-"}}, {"_id": 0, "numero_factura": 1}, sort=[("numero_factura", -1)])
+    if last:
+        try: seq = int(last["numero_factura"].split("-")[-1]) + 1
+        except: seq = 1
+    else:
+        seq = 1
+    return f"{establecimiento}-{punto_emision}-{str(seq).zfill(9)}"
+
+
+def _calcular_totales_factura(detalles, iva_pct=0.0):
+    subtotal = sum(float(d.get("precio_unitario",0))*float(d.get("cantidad",1)) for d in detalles)
+    desc = sum(float(d.get("descuento",0)) for d in detalles)
+    sub_desc = subtotal - desc
+    iva_val = round(sub_desc * iva_pct / 100, 2)
+    return {"subtotal": round(subtotal,2), "descuento_total": round(desc,2), "subtotal_con_descuento": round(sub_desc,2), "iva_porcentaje": iva_pct, "iva_valor": iva_val, "total": round(sub_desc + iva_val, 2)}
+
+
+@api_router.get("/invoices/stats")
+async def get_invoice_stats(current_user: TokenData = Depends(get_current_user)):
+    from datetime import date
+    hoy = date.today().isoformat()
+    mes = hoy[:7]
+    all_inv = await db.invoices.find({"estado": {"$ne": "anulada"}}, {"_id": 0}).to_list(5000)
+    return {"total_hoy": round(sum(i.get("total",0) for i in all_inv if i.get("fecha","") == hoy), 2), "total_mes": round(sum(i.get("total",0) for i in all_inv if i.get("fecha","")[:7] == mes), 2), "total_general": round(sum(i.get("total",0) for i in all_inv), 2), "num_facturas_hoy": sum(1 for i in all_inv if i.get("fecha","") == hoy), "num_facturas_mes": sum(1 for i in all_inv if i.get("fecha","")[:7] == mes), "num_facturas_total": len(all_inv)}
+
+
+@api_router.post("/invoices/{invoice_id}/anular")
+async def anular_invoice(invoice_id: str, data: dict, current_user: TokenData = Depends(get_current_user)):
+    existing = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    if existing.get("estado") == "anulada":
+        raise HTTPException(status_code=400, detail="La factura ya está anulada")
+    await db.invoices.update_one({"id": invoice_id}, {"$set": {"estado": "anulada", "observaciones": data.get("motivo","Anulada") + " | " + existing.get("observaciones",""), "anulada_por": current_user.username, "fecha_anulacion": datetime.now(timezone.utc).strftime("%Y-%m-%d")}})
+    return {"ok": True, "mensaje": "Factura anulada correctamente"}
+
+
+@api_router.get("/invoices/{invoice_id}/pdf")
+async def get_invoice_pdf(invoice_id: str, current_user: TokenData = Depends(get_current_user)):
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    from pdf_generator import generate_factura_pdf
+    pdf_buffer = generate_factura_pdf(inv)
+    filename = f"factura_{inv.get('numero_factura','').replace('-','_')}.pdf"
+    return StreamingResponse(pdf_buffer, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={filename}"})
+
+
+# ========== ADMIN MIGRACIÓN EDADES ==========
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

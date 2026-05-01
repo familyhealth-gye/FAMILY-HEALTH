@@ -111,6 +111,32 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
     cargar();
   }, [appointment?.id, token]);
 
+  // ── Detectar si es primera o segunda cita ──
+  const [esPrimeraCita, setEsPrimeraCita] = useState(true);
+  const [medidasAnteriores, setMedidasAnteriores] = useState(null);
+  const [modoEvolucion, setModoEvolucion] = useState(false);
+
+  useEffect(() => {
+    const checkHistorial = async () => {
+      if (!appointment?.cedula) return;
+      try {
+        const res = await axios.get(
+          `${API}/paciente/${appointment.cedula}/medidas-nutricion`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const medidas = res.data?.medidas || [];
+        // Filtrar medidas que no sean de esta cita actual
+        const medidasPrevias = medidas.filter(m => m.appointment_id !== appointment.id);
+        if (medidasPrevias.length > 0) {
+          setEsPrimeraCita(false);
+          setMedidasAnteriores(medidasPrevias[0]); // última cita anterior
+          setModoEvolucion(true); // por defecto mostrar modo evolución
+        }
+      } catch {}
+    };
+    checkHistorial();
+  }, [appointment?.cedula]);
+
   const setEF = (campo, valor) =>
     setForm(f => ({ ...f, examen_fisico: { ...f.examen_fisico, [campo]: valor } }));
   const setLab = (campo, valor) =>
@@ -192,7 +218,58 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
     <div style={{ display: "flex", height: "100%", gap: 0 }}>
       {/* Formulario principal */}
       <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-        {/* Encabezado */}
+        {/* Banner segunda cita */}
+        {!esPrimeraCita && (
+          <div style={{ background:"#fffbeb", border:"1.5px solid #fbbf24", borderRadius:"10px", padding:"12px 16px", marginBottom:"12px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <p style={{ margin:"0 0 2px", fontWeight:"800", color:"#92400e", fontSize:"14px" }}>
+                  🔄 Cita subsecuente — Paciente conocido
+                </p>
+                <p style={{ margin:0, fontSize:"12px", color:"#92400e" }}>
+                  Última consulta: {medidasAnteriores?.fecha} · Peso anterior: {medidasAnteriores?.peso} kg · IMC: {medidasAnteriores?.imc}
+                </p>
+              </div>
+              <div style={{ display:"flex", gap:"6px" }}>
+                <button type="button" onClick={() => setModoEvolucion(true)}
+                  style={{ padding:"6px 12px", background:modoEvolucion?"#d97706":"white", color:modoEvolucion?"white":"#d97706", border:"1.5px solid #d97706", borderRadius:"6px", fontSize:"12px", fontWeight:"700", cursor:"pointer" }}>
+                  ⚡ Solo evolución
+                </button>
+                <button type="button" onClick={() => setModoEvolucion(false)}
+                  style={{ padding:"6px 12px", background:!modoEvolucion?"#005f73":"white", color:!modoEvolucion?"white":"#005f73", border:"1.5px solid #005f73", borderRadius:"6px", fontSize:"12px", fontWeight:"700", cursor:"pointer" }}>
+                  📋 Ficha completa
+                </button>
+              </div>
+            </div>
+            {/* Tabla comparativa */}
+            {medidasAnteriores && (
+              <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px" }}>
+                {[
+                  ["Peso", medidasAnteriores.peso, pesoActual, "kg"],
+                  ["IMC", medidasAnteriores.imc, form.examen_fisico?.imc, ""],
+                  ["% Grasa", medidasAnteriores.masa_grasa, form.examen_fisico?.porcentaje_grasa, "%"],
+                  ["Cintura", medidasAnteriores.circunferencia_cintura, form.examen_fisico?.circunferencia_cintura, "cm"],
+                ].map(([label, prev, curr, unit]) => {
+                  const cambio = calcularCambio(curr, prev);
+                  return (
+                    <div key={label} style={{ background:"white", borderRadius:"8px", padding:"8px", textAlign:"center", border:"1px solid #fde68a" }}>
+                      <p style={{ margin:"0 0 2px", fontSize:"10px", color:"#666" }}>{label}</p>
+                      <p style={{ margin:0, fontSize:"11px", color:"#999" }}>Ant: {prev || "—"}{unit}</p>
+                      <p style={{ margin:0, fontSize:"13px", fontWeight:"700", color:"#005f73" }}>{curr || "—"}{unit}</p>
+                      {cambio && (
+                        <p style={{ margin:"2px 0 0", fontSize:"11px", fontWeight:"700", color:cambio.subio?"#dc2626":"#059669" }}>
+                          {cambio.subio ? "▲" : "▼"} {Math.abs(cambio.diff)}{unit} ({cambio.pct}%)
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+      {/* Encabezado */}
         <div style={{
           background: "linear-gradient(135deg, #00a8cc, #005f73)",
           borderRadius: "10px", padding: "14px 18px", marginBottom: "16px",

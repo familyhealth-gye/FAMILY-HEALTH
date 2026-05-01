@@ -24,8 +24,8 @@ import CajaTab from "@/components/CajaTab";
 import { PacientesTab } from "@/components/PacientesTab";
 import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
 import { ConfiguracionIA } from "@/components/ConfiguracionIA";
-import { ConfiguracionSRI } from "@/components/ConfiguracionSRI";
 import { FacturacionTab } from "@/components/FacturacionTab";
+import { ConfiguracionSRI } from "@/components/ConfiguracionSRI";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
 import { formatearEdad, validarFechaNacimiento } from "@/lib/edadUtils";
@@ -65,10 +65,26 @@ function App() {
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [searchingPatient, setSearchingPatient] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState({
+    tipo_documento: "cedula",
     nombre_completo: "",
     cedula: "",
-    fecha_nacimiento: "",  // CAMPO PRINCIPAL (edad calculada automáticamente)
+    fecha_nacimiento: "",
+    sexo: "",
+    email: "",
     telefono: "",
+    whatsapp: "",
+    tiene_whatsapp: true,
+    es_menor: false,
+    representante_nombre: "",
+    representante_cedula: "",
+    representante_telefono: "",
+    representante_whatsapp: "",
+    representante_email: "",
+    representante_parentesco: "",
+    factura_nombre: "",
+    factura_cedula_ruc: "",
+    factura_email: "",
+    factura_direccion: "",
     especialidad: "",
     doctor_id: "",
     fecha: null,
@@ -456,6 +472,10 @@ function App() {
             )}
             {(user.role === "Administrador" || user.role === "Recepcion") && (
               <>
+                <TabsTrigger value="facturacion" data-testid="facturacion-tab">
+                  <span className="tab-icon">🧾</span>
+                  Facturación
+                </TabsTrigger>
                 <TabsTrigger value="proformas" data-testid="proformas-tab">
                   <Receipt className="tab-icon" />
                   Proformas
@@ -467,21 +487,21 @@ function App() {
               </>
             )}
             {user.role === "Administrador" && (
-              <TabsTrigger value="config-ia"
-                data-testid="config-ia-tab"
-                className="tabs-list button"
-              >
-                <span className="tab-icon">🤖</span>
-                <span>Config. IA</span>
-              </TabsTrigger>
-            )}
-            {user.role === "Administrador" && (
               <TabsTrigger value="config-sri"
                 data-testid="config-sri-tab"
                 className="tabs-list button"
               >
                 <span className="tab-icon">🔏</span>
                 <span>Config. SRI</span>
+              </TabsTrigger>
+            )}
+            {user.role === "Administrador" && (
+              <TabsTrigger value="config-ia"
+                data-testid="config-ia-tab"
+                className="tabs-list button"
+              >
+                <span className="tab-icon">🤖</span>
+                <span>Config. IA</span>
               </TabsTrigger>
             )}
             {user.role === "Administrador" && (
@@ -713,9 +733,8 @@ function App() {
                             {doctors
                               .filter(d => {
                 if (!appointmentForm.especialidad) return true;
-                // Comparación sin distinción de acentos
-                const normalize = s => s?.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() || '';
-                return normalize(d.especialidad) === normalize(appointmentForm.especialidad);
+                const norm = s => s?.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() || '';
+                return norm(d.especialidad) === norm(appointmentForm.especialidad);
               })
                               .map((doctor) => (
                                 <SelectItem key={doctor.id} value={doctor.id}>
@@ -1013,7 +1032,6 @@ function App() {
             </TabsContent>
           )}
 
-          {/* Facturación Tab */}
           {(user.role === "Administrador" || user.role === "Recepcion") && (
             <TabsContent value="facturacion">
               <FacturacionTab token={token} user={user} />

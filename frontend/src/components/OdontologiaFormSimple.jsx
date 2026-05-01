@@ -82,6 +82,30 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
   const [existingHistory, setExistingHistory] = useState(null);
   const [form, setForm]           = useState(FORM0);
   const [tab, setTab]             = useState("historia");
+
+  // Detectar segunda cita
+  const [esPrimeraCita, setEsPrimeraCita] = useState(true);
+  const [citasAnteriores, setCitasAnteriores] = useState([]);
+
+  useEffect(() => {
+    const checkHistorial = async () => {
+      if (!appointment?.cedula) return;
+      try {
+        const res = await axios.get(
+          `${API}/paciente/${appointment.cedula}/historial-consultas?especialidad=Odontolog`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const consultas = (res.data?.consultas || []).filter(c => c.id !== appointment.id);
+        if (consultas.length > 0) {
+          setEsPrimeraCita(false);
+          setCitasAnteriores(consultas);
+          // Si hay historial previo, ir directo a evoluciones
+          setTab("evoluciones");
+        }
+      } catch {}
+    };
+    checkHistorial();
+  }, [appointment?.cedula]);
   const [catalogo, setCatalogo]   = useState([]);
   const [busqCat, setBusqCat]     = useState("");
   const [cie10q, setCie10q]       = useState("");
@@ -142,9 +166,19 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if(!form.motivo_consulta.trim()){toast.error("Motivo de consulta obligatorio");return;}
-    if(!form.diagnostico.trim()&&!form.cie10_codigo){toast.error("El diagnóstico es obligatorio");return;}
-    if(form.servicios_realizados.length===0){toast.error("Seleccione procedimientos en la pestaña Cobro");return;}
+    // Validaciones con mensajes claros
+    if(!form.motivo_consulta.trim()){
+      toast.error("⚠️ Falta: Motivo de consulta (pestaña Historia)");
+      setTab("historia"); return;
+    }
+    if(!form.diagnostico.trim()&&!form.cie10_codigo){
+      toast.error("⚠️ Falta: Diagnóstico o código CIE-10 (pestaña Historia)");
+      setTab("historia"); return;
+    }
+    if(form.servicios_realizados.length===0){
+      toast.error("⚠️ Falta: Selecciona al menos un procedimiento en la pestaña Cobro");
+      setTab("cobro"); return;
+    }
     setLoading(true);
     try {
       const p={appointment_id:appointment.id,
@@ -232,6 +266,7 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
     {id:"odontograma",label:"🦷 Odontograma"},
     {id:"plan",       label:"📅 Plan Tratamiento"},
     {id:"evoluciones",label:"📊 Evoluciones"},
+    {id:"receta",     label:"💊 Receta"},
     {id:"cobro",      label:"💰 Cobro"},
     {id:"fotos",      label:"📷 Fotos/RX"},
   ];
@@ -257,6 +292,20 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
             {existingHistory && <span style={{background:"rgba(255,255,255,0.2)",color:"white",borderRadius:"6px",padding:"3px 8px",fontSize:"11px"}}>✏️ Editando</span>}
           </div>
         </div>
+
+        {/* Banner segunda cita */}
+        {!esPrimeraCita && (
+          <div style={{ background:"#fffbeb", border:"1.5px solid #fbbf24", borderRadius:"8px", padding:"10px 14px", marginBottom:"12px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <p style={{ margin:"0 0 2px", fontWeight:"800", color:"#92400e", fontSize:"13px" }}>🔄 Paciente con {citasAnteriores.length} consulta{citasAnteriores.length!==1?"s":""} previa{citasAnteriores.length!==1?"s":""}</p>
+              <p style={{ margin:0, fontSize:"11px", color:"#92400e" }}>Última: {citasAnteriores[0]?.fecha} · Mostrando pestaña Evoluciones</p>
+            </div>
+            <button type="button" onClick={() => setTab("historia")}
+              style={{ padding:"5px 10px", background:"white", border:"1px solid #d97706", borderRadius:"6px", fontSize:"11px", color:"#92400e", cursor:"pointer", fontWeight:"600" }}>
+              Ver ficha completa
+            </button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{display:"flex",gap:"4px",marginBottom:"14px",flexWrap:"wrap"}}>
@@ -504,6 +553,99 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ══ TAB RECETA ══ */}
+        {tab==="receta" && (
+          <div style={{ padding:"8px 0" }}>
+            <div style={{ background:"linear-gradient(135deg,#005f73,#00a8cc)", borderRadius:"8px", padding:"10px 14px", marginBottom:"12px" }}>
+              <p style={{ margin:0, color:"white", fontWeight:"700", fontSize:"14px" }}>💊 Receta Odontológica</p>
+              <p style={{ margin:0, color:"rgba(255,255,255,0.8)", fontSize:"11px" }}>Dr/Dra. {appointment.doctor_nombre}</p>
+            </div>
+
+            {/* Medicamentos */}
+            <div style={{ ...S.sec }}>💊 MEDICAMENTOS</div>
+            {(form.receta_medicamentos || [{ nombre:"", dosis:"", frecuencia:"", duracion:"", indicaciones:"" }]).map((med, idx) => (
+              <div key={idx} style={{ background:"#f8fdff", borderRadius:"8px", padding:"10px", marginBottom:"8px", border:"1px solid #e0f7fa" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:"6px", marginBottom:"6px" }}>
+                  <div>
+                    <label style={S.label}>Medicamento</label>
+                    <input value={med.nombre||""} onChange={e=>{
+                      const meds=[...(form.receta_medicamentos||[])];
+                      meds[idx]={...meds[idx],nombre:e.target.value};
+                      setForm(f=>({...f,receta_medicamentos:meds}));
+                    }} placeholder="Ej: Amoxicilina 500mg" style={{width:"100%",padding:"6px 8px",border:"1.5px solid #b2ebf2",borderRadius:"6px",fontSize:"12px"}} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Dosis</label>
+                    <input value={med.dosis||""} onChange={e=>{
+                      const meds=[...(form.receta_medicamentos||[])];
+                      meds[idx]={...meds[idx],dosis:e.target.value};
+                      setForm(f=>({...f,receta_medicamentos:meds}));
+                    }} placeholder="1 tableta" style={{width:"100%",padding:"6px 8px",border:"1.5px solid #b2ebf2",borderRadius:"6px",fontSize:"12px"}} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Frecuencia</label>
+                    <input value={med.frecuencia||""} onChange={e=>{
+                      const meds=[...(form.receta_medicamentos||[])];
+                      meds[idx]={...meds[idx],frecuencia:e.target.value};
+                      setForm(f=>({...f,receta_medicamentos:meds}));
+                    }} placeholder="Cada 8h" style={{width:"100%",padding:"6px 8px",border:"1.5px solid #b2ebf2",borderRadius:"6px",fontSize:"12px"}} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Duración</label>
+                    <input value={med.duracion||""} onChange={e=>{
+                      const meds=[...(form.receta_medicamentos||[])];
+                      meds[idx]={...meds[idx],duracion:e.target.value};
+                      setForm(f=>({...f,receta_medicamentos:meds}));
+                    }} placeholder="5 días" style={{width:"100%",padding:"6px 8px",border:"1.5px solid #b2ebf2",borderRadius:"6px",fontSize:"12px"}} />
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
+                  <input value={med.indicaciones||""} onChange={e=>{
+                    const meds=[...(form.receta_medicamentos||[])];
+                    meds[idx]={...meds[idx],indicaciones:e.target.value};
+                    setForm(f=>({...f,receta_medicamentos:meds}));
+                  }} placeholder="Indicaciones especiales (ej: tomar con alimentos, no suspender aunque mejore)" style={{flex:1,padding:"6px 8px",border:"1.5px solid #b2ebf2",borderRadius:"6px",fontSize:"12px"}} />
+                  {(form.receta_medicamentos||[]).length > 1 && (
+                    <button type="button" onClick={()=>{
+                      const meds=(form.receta_medicamentos||[]).filter((_,i)=>i!==idx);
+                      setForm(f=>({...f,receta_medicamentos:meds}));
+                    }} style={{padding:"6px 10px",background:"#fee2e2",border:"none",borderRadius:"6px",color:"#dc2626",cursor:"pointer",fontSize:"12px"}}>✕</button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={()=>setForm(f=>({...f,receta_medicamentos:[...(f.receta_medicamentos||[]),{nombre:"",dosis:"",frecuencia:"",duracion:"",indicaciones:""}]}))}
+              style={{width:"100%",padding:"8px",background:"white",border:"1.5px dashed #b2ebf2",borderRadius:"8px",color:"#005f73",fontSize:"12px",cursor:"pointer",fontWeight:"600",marginBottom:"12px"}}>
+              + Agregar medicamento
+            </button>
+
+            {/* Indicaciones generales */}
+            <div style={S.sec}>📋 INDICACIONES POST-PROCEDIMIENTO</div>
+            <textarea value={form.receta_indicaciones||""} onChange={e=>setForm(f=>({...f,receta_indicaciones:e.target.value}))}
+              rows={4} placeholder="Ej: No comer por 2 horas, evitar alimentos duros por 24h, aplicar frío en caso de inflamación, no fumar..."
+              style={{width:"100%",padding:"8px 10px",border:"1.5px solid #b2ebf2",borderRadius:"8px",fontSize:"13px",resize:"vertical",boxSizing:"border-box"}} />
+
+            {/* Próxima cita */}
+            <div style={{...S.sec, marginTop:"12px"}}>📅 PRÓXIMA CITA</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+              <div>
+                <label style={S.label}>Fecha sugerida</label>
+                <input type="date" value={form.proximo_control||""} onChange={e=>setForm(f=>({...f,proximo_control:e.target.value}))}
+                  style={{width:"100%",padding:"6px 8px",border:"1.5px solid #b2ebf2",borderRadius:"6px",fontSize:"13px"}} />
+              </div>
+              <div>
+                <label style={S.label}>Motivo próxima cita</label>
+                <input value={form.proximo_control_motivo||""} onChange={e=>setForm(f=>({...f,proximo_control_motivo:e.target.value}))}
+                  placeholder="Ej: Endodoncia pieza 36, Control..." style={{width:"100%",padding:"6px 8px",border:"1.5px solid #b2ebf2",borderRadius:"6px",fontSize:"13px"}} />
+              </div>
+            </div>
+
+            <div style={{marginTop:"12px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:"#92400e"}}>
+              💡 La receta se guarda automáticamente al terminar la consulta. Para imprimir, usa el botón "Terminar y guardar" y luego descarga la receta desde el historial.
+            </div>
           </div>
         )}
 

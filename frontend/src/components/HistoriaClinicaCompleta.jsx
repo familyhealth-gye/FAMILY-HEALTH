@@ -368,20 +368,124 @@ export const HistoriaClinicaCompleta = ({
       )}
       <Campo label="Tratamiento" value={h.tratamiento_realizado || h.tratamiento} />
       <Campo label="Indicaciones" value={h.indicaciones} />
-      <Campo label="Receta" value={h.receta} />
       <Campo label="Observaciones" value={h.observaciones || h.notas} />
+    </>
+  );
+
+  const renderMedicinaGeneral = (h) => (
+    <>
+      <Campo label="Motivo de Consulta" value={h.motivo_consulta} />
+      <Campo label="Enfermedad Actual" value={h.enfermedad_actual} />
+      {h.signos_vitales && Object.values(h.signos_vitales).some(Boolean) && (
+        <div style={{ margin:"8px 0" }}>
+          <p style={{ fontSize:"11px", fontWeight:"700", color:"#005f73", margin:"0 0 4px", textTransform:"uppercase" }}>Signos Vitales</p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px" }}>
+            {[["Peso",h.signos_vitales?.peso,"kg"],["Talla",h.signos_vitales?.talla,"cm"],["Temp.",h.signos_vitales?.temperatura,"°C"],["P. Arterial",h.signos_vitales?.presion_arterial,""],["F. Cardíaca",h.signos_vitales?.frecuencia_cardiaca,"lpm"],["SatO2",h.signos_vitales?.saturacion_oxigeno,"%"]].filter(([,v])=>v).map(([l,v,u])=>(
+              <div key={l} style={{ background:"#f0f9ff", borderRadius:"6px", padding:"4px 8px" }}>
+                <p style={{ margin:0, fontSize:"10px", color:"#666" }}>{l}</p>
+                <p style={{ margin:0, fontWeight:"700", fontSize:"13px", color:"#005f73" }}>{v}{u}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <Campo label="Antecedentes" value={h.antecedentes_familiares} />
+      <Campo label="Alergias" value={h.alergias} />
+      <Campo label="Diagnóstico" value={h.diagnostico} />
+      {(h.cie10_codigo||h.cie10_descripcion) && <Campo label="CIE-10" value={`${h.cie10_codigo||""} - ${h.cie10_descripcion||""}`} />}
+      <Campo label="Indicaciones Generales" value={h.indicaciones_generales} />
+      <Campo label="Observaciones" value={h.observaciones} />
+    </>
+  );
+
+  const renderOdontologia = (h) => (
+    <>
+      <Campo label="Motivo de Consulta" value={h.motivo_consulta} />
+      <Campo label="Alergias a Medicamentos" value={h.alergias_medicamentos} />
+      <Campo label="Última Visita Odontológica" value={h.ultima_visita_odonto} />
+      {h.estado_dental && (
+        <div style={{ margin:"8px 0" }}>
+          <p style={{ fontSize:"11px", fontWeight:"700", color:"#d97706", margin:"0 0 4px", textTransform:"uppercase" }}>Examen Clínico</p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"6px" }}>
+            {[["Higiene",h.estado_dental?.higiene_oral],["Encías",h.estado_dental?.encia],["Mucosa",h.estado_dental?.mucosa_oral],["Lengua",h.estado_dental?.lengua],["ATM",h.estado_dental?.atm]].filter(([,v])=>v).map(([l,v])=>(
+              <div key={l} style={{ background:"#fffbeb", borderRadius:"6px", padding:"4px 8px" }}>
+                <p style={{ margin:0, fontSize:"10px", color:"#92400e" }}>{l}</p>
+                <p style={{ margin:0, fontWeight:"600", fontSize:"12px" }}>{v}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <Campo label="Diagnóstico" value={h.diagnostico} />
+      {(h.cie10_codigo||h.cie10_descripcion) && <Campo label="CIE-10" value={`${h.cie10_codigo||""} - ${h.cie10_descripcion||""}`} />}
+      <Campo label="Plan de Tratamiento" value={h.plan_tratamiento} />
+      <Campo label="Procedimientos Realizados" value={h.procedimientos_realizados} />
+      <Campo label="Próximo Control" value={h.proximo_control} />
+      <Campo label="Observaciones" value={h.observaciones} />
+    </>
+  );
+
+  const renderPediatria = (h) => (
+    <>
+      <Campo label="Responsable" value={h.nombre_responsable} />
+      <Campo label="Motivo de Consulta" value={h.motivo_consulta} />
+      <Campo label="Enfermedad Actual" value={h.enfermedad_actual} />
+      {h.signos_vitales && (
+        <div style={{ margin:"8px 0" }}>
+          <p style={{ fontSize:"11px", fontWeight:"700", color:"#005f73", margin:"0 0 4px", textTransform:"uppercase" }}>Somatometría</p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px" }}>
+            {[["Peso",h.signos_vitales?.peso,"kg"],["Talla",h.signos_vitales?.talla,"cm"],["Temp.",h.signos_vitales?.temperatura,"°C"],["P. Cefalico",h.signos_vitales?.perimetro_cefalico,"cm"]].filter(([,v])=>v).map(([l,v,u])=>(
+              <div key={l} style={{ background:"#f0f9ff", borderRadius:"6px", padding:"4px 8px" }}>
+                <p style={{ margin:0, fontSize:"10px", color:"#666" }}>{l}</p>
+                <p style={{ margin:0, fontWeight:"700", fontSize:"13px", color:"#005f73" }}>{v}{u}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <Campo label="Alergias" value={h.alergias} />
+      <Campo label="Esquema de Vacunas" value={h.esquema_vacunas} />
+      <Campo label="Diagnóstico" value={h.diagnostico} />
+      {(h.cie10_codigo||h.cie10_descripcion) && <Campo label="CIE-10" value={`${h.cie10_codigo||""} - ${h.cie10_descripcion||""}`} />}
+      <Campo label="Tratamiento" value={h.tratamiento} />
+      <Campo label="Indicaciones" value={h.indicaciones_generales} />
+      <Campo label="Próximo Control" value={h.proximo_control} />
+    </>
+  );
+
+  const renderEcografia = (h) => (
+    <>
+      <Campo label="Tipo de Estudio" value={h.tipo_estudio} />
+      <Campo label="Motivo" value={h.motivo_consulta} />
+      <Campo label="Hallazgos" value={h.hallazgos} />
+      {h.datos_obstetricia && (
+        <>
+          <Campo label="Semanas de Gestación" value={h.datos_obstetricia?.semanas_gestacion} />
+          <Campo label="Presentación" value={h.datos_obstetricia?.presentacion} />
+          <Campo label="Latidos Fetales" value={h.datos_obstetricia?.latidos_fetales} />
+          <Campo label="Líquido Amniótico" value={h.datos_obstetricia?.liquido_amniotico} />
+        </>
+      )}
+      <Campo label="Diagnóstico" value={h.diagnostico} />
+      {(h.cie10_codigo||h.cie10_descripcion) && <Campo label="CIE-10" value={`${h.cie10_codigo||""} - ${h.cie10_descripcion||""}`} />}
+      <Campo label="Conclusiones" value={h.conclusiones || h.recomendaciones} />
+      <Campo label="Observaciones" value={h.observaciones} />
     </>
   );
 
   const renderHistoriaCompleta = (consulta) => {
     const h = consulta.historia || {};
     switch (consulta.tipoHistoria) {
-      case "nutricion":
-        return renderNutricion(h);
-      case "ginecologia":
-        return renderGinecologia(h);
-      default:
-        return renderGenerico(h);
+      case "nutricion": return renderNutricion(h);
+      case "ginecologia": return renderGinecologia(h);
+      case "general":
+      case "medicina_general": return renderMedicinaGeneral(h);
+      case "odontologia":
+      case "odontology": return renderOdontologia(h);
+      case "pediatria":
+      case "pediatric": return renderPediatria(h);
+      case "ecografia": return renderEcografia(h);
+      default: return renderGenerico(h);
     }
   };
 
