@@ -111,7 +111,7 @@ class MedicalHistoryGeneral(BaseModel):
 class MedicalHistoryGeneralCreate(BaseModel):
     appointment_id: str
     motivo_consulta: str
-    enfermedad_actual: str
+    enfermedad_actual: Optional[str] = ""
     antecedentes_familiares: Optional[str] = ""
     padre_vivo: Optional[bool] = None
     padre_causa_muerte: Optional[str] = ""
@@ -163,7 +163,7 @@ class MedicalHistoryGeneralCreate(BaseModel):
     laboratorios: Optional[str] = ""
     diagnostico: str
     cie10_codigo: Optional[str] = ""
-    plan_tratamiento: str
+    plan_tratamiento: Optional[str] = ""
     observaciones: Optional[str] = ""
 
 
