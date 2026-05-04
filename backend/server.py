@@ -1636,6 +1636,91 @@ async def get_medidas_nutricion(
 
     return {"cedula": cedula, "medidas": medidas}
 
+
+@api_router.post("/nutricion/enviar-plan/{appointment_id}")
+async def enviar_plan_nutricional(
+    appointment_id: str,
+    data: dict = {},
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Envia el plan nutricional por correo al paciente."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    apt = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+    if not apt:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    hist = await db.nutricion_history.find_one({"appointment_id": appointment_id}, {"_id": 0})
+    if not hist:
+        raise HTTPException(status_code=404, detail="Historia nutricional no encontrada. Guarda primero la consulta.")
+
+    email_destino = data.get("email") or apt.get("email", "")
+    if not email_destino:
+        raise HTTPException(status_code=400, detail="No hay email del paciente. Agrega el correo en la ficha de la cita.")
+
+    cfg_email = await db.configuracion.find_one({"clave": "email_config"}, {"_id": 0})
+    if not cfg_email or not cfg_email.get("valor"):
+        raise HTTPException(status_code=503, detail="Correo no configurado. Ve a Admin -> Config. SRI -> seccion Gmail")
+
+    email_cfg = cfg_email["valor"]
+    smtp_user = email_cfg.get("email", "")
+    smtp_pass = email_cfg.get("app_password", "")
+    if not smtp_user or not smtp_pass:
+        raise HTTPException(status_code=503, detail="Configuracion de correo incompleta")
+
+    plan = hist.get("plan_alimentario", "")
+    recs = hist.get("recomendaciones", "")
+    diag = hist.get("diagnostico_nutricional", "")
+    peso = hist.get("peso_actual", "") or str(hist.get("examen_fisico", {}).get("peso", ""))
+    imc  = hist.get("imc", "") or str(hist.get("examen_fisico", {}).get("imc", ""))
+    nombre = apt.get("nombre_completo", "Paciente")
+    fecha = apt.get("fecha", "")
+
+    plan_html = f"<div style='white-space:pre-wrap;font-size:13px;line-height:1.6'>{plan}</div>" if plan else ""
+    recs_html = f"<div style='white-space:pre-wrap;font-size:13px;line-height:1.6'>{recs}</div>" if recs else ""
+
+    cuerpo = f"""<html><body style='font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto'>
+<div style='background:linear-gradient(135deg,#00a8cc,#005f73);padding:20px;border-radius:10px 10px 0 0;text-align:center'>
+  <h2 style='color:white;margin:0'>Plan Nutricional Personalizado</h2>
+  <p style='color:rgba(255,255,255,0.8);margin:5px 0 0'>Centro de Especialidades Family Health</p>
+</div>
+<div style='background:#f8fdff;padding:20px;border:1px solid #e0f7fa'>
+  <p>Estimado/a <strong>{nombre}</strong>,</p>
+  <p>A continuacion su plan nutricional personalizado segun su evaluacion del {fecha}.</p>
+  <div style='background:white;border:1px solid #b2ebf2;border-radius:8px;padding:15px;margin:12px 0'>
+    <p style='margin:0 0 8px;font-weight:700;color:#005f73'>Datos de su consulta:</p>
+    <p style='margin:3px 0'>Fecha: {fecha}</p>
+    {'<p style="margin:3px 0">Peso: ' + peso + ' kg</p>' if peso else ''}
+    {'<p style="margin:3px 0">IMC: ' + imc + '</p>' if imc else ''}
+    {'<p style="margin:3px 0">Diagnostico: ' + diag + '</p>' if diag else ''}
+  </div>
+  {'<div style="background:white;border:1px solid #b2ebf2;border-radius:8px;padding:15px;margin:12px 0"><p style="margin:0 0 10px;font-weight:700;color:#005f73">Plan Alimentario:</p>' + plan_html + '</div>' if plan else ''}
+  {'<div style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:8px;padding:15px;margin:12px 0"><p style="margin:0 0 8px;font-weight:700;color:#e65100">Recomendaciones:</p>' + recs_html + '</div>' if recs else ''}
+  <p style='font-size:12px;color:#666;margin-top:16px'>Si tiene dudas sobre su plan, contactenos.</p>
+</div>
+<div style='background:#005f73;padding:15px;border-radius:0 0 10px 10px;text-align:center'>
+  <p style='color:white;margin:0;font-size:13px'>Family Health | Guayaquil | 096-291-2170</p>
+</div>
+</body></html>"""
+
+    msg = MIMEMultipart()
+    msg["From"] = f"Family Health <{smtp_user}>"
+    msg["To"] = email_destino
+    msg["Subject"] = f"Plan Nutricional - {nombre} - Family Health"
+    msg.attach(MIMEText(cuerpo, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        return {"ok": True, "mensaje": f"Plan nutricional enviado a {email_destino}"}
+    except smtplib.SMTPAuthenticationError:
+        raise HTTPException(status_code=401, detail="Error de autenticacion Gmail. Usa una App Password.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al enviar: {e}")
+
 # ========== MIGRACIÓN: RECALCULAR EDAD PACIENTES EXISTENTES ==========
 
 def calcular_edad_desde_fecha(fecha_nacimiento: str) -> int:

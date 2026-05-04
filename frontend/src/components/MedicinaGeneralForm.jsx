@@ -161,6 +161,29 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
         } catch { toast.warning("Historia guardada. Error al crear receta."); }
       }
 
+      // Auto-agendar proxima cita si se indico fecha
+      const proxFecha = form.proximo_control || form.fecha_control;
+      if (proxFecha) {
+        try {
+          await axios.post(`${API}/appointments`, {
+            tipo_documento: appointment.tipo_documento || "cedula",
+            nombre_completo: appointment.nombre_completo,
+            cedula: appointment.cedula || "",
+            fecha_nacimiento: appointment.fecha_nacimiento || "",
+            telefono: appointment.telefono || "",
+            email: appointment.email || "",
+            especialidad: appointment.especialidad,
+            doctor_id: appointment.doctor_id || "",
+            doctor_nombre: appointment.doctor_nombre || "",
+            fecha: proxFecha,
+            hora: appointment.hora || "09:00",
+            tipo_pago: "efectivo",
+            observaciones: "Control medico programado automaticamente.",
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          toast.success(`Proximo control agendado para ${proxFecha}`);
+        } catch { toast.warning("Consulta guardada. Agenda el control manualmente."); }
+      }
+
       onSuccess(); onClose();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Error al guardar la historia clínica");

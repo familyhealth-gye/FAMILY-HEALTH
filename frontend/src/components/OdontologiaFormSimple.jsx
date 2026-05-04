@@ -107,6 +107,7 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
     checkHistorial();
   }, [appointment?.cedula]);
   const [catalogo, setCatalogo]   = useState([]);
+  const [procDesdeOdontograma, setProcDesdeOdontograma] = useState([]); // procedimientos auto-detectados del odontograma
   const [busqCat, setBusqCat]     = useState("");
   const [cie10q, setCie10q]       = useState("");
   const [cie10open, setCie10open] = useState(false);
@@ -239,8 +240,33 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
         catch{toast.warning("Historia guardada. Error en receta.");}
       }
 
+      // Auto-agendar próxima cita si se indicó fecha y motivo
+      if (form.proximo_control && form.proximo_control_motivo) {
+        try {
+          await axios.post(`${API}/appointments`, {
+            tipo_documento: appointment.tipo_documento || "cedula",
+            nombre_completo: appointment.nombre_completo,
+            cedula: appointment.cedula || "",
+            fecha_nacimiento: appointment.fecha_nacimiento || "",
+            telefono: appointment.telefono || "",
+            whatsapp: appointment.whatsapp || "",
+            email: appointment.email || "",
+            especialidad: appointment.especialidad,
+            doctor_id: appointment.doctor_id || "",
+            doctor_nombre: appointment.doctor_nombre || "",
+            fecha: form.proximo_control,
+            hora: appointment.hora || "09:00",
+            tipo_pago: "efectivo",
+            observaciones: `Cita programada automáticamente. Motivo: ${form.proximo_control_motivo}`,
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          toast.success(`📅 Próxima cita agendada para ${form.proximo_control}`);
+        } catch {
+          toast.warning("Historia guardada. No se pudo agendar la próxima cita — agrégala manualmente.");
+        }
+      }
+
       onSuccess();onClose();
-    } catch(err){toast.error(err.response?.data?.detail||"Error al guardar");}
+    } catch(err){toast.error(`❌ ${err.response?.data?.detail || "Error al guardar"} — Revisa e intenta de nuevo`);}
     setLoading(false);
   };
 
@@ -270,6 +296,70 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
     {id:"cobro",      label:"💰 Cobro"},
     {id:"fotos",      label:"📷 Fotos/RX"},
   ];
+
+  // Mapeo de estado odontograma → nombre en catálogo
+  const ODONTO_A_CATALOGO = {
+    "caries": ["restauración", "obturación", "resina"],
+    "extraccion": ["extracción", "exodoncia"],
+    "endodoncia": ["endodoncia", "conducto"],
+    "corona": ["corona"],
+    "sellante": ["sellante", "fosa y fisura"],
+    "fractura": ["restauración", "corona", "resina"],
+    "restauracion": ["restauración", "resina", "obturación"],
+  };
+
+  // Callback del odontograma: cuando el doctor marca un diente/superficie
+  const handleOdontogramaChange = (dientes) => {
+    const procedimientosNuevos = [];
+    dientes.forEach(diente => {
+      // Por estado del diente completo
+      const mapEstado = ODONTO_A_CATALOGO[diente.estado];
+      if (mapEstado) {
+        const srv = catalogo.find(s =>
+          mapEstado.some(keyword => s.nombre.toLowerCase().includes(keyword))
+        );
+        if (srv && !form.servicios_realizados.find(sr => sr.id === srv.id)) {
+          procedimientosNuevos.push({
+            ...srv,
+            cantidad: 1,
+            diente: diente.numero_fdi,
+            origen: "odontograma"
+          });
+        }
+      }
+      // Por superficies con caries
+      if (diente.superficies) {
+        Object.entries(diente.superficies).forEach(([sup, estado]) => {
+          if (estado === "caries") {
+            const srv = catalogo.find(s =>
+              ["restauración","obturación","resina"].some(k => s.nombre.toLowerCase().includes(k))
+            );
+            if (srv && !form.servicios_realizados.find(sr => sr.id === srv.id && sr.diente === diente.numero_fdi)) {
+              procedimientosNuevos.push({
+                ...srv, cantidad: 1,
+                diente: diente.numero_fdi,
+                superficie: sup,
+                origen: "odontograma"
+              });
+            }
+          }
+        });
+      }
+    });
+    if (procedimientosNuevos.length > 0) {
+      setProcDesdeOdontograma(procedimientosNuevos);
+    }
+  };
+
+  // Agregar todos los procedimientos sugeridos del odontograma al cobro
+  const agregarProcOdontograma = () => {
+    const nuevos = procDesdeOdontograma.filter(p =>
+      !form.servicios_realizados.find(s => s.id === p.id && s.diente === p.diente)
+    );
+    if (nuevos.length === 0) { return; }
+    setForm(f => ({ ...f, servicios_realizados: [...f.servicios_realizados, ...nuevos] }));
+    setProcDesdeOdontograma([]);
+  };
 
   const catFil = busqCat ? catalogo.filter(s=>s.nombre.toLowerCase().includes(busqCat.toLowerCase())) : catalogo;
 
@@ -502,6 +592,25 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
         {/* ══ TAB COBRO ══ */}
         {tab==="cobro" && (
           <div>
+            {/* Sugerencias desde odontograma */}
+            {procDesdeOdontograma.length > 0 && (
+              <div style={{background:"#f0fdf4",border:"2px solid #86efac",borderRadius:"10px",padding:"12px",marginBottom:"12px"}}>
+                <p style={{margin:"0 0 8px",fontSize:"13px",fontWeight:"700",color:"#15803d"}}>
+                  🦷 Procedimientos detectados del odontograma:
+                </p>
+                {procDesdeOdontograma.map((p,i) => (
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:"12px"}}>
+                    <span>• {p.nombre} {p.diente ? `— Pieza ${p.diente}` : ""} {p.superficie ? `(${p.superficie})` : ""}</span>
+                    <span style={{fontWeight:"700",color:"#005f73"}}>${p.precio_base?.toFixed(2)}</span>
+                  </div>
+                ))}
+                <button type="button" onClick={agregarProcOdontograma}
+                  style={{marginTop:"8px",width:"100%",padding:"8px",background:"#15803d",color:"white",border:"none",borderRadius:"8px",fontSize:"13px",fontWeight:"700",cursor:"pointer"}}>
+                  ✅ Agregar todos al cobro ({procDesdeOdontograma.length} procedimiento{procDesdeOdontograma.length!==1?"s":""})
+                </button>
+              </div>
+            )}
+
             <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:"10px",padding:"14px",marginBottom:"12px"}}>
               <p style={{margin:"0 0 8px",fontSize:"13px",fontWeight:"700",color:"#92400e"}}>
                 ✅ Selecciona los procedimientos realizados HOY

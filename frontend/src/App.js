@@ -699,6 +699,15 @@ function App() {
                         />
                       </div>
                       <div className="form-field">
+                        <Label>Email (opcional — para RIDE y plan nutricional)</Label>
+                        <Input
+                          type="email"
+                          value={appointmentForm.email}
+                          onChange={(e) => setAppointmentForm({...appointmentForm, email: e.target.value})}
+                          placeholder="paciente@email.com"
+                        />
+                      </div>
+                      <div className="form-field">
                        <Label>Especialidad</Label>
                         <Select
                            value={appointmentForm.especialidad}

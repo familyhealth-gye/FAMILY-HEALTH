@@ -129,8 +129,19 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
         const medidasPrevias = medidas.filter(m => m.appointment_id !== appointment.id);
         if (medidasPrevias.length > 0) {
           setEsPrimeraCita(false);
-          setMedidasAnteriores(medidasPrevias[0]); // última cita anterior
-          setModoEvolucion(true); // por defecto mostrar modo evolución
+          const ultima = medidasPrevias[0];
+          setMedidasAnteriores(ultima);
+          setModoEvolucion(true);
+
+          // Precargar datos de la cita anterior para no repetir llenado
+          setForm(f => ({
+            ...f,
+            diagnostico_nutricional: f.diagnostico_nutricional || ultima.diagnostico_nutricional || "",
+            antecedentes_patologicos: f.antecedentes_patologicos || ultima.antecedentes || "",
+            plan_alimentario: f.plan_alimentario || (ultima.plan_alimentario
+              ? `[Plan anterior — ajustar según evolución]\n${ultima.plan_alimentario}`
+              : ""),
+          }));
         }
       } catch {}
     };
@@ -199,11 +210,37 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
         } catch { /* no bloquear si falla la receta */ }
       }
 
+      // Auto-agendar próxima cita si se indicó fecha
+      const proximaFecha = form.proxima_cita || form.proximo_control;
+      if (proximaFecha) {
+        try {
+          await axios.post(`${API}/appointments`, {
+            tipo_documento: appointment.tipo_documento || "cedula",
+            nombre_completo: appointment.nombre_completo,
+            cedula: appointment.cedula || "",
+            fecha_nacimiento: appointment.fecha_nacimiento || "",
+            telefono: appointment.telefono || "",
+            whatsapp: appointment.whatsapp || "",
+            email: appointment.email || "",
+            especialidad: appointment.especialidad,
+            doctor_id: appointment.doctor_id || "",
+            doctor_nombre: appointment.doctor_nombre || "",
+            fecha: proximaFecha,
+            hora: appointment.hora || "09:00",
+            tipo_pago: "efectivo",
+            observaciones: "Cita de control nutricional programada automáticamente.",
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          toast.success(`📅 Próxima cita de control agendada para ${proximaFecha}`);
+        } catch {
+          toast.warning("Consulta guardada. No se pudo agendar la próxima cita — agrégala manualmente.");
+        }
+      }
+
       onSuccess();
       onClose();
     } catch (err) {
       const msg = err.response?.data?.detail || "Error al guardar la historia clínica";
-      toast.error(msg);
+      toast.error(`❌ ${msg} — Revisa los datos e intenta de nuevo`);
     }
     setLoading(false);
   };
@@ -550,10 +587,30 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
         </div>
 
         {/* Botones */}
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingBottom: "20px" }}>
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingBottom: "20px", flexWrap: "wrap" }}>
           <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
             Cancelar
           </Button>
+          {existingHistory && (
+            <Button type="button" disabled={loading}
+              style={{ background: "#059669", color: "white" }}
+              onClick={async () => {
+                const email = appointment.email || prompt("Ingresa el email del paciente:");
+                if (!email) return;
+                try {
+                  const res = await axios.post(
+                    `${API}/nutricion/enviar-plan/${appointment.id}`,
+                    { email },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+                  alert(res.data.mensaje || "Plan enviado correctamente");
+                } catch (e) {
+                  alert("Error: " + (e.response?.data?.detail || e.message));
+                }
+              }}>
+              {appointment.email ? `📧 Enviar plan a ${appointment.email}` : "📧 Enviar plan nutricional"}
+            </Button>
+          )}
           <Button type="submit" disabled={loading} style={{ background: "#00a8cc", color: "white" }}>
             {loading ? "Guardando..." : existingHistory ? "Actualizar Consulta" : "Terminar Consulta"}
           </Button>
