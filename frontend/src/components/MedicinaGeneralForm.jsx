@@ -240,11 +240,11 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
       <div style={{ ...S.g2, marginBottom:"10px" }}>
         <div style={{ ...S.f, gridColumn:"1/-1" }}>
           <Label style={S.l}>Motivo de consulta *</Label>
-          <Textarea value={form.motivo_consulta} onChange={e=>setForm(f=>({...f,motivo_consulta:e.target.value}))} rows={2} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} required />
+          <Textarea value={form.motivo_consulta} onChange={e=>setForm(f=>({...f,motivo_consulta:e.target.value}))} rows={2} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} />
         </div>
         <div style={{ ...S.f, gridColumn:"1/-1" }}>
-          <Label style={S.l}>Enfermedad actual *</Label>
-          <Textarea value={form.enfermedad_actual} onChange={e=>setForm(f=>({...f,enfermedad_actual:e.target.value}))} rows={3} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} required />
+          <Label style={S.l}>Enfermedad actual</Label>
+          <Textarea value={form.enfermedad_actual} onChange={e=>setForm(f=>({...f,enfermedad_actual:e.target.value}))} rows={3} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} />
         </div>
       </div>
 
@@ -261,7 +261,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
             <Textarea value={form.quirurgicos} onChange={e=>setForm(f=>({...f,quirurgicos:e.target.value}))} rows={2} style={{ fontSize:"12px" }} />
           </div>
           <div style={S.f}>
-            <Label style={S.l}>Alergias *</Label>
+            <Label style={S.l}>Alergias</Label>
             <Input value={form.alergias} onChange={e=>setForm(f=>({...f,alergias:e.target.value}))} style={{ ...S.i, borderColor: form.alergias ? "#f87171" : "#b2ebf2", background: form.alergias ? "#fff5f5" : "white" }} placeholder="Ninguna conocida" />
           </div>
         </div>
@@ -345,7 +345,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
         <div style={{ marginTop:"8px" }}>
           <Label style={S.l}>Diagnóstico clínico *</Label>
           <Textarea value={form.diagnostico} onChange={e=>setForm(f=>({...f,diagnostico:e.target.value}))}
-            rows={2} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} required />
+            rows={2} style={{ fontSize:"13px", borderColor:"#b2ebf2" }} />
         </div>
       </div>
 
