@@ -2044,9 +2044,22 @@ async def create_prescription(
         appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
     if not appointment and input.paciente_id:
         appointment = await db.appointments.find_one({"id": input.paciente_id}, {"_id": 0})
-    
+    # Fallback: buscar por cédula si no encontró por ID
+    if not appointment and input.paciente_cedula:
+        appointment = await db.appointments.find_one(
+            {"cedula": input.paciente_cedula}, {"_id": 0},
+        )
+    # Si aún no hay cita, crear un appointment mínimo desde los datos disponibles
     if not appointment:
-        raise HTTPException(status_code=404, detail="Cita/Paciente no encontrado")
+        appointment = {
+            "id": input.appointment_id or input.paciente_id or "",
+            "nombre_completo": "",
+            "cedula": input.paciente_cedula or "",
+            "edad": 0,
+            "fecha_nacimiento": "",
+            "especialidad": input.especialidad or "",
+            "doctor_id": input.doctor_id or "",
+        }
     
     # Get doctor info - del usuario actual o del input
     doctor = None
@@ -2364,20 +2377,77 @@ async def delete_appointment(appointment_id: str):
 
 # Invoice endpoints  
 @api_router.post("/invoices", response_model=Invoice)
-async def create_invoice(input: InvoiceCreate):
-    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
-    if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor no encontrado")
-    
-    invoice_dict = input.model_dump()
-    invoice_dict['doctor_nombre'] = doctor['nombre']
-    invoice_obj = Invoice(**invoice_dict)
-    
-    doc = invoice_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
+async def create_invoice(
+    input: InvoiceCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Crea factura con numeración automática. Doctor es opcional."""
+    # Leer config clinica para numeración y datos emisor
+    cfg_clinica = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+    clinica = cfg_clinica.get("valor", {}) if cfg_clinica else {}
+
+    # Auto-numerar si no viene numero_factura
+    numero = input.numero_factura if input.numero_factura else await _siguiente_numero_factura(
+        clinica.get("establecimiento", "001"),
+        clinica.get("punto_emision", "001")
+    )
+
+    # Doctor es opcional
+    doctor_nombre = input.doctor_nombre or ""
+    if input.doctor_id and not doctor_nombre:
+        doc_db = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
+        if doc_db:
+            doctor_nombre = doc_db.get("nombre", "")
+
+    # Calcular totales desde detalles
+    detalles_list = [d.model_dump() if hasattr(d, 'model_dump') else d for d in (input.detalles or [])]
+    totales = _calcular_totales_factura(detalles_list, input.iva_porcentaje or 0.0)
+
+    # Construir detalles con subtotal calculado
+    detalles_final = []
+    for d in (input.detalles or []):
+        det = d.model_dump() if hasattr(d, 'model_dump') else dict(d)
+        det["subtotal"] = round(
+            float(det.get("precio_unitario", 0)) * float(det.get("cantidad", 1)) - float(det.get("descuento", 0)), 2
+        )
+        detalles_final.append(det)
+
+    fecha = input.fecha or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    invoice = Invoice(
+        numero_factura=numero,
+        emisor_ruc=clinica.get("ruc", ""),
+        emisor_razon_social=clinica.get("razon_social", "CENTRO DE ESPECIALIDADES FAMILY HEALTH"),
+        emisor_nombre_comercial=clinica.get("nombre_comercial", "FAMILY HEALTH"),
+        emisor_direccion=clinica.get("direccion", "Mucho Lote 2 MZ 2833 Villa 15, Guayaquil"),
+        emisor_telefono=clinica.get("telefono", "096-291-2170"),
+        emisor_email=clinica.get("email", "centrodeespecialidadesfamilyhe@gmail.com"),
+        paciente_nombre=input.paciente_nombre,
+        paciente_cedula=input.paciente_cedula,
+        paciente_direccion=input.paciente_direccion or "",
+        paciente_email=input.paciente_email or "",
+        paciente_telefono=input.paciente_telefono or "",
+        doctor_id=input.doctor_id or "",
+        doctor_nombre=doctor_nombre,
+        especialidad=input.especialidad or "",
+        detalles=detalles_final,
+        tipo_pago=input.tipo_pago or "efectivo",
+        referencia_pago=input.referencia_pago or "",
+        consulta_financiera_id=input.consulta_financiera_id or "",
+        appointment_id=input.appointment_id or "",
+        numero_autorizacion=input.numero_autorizacion or "",
+        observaciones=input.observaciones or "",
+        fecha=fecha,
+        estado="emitida",
+        created_by=current_user.username,
+        **totales,
+    )
+
+    doc = invoice.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    doc["detalles"] = detalles_final
     await db.invoices.insert_one(doc)
-    return invoice_obj
+    return invoice
 
 @api_router.get("/invoices", response_model=List[Invoice])
 async def get_invoices():

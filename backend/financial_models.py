@@ -88,6 +88,7 @@ class PagoCreate(BaseModel):
     tipo_pago: str = "efectivo"
     referencia: str = ""
     notas: str = ""
+    descuento_aplicado: float = 0.0  # descuento aplicado en este pago
 
 
 # ========== CONSULTAS FINANCIERAS ==========

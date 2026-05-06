@@ -63,7 +63,12 @@ export const ConfiguracionSRI = ({ token }) => {
       }, { headers });
 
       toast.success(res.data.mensaje);
-      setP12File(null); setP12Password("");
+      setP12File(null);
+      setP12Password("");
+      setKeyTemporal("");
+      // Reset file input DOM element
+      const fileInput = document.querySelector('input[type="file"][accept=".p12,.pfx"]');
+      if (fileInput) fileInput.value = "";
       await cargar();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Error al configurar el certificado");

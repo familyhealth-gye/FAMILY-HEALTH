@@ -401,7 +401,7 @@ async def registrar_pago(
     input: PagoCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Registrar pago/abono a una consulta"""
+    """Registrar pago/abono a una consulta, respetando descuentos aplicados."""
     consulta = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
@@ -421,15 +421,26 @@ async def registrar_pago(
     pagos = consulta.get('pagos', [])
     pago_doc = pago.model_dump()
     pago_doc['created_at'] = pago_doc['created_at'].isoformat()
+    
+    # Aplicar descuento si viene en el pago
+    descuento_aplicado = getattr(input, 'descuento_aplicado', 0) or 0
+    if descuento_aplicado > 0:
+        pago_doc['descuento_aplicado'] = descuento_aplicado
+    
     pagos.append(pago_doc)
     
     # Recalcular totales
-    total = consulta.get('total', 0)
+    # El total efectivo = total original - descuento acumulado
+    total_original = consulta.get('total', 0)
+    descuento_previo = consulta.get('descuento_aplicado', 0) or 0
+    descuento_total = descuento_previo + descuento_aplicado
+    total_efectivo = max(0, total_original - descuento_total)
+    
     total_pagado = sum(p.get('monto', 0) for p in pagos)
-    saldo = total - total_pagado
+    saldo = round(max(0, total_efectivo - total_pagado), 2)
     
     # Determinar estado de pago
-    if saldo <= 0:
+    if saldo <= 0.01:
         estado_pago = "pagado"
         saldo = 0
     elif total_pagado > 0:
@@ -438,15 +449,20 @@ async def registrar_pago(
         estado_pago = "pendiente"
     
     # Actualizar
+    update_fields = {
+        "pagos": pagos,
+        "total_pagado": round(total_pagado, 2),
+        "saldo": saldo,
+        "estado_pago": estado_pago,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    if descuento_aplicado > 0:
+        update_fields["descuento_aplicado"] = descuento_total
+        update_fields["total_con_descuento"] = total_efectivo
+    
     await db.consultas_financieras.update_one(
         {"id": consulta_id},
-        {"$set": {
-            "pagos": pagos,
-            "total_pagado": total_pagado,
-            "saldo": saldo,
-            "estado_pago": estado_pago,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
+        {"$set": update_fields}
     )
     
     updated = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})

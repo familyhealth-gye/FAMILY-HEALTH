@@ -28,6 +28,7 @@ const ESPECIALIDADES = [
   "Odontología", 
   "Pediatría",
   "Ginecología",
+  "Obstetricia",
   "Psicología",
   "Nutrición",
   "Laboratorio Clínico",

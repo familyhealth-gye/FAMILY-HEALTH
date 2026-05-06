@@ -351,10 +351,20 @@ export const AppointmentsWithAttention = ({
         toast.success(`Pago registrado - Saldo restante: $${response.data.saldo.toFixed(2)}`);
       }
 
-      // ── AUTO-FACTURACIÓN SRI ──────────────────────────────
+      // ── AUTO-FACTURACIÓN SRI — solo cuando el saldo queda en 0 ──
       const apt = selectedAppointmentForPayment;
       const montoFinal = parseFloat(paymentForm.monto);
       const descuentoFinal = parseFloat(paymentForm.descuento) || 0;
+
+      // Solo ofrecer factura si el pago quedó completo (saldo = 0)
+      if (!pagoCompleto) {
+        toast.info(`Pago parcial registrado. Al completar el pago total podrás emitir la factura.`);
+        setShowPaymentModal(false);
+        setConsultaFinanciera(null);
+        setSelectedAppointmentForPayment(null);
+        fetchData();
+        return;
+      }
 
       const quiereFactura = window.confirm(
         `¿Emitir factura electrónica al SRI?\n\nPaciente: ${apt.nombre_completo}\nCédula: ${apt.cedula}\nTotal: $${montoFinal.toFixed(2)}${descuentoFinal > 0 ? ` (descuento $${descuentoFinal.toFixed(2)})` : ''}\n\nSi dice NO, puede facturar después desde la pestaña Facturación.`
