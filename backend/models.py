@@ -155,11 +155,13 @@ class Prescription(BaseModel):
 
 class PrescriptionCreate(BaseModel):
     """
-    Crear receta - todos los campos opcionales excepto paciente_id
-    Permite crear recetas desde cualquier especialidad
+    Crear receta - todos los campos opcionales.
+    paciente_id puede ser la cédula, appointment_id, o cualquier identificador.
     """
-    # Obligatorio
-    paciente_id: str
+    # Identificación - todos opcionales, el backend busca con lo que venga
+    paciente_id: str = ""
+    paciente_cedula: str = ""
+    paciente_nombre: str = ""
     
     # Campos comunes opcionales
     doctor_id: str = ""
