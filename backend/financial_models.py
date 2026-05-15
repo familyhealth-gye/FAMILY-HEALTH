@@ -250,3 +250,4 @@ class CierreCaja(BaseModel):
 class CierreCajaCreate(BaseModel):
     fecha: str
     observaciones: str = ""
+    
