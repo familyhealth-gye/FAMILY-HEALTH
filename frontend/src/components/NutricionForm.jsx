@@ -57,6 +57,38 @@ const FORM_INICIAL = {
 
 export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [autoSaved, setAutoSaved] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+
+  // Guardado manual rápido (sin cerrar el formulario)
+  const handleGuardarBorrador = async () => {
+    if (!form.motivo_consulta.trim()) return; // necesita al menos motivo
+    try {
+      const endpoint = existingHistory
+        ? `${API}/medical-history/nutricion/${existingHistory.id}`
+        : `${API}/medical-history/nutricion`;
+      const method = existingHistory ? "put" : "post";
+      const payload = {
+        appointment_id: appointment.id,
+        paciente_cedula: appointment.cedula || "",
+        paciente_nombre: appointment.nombre_completo || "",
+        ...form,
+        examen_fisico: {
+          ...form.examen_fisico,
+          peso: parseFloat(form.examen_fisico?.peso) || null,
+          talla: parseFloat(form.examen_fisico?.talla) || null,
+        },
+      };
+      await axios[method](`${endpoint}`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAutoSaved(true);
+      setLastSaved(new Date().toLocaleTimeString());
+      setTimeout(() => setAutoSaved(false), 3000);
+    } catch (e) {
+      console.warn("Auto-save failed:", e.message);
+    }
+  };
   const [loadingData, setLoadingData] = useState(true);
   const [existingHistory, setExistingHistory] = useState(null);
   const [form, setForm] = useState(FORM_INICIAL);
@@ -133,15 +165,11 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
           setMedidasAnteriores(ultima);
           setModoEvolucion(true);
 
-          // Precargar datos de la cita anterior para no repetir llenado
-          setForm(f => ({
-            ...f,
-            diagnostico_nutricional: f.diagnostico_nutricional || ultima.diagnostico_nutricional || "",
-            antecedentes_patologicos: f.antecedentes_patologicos || ultima.antecedentes || "",
-            plan_alimentario: f.plan_alimentario || (ultima.plan_alimentario
-              ? `[Plan anterior — ajustar según evolución]\n${ultima.plan_alimentario}`
-              : ""),
-          }));
+          // Precargar solo las medidas físicas (no los campos de historia que no vienen aquí)
+          // diagnostico/plan se cargan cuando se abre la historia existente via el useEffect de appointment
+          if (ultima.peso) {
+            setMedidasAnteriores(ultima);
+          }
         }
       } catch {}
     };
@@ -155,8 +183,15 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.motivo_consulta.trim()) { toast.error("El motivo de consulta es obligatorio"); return; }
-    if (!form.diagnostico_texto.trim() && !form.cie10_codigo) { toast.error("El diagnóstico es obligatorio"); return; }
+    if (!form.motivo_consulta.trim()) {
+      toast.error("⚠️ Falta: Motivo de consulta");
+      return;
+    }
+    // Diagnóstico es recomendado pero no bloquea
+    if (!form.diagnostico_texto.trim() && !form.cie10_codigo) {
+      toast.warning("💡 Recuerda agregar el diagnóstico nutricional antes de terminar");
+      // No hace return - permite continuar sin diagnóstico
+    }
     setLoading(true);
 
     try {
@@ -239,8 +274,18 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (err) {
-      const msg = err.response?.data?.detail || "Error al guardar la historia clínica";
-      toast.error(`❌ ${msg} — Revisa los datos e intenta de nuevo`);
+      const status = err.response?.status;
+      const msg = err.response?.data?.detail || err.message || "Error desconocido";
+      if (status === 401 || status === 403) {
+        toast.error("❌ Sesión expirada — recarga la página e inicia sesión de nuevo");
+      } else if (status >= 500) {
+        toast.error(`❌ Error del servidor: ${msg}. Intenta de nuevo.`);
+      } else if (!err.response) {
+        toast.error("❌ Sin conexión — verifica tu internet e intenta de nuevo");
+      } else {
+        toast.error(`❌ ${msg}`);
+      }
+      console.error("Error guardando historia nutrición:", err);
     }
     setLoading(false);
   };
@@ -590,6 +635,12 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingBottom: "20px", flexWrap: "wrap" }}>
           <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
             Cancelar
+          </Button>
+          <Button type="button"
+            style={{ background: autoSaved ? "#059669" : "#6366f1", color: "white" }}
+            disabled={loading || !form.motivo_consulta?.trim()}
+            onClick={handleGuardarBorrador}>
+            {autoSaved ? `✅ Guardado ${lastSaved}` : "💾 Guardar borrador"}
           </Button>
           {existingHistory && (
             <Button type="button" disabled={loading}
