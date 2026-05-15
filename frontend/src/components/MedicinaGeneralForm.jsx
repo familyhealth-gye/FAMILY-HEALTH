@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import {} from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import axios from "axios";
 import { AntecedentesPanel } from "./AntecedentesPanel";
@@ -106,8 +106,18 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.motivo_consulta.trim()) { toast.error("El motivo de consulta es obligatorio"); return; }
-    if (!form.diagnostico.trim() && !form.cie10_codigo) { toast.error("El diagnóstico es obligatorio"); return; }
+    // Validación con highlight visual del campo
+    if (!form.motivo_consulta.trim()) {
+      toast.error("⚠️ Falta: Motivo de consulta");
+      document.querySelector('[data-field="motivo_consulta"]')?.scrollIntoView({ behavior:'smooth', block:'center' });
+      document.querySelector('[data-field="motivo_consulta"]')?.focus();
+      return;
+    }
+    if (!form.diagnostico.trim() && !form.cie10_codigo) {
+      toast.error("⚠️ Falta: Diagnóstico — agrega el diagnóstico o código CIE-10");
+      document.querySelector('[data-field="diagnostico"]')?.scrollIntoView({ behavior:'smooth', block:'center' });
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -248,38 +258,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
         </div>
       </div>
 
-      {/* ANTECEDENTES — aquí sí el formulario completo */}
-      <div style={S.sec}>📂 ANTECEDENTES</div>
-      <div style={{ background:"#f0fbff", borderRadius:"8px", padding:"12px", marginBottom:"10px" }}>
-        <div style={{ ...S.g3, marginBottom:"10px" }}>
-          <div style={S.f}>
-            <Label style={S.l}>Antecedentes familiares</Label>
-            <Textarea value={form.antecedentes_familiares} onChange={e=>setForm(f=>({...f,antecedentes_familiares:e.target.value}))} rows={2} style={{ fontSize:"12px" }} />
-          </div>
-          <div style={S.f}>
-            <Label style={S.l}>Quirúrgicos</Label>
-            <Textarea value={form.quirurgicos} onChange={e=>setForm(f=>({...f,quirurgicos:e.target.value}))} rows={2} style={{ fontSize:"12px" }} />
-          </div>
-          <div style={S.f}>
-            <Label style={S.l}>Alergias</Label>
-            <Input value={form.alergias} onChange={e=>setForm(f=>({...f,alergias:e.target.value}))} style={{ ...S.i, borderColor: form.alergias ? "#f87171" : "#b2ebf2", background: form.alergias ? "#fff5f5" : "white" }} placeholder="Ninguna conocida" />
-          </div>
-        </div>
-        <p style={{ fontSize:"12px", fontWeight:"700", color:"#005f73", marginBottom:"6px" }}>Patologías:</p>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:"10px", marginBottom:"8px" }}>
-          {[["ant_hta","HTA"],["ant_diabetes","Diabetes"],["ant_tbc","TBC"],["ant_cancer","Cáncer"],
-            ["ant_hepatopatias","Hepatopatías"],["ant_nefropatias","Nefropatías"],
-            ["ant_epilepsia","Epilepsia"],["ant_asma","Asma"],["ant_mentales","Mentales"]
-          ].map(([k,l]) => (
-            <label key={k} style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"12px", cursor:"pointer", color: form[k] ? "#dc2626" : "#374151", fontWeight: form[k] ? "700" : "normal" }}>
-              <Checkbox checked={form[k]} onCheckedChange={v=>setForm(f=>({...f,[k]:v}))} />{l}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* SIGNOS VITALES */}
-      <div style={S.sec}>💓 SIGNOS VITALES</div>
+<div style={S.sec}>💓 SIGNOS VITALES</div>
       <div style={{ ...S.g4, marginBottom:"10px" }}>
         {[["peso","Peso","kg"],["talla","Talla","cm"],["temperatura","Temp.","°C"],
           ["presion_arterial","P. Arterial",""],["frecuencia_cardiaca","Frec. Cardíaca","lpm"],
@@ -379,6 +358,23 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
       {/* Botones */}
       <div style={{ display:"flex", gap:"10px", justifyContent:"flex-end", paddingBottom:"20px" }}>
         <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
+        <Button type="button" variant="outline" disabled={loading || !form.motivo_consulta?.trim()}
+          onClick={async () => {
+            try {
+              const ep = existingHistory
+                ? `${API}/medical-history/general/${existingHistory.id}`
+                : `${API}/medical-history/general`;
+              const method = existingHistory ? "put" : "post";
+              await axios[method](ep, {
+                appointment_id: appointment.id,
+                paciente_cedula: appointment.cedula || "",
+                ...form,
+              }, { headers: { Authorization: `Bearer ${token}` } });
+              toast.success("💾 Borrador guardado");
+            } catch { toast.warning("No se pudo guardar el borrador"); }
+          }}>
+          💾 Guardar borrador
+        </Button>
         <Button type="submit" disabled={loading} style={{ background:"#00a8cc", color:"white" }}>
           {loading ? "Guardando..." : existingHistory ? "Actualizar Consulta" : "Terminar Consulta"}
         </Button>
