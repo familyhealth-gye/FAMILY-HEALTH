@@ -26,6 +26,8 @@ import { CatalogoServiciosTab } from "@/components/CatalogoServiciosTab";
 import { ConfiguracionIA } from "@/components/ConfiguracionIA";
 import { FacturacionTab } from "@/components/FacturacionTab";
 import { ConfiguracionSRI } from "@/components/ConfiguracionSRI";
+import { ProcedimientoRapidoTab } from "@/components/ProcedimientoRapidoTab";
+import { LaboratorioTab } from "@/components/LaboratorioTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
 import { formatearEdad, validarFechaNacimiento } from "@/lib/edadUtils";
@@ -351,9 +353,21 @@ function App() {
           setAppointmentForm({
             ...appointmentForm,
             cedula,
+            tipo_documento: patientAppointment.tipo_documento || "cedula",
             nombre_completo: patientAppointment.nombre_completo,
-            edad: patientAppointment.edad.toString(),
-            telefono: patientAppointment.telefono,
+            fecha_nacimiento: patientAppointment.fecha_nacimiento || "",
+            edad: patientAppointment.edad ? patientAppointment.edad.toString() : "",
+            sexo: patientAppointment.sexo || "",
+            telefono: patientAppointment.telefono || "",
+            whatsapp: patientAppointment.whatsapp || "",
+            email: patientAppointment.email || "",
+            es_menor: patientAppointment.es_menor || false,
+            representante_nombre: patientAppointment.representante_nombre || "",
+            representante_cedula: patientAppointment.representante_cedula || "",
+            representante_telefono: patientAppointment.representante_telefono || "",
+            representante_whatsapp: patientAppointment.representante_whatsapp || "",
+            representante_email: patientAppointment.representante_email || "",
+            representante_parentesco: patientAppointment.representante_parentesco || "",
             // No autocompletar especialidad ni doctor (puede querer otra especialidad)
           });
           toast.success(`✓ Paciente: ${patientAppointment.nombre_completo}`, {
@@ -479,6 +493,14 @@ function App() {
                 <TabsTrigger value="proformas" data-testid="proformas-tab">
                   <Receipt className="tab-icon" />
                   Proformas
+                </TabsTrigger>
+                <TabsTrigger value="procedimientos" data-testid="procedimientos-tab">
+                  <span className="tab-icon">💉</span>
+                  Procedimientos
+                </TabsTrigger>
+                <TabsTrigger value="laboratorio" data-testid="laboratorio-tab">
+                  <span className="tab-icon">🔬</span>
+                  Laboratorio
                 </TabsTrigger>
                 <TabsTrigger value="caja" data-testid="caja-tab">
                   <CreditCard className="tab-icon" />
@@ -638,8 +660,22 @@ function App() {
                     <DialogTitle>{editingAppointment ? "Editar Cita" : "Agendar Nueva Cita"}</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleAppointmentSubmit}>
+                    {/* Role-based form: Doctor sees minimal, Counter sees all */}
+                    {user?.role !== "Administrador" && user?.role !== "Recepcion" && editingAppointment && (
+                      <div style={{ background:"#e0f7fa", borderRadius:"8px", padding:"10px 14px", marginBottom:"12px", fontSize:"13px" }}>
+                        <p style={{ margin:"0 0 4px", fontWeight:"700", color:"#005f73" }}>
+                          📋 {appointmentForm.nombre_completo}
+                        </p>
+                        <p style={{ margin:0, color:"#555" }}>
+                          Cédula: {appointmentForm.cedula} · {appointmentForm.telefono}
+                          {appointmentForm.fecha_nacimiento && ` · Nac: ${appointmentForm.fecha_nacimiento}`}
+                        </p>
+                      </div>
+                    )}
                     <div className="form-grid">
-                      <div className="form-field">
+                      {/* Patient fields — hidden for doctor role on returning patients */}
+                      {(user?.role === "Administrador" || user?.role === "Recepcion" || !appointmentForm.cedula) && (
+                        <>                      <div className="form-field">
                         <Label>Nombre Completo</Label>
                         <Input
                           data-testid="appointment-name-input"
@@ -706,7 +742,8 @@ function App() {
                           onChange={(e) => setAppointmentForm({...appointmentForm, email: e.target.value})}
                           placeholder="paciente@email.com"
                         />
-                      </div>
+</>
+                      )}
                       <div className="form-field">
                        <Label>Especialidad</Label>
                         <Select
@@ -1056,7 +1093,13 @@ function App() {
 
           {/* Abonos Tab - Admin & Recepcion */}
           {(user.role === "Administrador" || user.role === "Recepcion") && (
-            <TabsContent value="caja">
+            <TabsContent value="procedimientos">
+            <ProcedimientoRapidoTab token={token} user={user} />
+          </TabsContent>
+          <TabsContent value="laboratorio">
+            <LaboratorioTab token={token} user={user} />
+          </TabsContent>
+          <TabsContent value="caja">
               <CajaTab />
             </TabsContent>
           )}
