@@ -1494,4 +1494,4 @@ async def get_cierre_caja(
     if isinstance(cierre.get('created_at'), str):
         cierre['created_at'] = datetime.fromisoformat(cierre['created_at'])
     
-    return cierre
+    return cierre 
