@@ -562,6 +562,19 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
 
             <div style={{display:"flex",gap:"10px",justifyContent:"flex-end",paddingBottom:"20px"}}>
               <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
+              <Button type="button" variant="outline" disabled={loading}
+                onClick={async () => {
+                  try {
+                    const saved = await axios.post(`${API}/medical-history/odontology`, {
+                      appointment_id: appointment.id,
+                      paciente_cedula: appointment.cedula || "",
+                      ...form,
+                    }, { headers: { Authorization: `Bearer ${token}` } });
+                    toast.success("💾 Borrador guardado");
+                  } catch { toast.warning("No se pudo guardar el borrador"); }
+                }}>
+                💾 Guardar borrador
+              </Button>
               <Button type="submit" disabled={loading} style={{background:"#d97706",color:"white"}}>
                 {loading?"Guardando...":existingHistory?"Actualizar Consulta":"Terminar Consulta"}
               </Button>
