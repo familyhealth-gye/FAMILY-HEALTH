@@ -2039,22 +2039,26 @@ async def create_prescription(
     Solo valida campos mínimos obligatorios.
     """
     # Get patient info - buscar por appointment_id o paciente_id
+    # Normalizar paciente_id — puede venir vacío, usar cedula como fallback
+    paciente_id_real = input.paciente_id or input.paciente_cedula or input.appointment_id or ""
+    paciente_cedula_real = input.paciente_cedula or input.paciente_id or ""
+
     appointment = None
     if input.appointment_id:
         appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
-    if not appointment and input.paciente_id:
-        appointment = await db.appointments.find_one({"id": input.paciente_id}, {"_id": 0})
-    # Fallback: buscar por cédula si no encontró por ID
-    if not appointment and input.paciente_cedula:
+    if not appointment and paciente_id_real:
+        appointment = await db.appointments.find_one({"id": paciente_id_real}, {"_id": 0})
+    # Fallback: buscar por cédula
+    if not appointment and paciente_cedula_real:
         appointment = await db.appointments.find_one(
-            {"cedula": input.paciente_cedula}, {"_id": 0},
+            {"cedula": paciente_cedula_real}, {"_id": 0}
         )
-    # Si aún no hay cita, crear un appointment mínimo desde los datos disponibles
+    # Si aún no hay cita, crear objeto mínimo para no bloquear
     if not appointment:
         appointment = {
-            "id": input.appointment_id or input.paciente_id or "",
-            "nombre_completo": "",
-            "cedula": input.paciente_cedula or "",
+            "id": input.appointment_id or "",
+            "nombre_completo": input.paciente_nombre or "",
+            "cedula": paciente_cedula_real,
             "edad": 0,
             "fecha_nacimiento": "",
             "especialidad": input.especialidad or "",
@@ -4389,6 +4393,109 @@ app.include_router(financial_router, prefix="/api")
     
 import os
 import uvicorn
+
+
+# ========== PROCEDIMIENTOS RAPIDOS ==========
+
+@api_router.post("/procedimientos-rapidos")
+async def crear_procedimiento_rapido(data: dict, current_user: TokenData = Depends(get_current_user)):
+    proc = {
+        "id": str(uuid.uuid4()),
+        "paciente_cedula": data.get("paciente_cedula", ""),
+        "paciente_nombre": data.get("paciente_nombre", ""),
+        "paciente_telefono": data.get("paciente_telefono", ""),
+        "procedimientos": data.get("procedimientos", []),
+        "aplicado_por": data.get("aplicado_por", ""),
+        "prescripcion_externa": data.get("prescripcion_externa", ""),
+        "consentimiento_verbal": data.get("consentimiento_verbal", True),
+        "observaciones": data.get("observaciones", ""),
+        "tipo_pago": data.get("tipo_pago", "efectivo"),
+        "total": float(data.get("total", 0)),
+        "fecha": data.get("fecha", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+        "hora": data.get("hora", datetime.now(timezone.utc).strftime("%H:%M")),
+        "usuario": current_user.username,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if not proc["paciente_nombre"]:
+        raise HTTPException(status_code=400, detail="Nombre del paciente es obligatorio")
+    if not proc["procedimientos"]:
+        raise HTTPException(status_code=400, detail="Agrega al menos un procedimiento")
+    await db.procedimientos_rapidos.insert_one(proc)
+    proc.pop("_id", None)
+    # Registrar como ingreso en caja
+    await db.consultas_financieras.insert_one({
+        "id": str(uuid.uuid4()), "tipo": "procedimiento_rapido",
+        "paciente_cedula": proc["paciente_cedula"], "paciente_nombre": proc["paciente_nombre"],
+        "doctor_nombre": proc["aplicado_por"], "doctor_id": "",
+        "especialidad": "Procedimiento Rapido", "servicios": proc["procedimientos"],
+        "total": proc["total"], "total_pagado": proc["total"], "saldo": 0,
+        "estado_pago": "pagado", "tipo_pago": proc["tipo_pago"], "fecha": proc["fecha"],
+        "pagos": [{"monto": proc["total"], "tipo_pago": proc["tipo_pago"],
+                   "fecha": proc["fecha"], "recibido_por": current_user.username}],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return proc
+
+
+@api_router.get("/procedimientos-rapidos")
+async def get_procedimientos_rapidos(
+    paciente_cedula: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    query = {}
+    if paciente_cedula: query["paciente_cedula"] = paciente_cedula
+    procs = await db.procedimientos_rapidos.find(query, {"_id": 0}).sort("fecha", -1).to_list(500)
+    return procs
+
+
+# ========== LABORATORIO EXTERNO ==========
+
+@api_router.post("/configuracion/laboratorio")
+async def save_config_laboratorio(data: dict, current_user: TokenData = Depends(get_current_user)):
+    if current_user.role != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo Administrador")
+    await db.configuracion.update_one(
+        {"clave": "laboratorio_externo"},
+        {"$set": {"clave": "laboratorio_externo", "valor": {"nombre": data.get("nombre", "Laboratorio"), "link": data.get("link", ""), "notas": data.get("notas", "")}, "actualizado": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"ok": True}
+
+
+@api_router.get("/configuracion/laboratorio")
+async def get_config_laboratorio(current_user: TokenData = Depends(get_current_user)):
+    cfg = await db.configuracion.find_one({"clave": "laboratorio_externo"}, {"_id": 0})
+    return cfg.get("valor", {}) if cfg else {}
+
+
+@api_router.post("/laboratorio/envio")
+async def registrar_envio_laboratorio(data: dict, current_user: TokenData = Depends(get_current_user)):
+    envio = {
+        "id": str(uuid.uuid4()),
+        "paciente_cedula": data.get("paciente_cedula", ""),
+        "paciente_nombre": data.get("paciente_nombre", ""),
+        "appointment_id": data.get("appointment_id", ""),
+        "examenes": data.get("examenes", ""),
+        "fecha_envio": data.get("fecha_envio", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+        "fecha_resultado_estimada": data.get("fecha_resultado_estimada", ""),
+        "enviado_por": current_user.username,
+        "notas": data.get("notas", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.laboratorio_envios.insert_one(envio)
+    envio.pop("_id", None)
+    return envio
+
+
+@api_router.get("/laboratorio/envios")
+async def get_envios_laboratorio(
+    paciente_cedula: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    query = {}
+    if paciente_cedula: query["paciente_cedula"] = paciente_cedula
+    envios = await db.laboratorio_envios.find(query, {"_id": 0}).sort("fecha_envio", -1).to_list(200)
+    return envios
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
