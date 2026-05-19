@@ -197,16 +197,18 @@ function App() {
     return <Login onLogin={handleLogin} />;
   }
 
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
   // Doctor handlers
   const handleDoctorSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (editingDoctor) {
-        await axios.put(`${API}/doctors/${editingDoctor.id}`, doctorForm);
+        await axios.put(`${API}/doctors/${editingDoctor.id}`, doctorForm, { headers: authHeaders });
         toast.success("Doctor actualizado exitosamente");
       } else {
-        await axios.post(`${API}/doctors`, doctorForm);
+        await axios.post(`${API}/doctors`, doctorForm, { headers: authHeaders });
         toast.success("Doctor registrado exitosamente");
       }
       setDoctorDialog(false);
@@ -228,7 +230,7 @@ function App() {
   const handleDeleteDoctor = async (id) => {
     if (!window.confirm("¿Está seguro de eliminar este doctor?")) return;
     try {
-      await axios.delete(`${API}/doctors/${id}`);
+      await axios.delete(`${API}/doctors/${id}`, { headers: authHeaders });
       toast.success("Doctor eliminado exitosamente");
       fetchData();
     } catch (error) {
@@ -266,11 +268,11 @@ function App() {
       delete data.edad;
       
       if (editingAppointment) {
-        const response = await axios.put(`${API}/appointments/${editingAppointment.id}`, data);
+        const response = await axios.put(`${API}/appointments/${editingAppointment.id}`, data, { headers: authHeaders });
         console.log("✅ Respuesta actualización:", response.data);
         toast.success("Cita actualizada exitosamente");
       } else {
-        const response = await axios.post(`${API}/appointments`, data);
+        const response = await axios.post(`${API}/appointments`, data, { headers: authHeaders });
         console.log("✅ Respuesta creación:", response.data);
         toast.success("Cita agendada exitosamente");
       }
@@ -305,7 +307,7 @@ function App() {
   const handleDeleteAppointment = async (id) => {
     if (!window.confirm("¿Está seguro de eliminar esta cita?")) return;
     try {
-      await axios.delete(`${API}/appointments/${id}`);
+      await axios.delete(`${API}/appointments/${id}`, { headers: authHeaders });
       toast.success("Cita eliminada exitosamente");
       fetchData();
     } catch (error) {
@@ -675,94 +677,96 @@ function App() {
                     <div className="form-grid">
                       {/* Patient fields — hidden for doctor role on returning patients */}
                       {(user?.role === "Administrador" || user?.role === "Recepcion" || !appointmentForm.cedula) && (
-                        <>                      <div className="form-field">
-                        <Label>Nombre Completo</Label>
-                        <Input
-                          data-testid="appointment-name-input"
-                          value={appointmentForm.nombre_completo}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, nombre_completo: e.target.value})}
-                          required
-                        />
-                      </div>
-                      <div className="form-field">
-                        <Label>Cédula *</Label>
-                        <div style={{ position: 'relative' }}>
-                          <Input
-                            data-testid="appointment-cedula-input"
-                            value={appointmentForm.cedula}
-                            onChange={(e) => handleCedulaChange(e.target.value)}
-                            placeholder="Ingrese cédula (se autocompletará si existe)"
-                            required
-                          />
-                          {searchingPatient && (
-                            <div style={{ 
-                              position: 'absolute', 
-                              right: '10px', 
-                              top: '50%', 
-                              transform: 'translateY(-50%)',
-                              color: '#00a8cc',
-                              fontSize: '0.875rem'
-                            }}>
-                              Buscando...
+                        <>
+                          <div className="form-field">
+                            <Label>Nombre Completo</Label>
+                            <Input
+                              data-testid="appointment-name-input"
+                              value={appointmentForm.nombre_completo}
+                              onChange={(e) => setAppointmentForm({...appointmentForm, nombre_completo: e.target.value})}
+                              required
+                            />
+                          </div>
+                          <div className="form-field">
+                            <Label>Cédula *</Label>
+                            <div style={{ position: 'relative' }}>
+                              <Input
+                                data-testid="appointment-cedula-input"
+                                value={appointmentForm.cedula}
+                                onChange={(e) => handleCedulaChange(e.target.value)}
+                                placeholder="Ingrese cédula (se autocompletará si existe)"
+                                required
+                              />
+                              {searchingPatient && (
+                                <div style={{ 
+                                  position: 'absolute', 
+                                  right: '10px', 
+                                  top: '50%', 
+                                  transform: 'translateY(-50%)',
+                                  color: '#00a8cc',
+                                  fontSize: '0.875rem'
+                                }}>
+                                  Buscando...
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="form-field">
-                        <Label>Fecha de Nacimiento *</Label>
-                        <Input
-                          data-testid="appointment-birthdate-input"
-                          type="date"
-                          value={appointmentForm.fecha_nacimiento}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, fecha_nacimiento: e.target.value})}
-                          max={new Date().toISOString().split('T')[0]}
-                          required
-                        />
-                        {appointmentForm.fecha_nacimiento && validarFechaNacimiento(appointmentForm.fecha_nacimiento) && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            Edad: <span className="font-semibold">{formatearEdad(appointmentForm.fecha_nacimiento)}</span>
-                          </p>
-                        )}
-                      </div>
-                      <div className="form-field">
-                        <Label>Teléfono</Label>
-                        <Input
-                          data-testid="appointment-phone-input"
-                          value={appointmentForm.telefono}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, telefono: e.target.value})}
-                          placeholder="0999999999"
-                          required
-                        />
-                      </div>
-                      <div className="form-field">
-                        <Label>Email (opcional — para RIDE y plan nutricional)</Label>
-                        <Input
-                          type="email"
-                          value={appointmentForm.email}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, email: e.target.value})}
-                          placeholder="paciente@email.com"
-                        />
-</>
+                          </div>
+                          <div className="form-field">
+                            <Label>Fecha de Nacimiento *</Label>
+                            <Input
+                              data-testid="appointment-birthdate-input"
+                              type="date"
+                              value={appointmentForm.fecha_nacimiento}
+                              onChange={(e) => setAppointmentForm({...appointmentForm, fecha_nacimiento: e.target.value})}
+                              max={new Date().toISOString().split('T')[0]}
+                              required
+                            />
+                            {appointmentForm.fecha_nacimiento && validarFechaNacimiento(appointmentForm.fecha_nacimiento) && (
+                              <p className="text-sm text-gray-600 mt-1">
+                                Edad: <span className="font-semibold">{formatearEdad(appointmentForm.fecha_nacimiento)}</span>
+                              </p>
+                            )}
+                          </div>
+                          <div className="form-field">
+                            <Label>Teléfono</Label>
+                            <Input
+                              data-testid="appointment-phone-input"
+                              value={appointmentForm.telefono}
+                              onChange={(e) => setAppointmentForm({...appointmentForm, telefono: e.target.value})}
+                              placeholder="0999999999"
+                              required
+                            />
+                          </div>
+                          <div className="form-field">
+                            <Label>Email (opcional — para RIDE y plan nutricional)</Label>
+                            <Input
+                              type="email"
+                              value={appointmentForm.email}
+                              onChange={(e) => setAppointmentForm({...appointmentForm, email: e.target.value})}
+                              placeholder="paciente@email.com"
+                            />
+                          </div>
+                        </>
                       )}
                       <div className="form-field">
-                       <Label>Especialidad</Label>
+                        <Label>Especialidad</Label>
                         <Select
-                           value={appointmentForm.especialidad}
-                           onValueChange={(value) => {
-                             console.log("Especialidad seleccionada:", value);
-                              setAppointmentForm(prev => ({
+                          value={appointmentForm.especialidad}
+                          onValueChange={(value) => {
+                            console.log("Especialidad seleccionada:", value);
+                            setAppointmentForm(prev => ({
                               ...prev,
                               especialidad: value
-                             }));
-                           }}
-                         >
+                            }));
+                          }}
+                        >
                           <SelectTrigger data-testid="appointment-specialty-select">
                             <SelectValue placeholder="Seleccione especialidad" />
                           </SelectTrigger>
                           <SelectContent>
                             {specialties.map((spec) => (
                               <SelectItem key={spec} value={spec}>{spec}</SelectItem>
-                               ))}
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -778,10 +782,10 @@ function App() {
                           <SelectContent>
                             {doctors
                               .filter(d => {
-                if (!appointmentForm.especialidad) return true;
-                const norm = s => s?.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() || '';
-                return norm(d.especialidad) === norm(appointmentForm.especialidad);
-              })
+                                if (!appointmentForm.especialidad) return true;
+                                const norm = s => s?.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() || '';
+                                return norm(d.especialidad) === norm(appointmentForm.especialidad);
+                              })
                               .map((doctor) => (
                                 <SelectItem key={doctor.id} value={doctor.id}>
                                   {doctor.nombre} - {doctor.especialidad}
@@ -1024,6 +1028,7 @@ function App() {
               searchInvoice={searchInvoice} 
               setSearchInvoice={setSearchInvoice}
               monthlyTotals={monthlyTotals}
+              token={token}
             />
           </TabsContent>
 
@@ -1074,6 +1079,7 @@ function App() {
                 users={users}
                 fetchData={fetchData}
                 token={token}
+                user={user}
               />
             </TabsContent>
           )}
@@ -1093,15 +1099,17 @@ function App() {
 
           {/* Abonos Tab - Admin & Recepcion */}
           {(user.role === "Administrador" || user.role === "Recepcion") && (
-            <TabsContent value="procedimientos">
-            <ProcedimientoRapidoTab token={token} user={user} />
-          </TabsContent>
-          <TabsContent value="laboratorio">
-            <LaboratorioTab token={token} user={user} />
-          </TabsContent>
-          <TabsContent value="caja">
-              <CajaTab />
-            </TabsContent>
+            <>
+              <TabsContent value="procedimientos">
+                <ProcedimientoRapidoTab token={token} user={user} />
+              </TabsContent>
+              <TabsContent value="laboratorio">
+                <LaboratorioTab token={token} user={user} />
+              </TabsContent>
+              <TabsContent value="caja">
+                <CajaTab />
+              </TabsContent>
+            </>
           )}
 
           {/* Catálogo de Servicios Tab - Admin Only */}
