@@ -11,7 +11,7 @@ import { toast } from "sonner";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-export const UsersTab = ({ users, fetchData, token }) => {
+export const UsersTab = ({ users, fetchData, token, user: currentUser }) => {
   const [dialog, setDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -141,10 +141,12 @@ export const UsersTab = ({ users, fetchData, token }) => {
     setShowPassword(false);
   };
 
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
   // Cargar doctores
   const fetchDoctors = async () => {
     try {
-      const response = await axios.get(`${API}/doctors`);
+      const response = await axios.get(`${API}/doctors`, { headers: authHeaders });
       setDoctors(response.data);
     } catch (error) {
       console.error("Error loading doctors:", error);
@@ -154,7 +156,7 @@ export const UsersTab = ({ users, fetchData, token }) => {
   // Cargar especialidades desde BD
   const fetchEspecialidades = async () => {
     try {
-      const response = await axios.get(`${API}/especialidades`);
+      const response = await axios.get(`${API}/especialidades`, { headers: authHeaders });
       setEspecialidades(response.data);
     } catch (error) {
       console.error("Error loading especialidades:", error);
@@ -163,9 +165,19 @@ export const UsersTab = ({ users, fetchData, token }) => {
 
   // useEffect para cargar datos al montar
   useEffect(() => {
-    fetchDoctors();
-    fetchEspecialidades();
-  }, []);
+    if (token) {
+      fetchDoctors();
+      fetchEspecialidades();
+    }
+  }, [token]);
+
+  if (currentUser?.role !== "Administrador") {
+    return (
+      <div className="tab-content">
+        <p className="section-subtitle">Solo los administradores pueden gestionar usuarios.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="tab-content">

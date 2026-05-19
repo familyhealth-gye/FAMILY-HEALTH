@@ -7,10 +7,11 @@ import { toast } from "sonner";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-export const InvoicesTab = ({ invoices, searchInvoice, setSearchInvoice, monthlyTotals }) => {
+export const InvoicesTab = ({ invoices, searchInvoice, setSearchInvoice, monthlyTotals, token }) => {
   const handleExport = async () => {
     try {
-      const response = await axios.get(`${API}/invoices/export`, { responseType: 'blob' });
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${API}/invoices/export`, { responseType: 'blob', headers });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
