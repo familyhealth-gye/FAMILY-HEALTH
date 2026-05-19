@@ -1,12 +1,4 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-from dotenv import load_dotenv
+"""Compatibilidad: use `from db import db, client`."""
+from db import client, db, close_client, ensure_indexes, DB_NAME, MONGO_URL
 
-load_dotenv()
-
-# 🚨 FORZAMOS a usar SIEMPRE la URL del .env
-MONGO_URL = os.environ["MONGO_URL"]
-DB_NAME = os.environ.get("DB_NAME", "familyhealth")
-
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+__all__ = ["client", "db", "close_client", "ensure_indexes", "DB_NAME", "MONGO_URL"]

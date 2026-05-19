@@ -5,15 +5,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from datetime import datetime, timezone
-from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
-from pathlib import Path
-import os
+from pymongo.errors import DuplicateKeyError
 import io
 import uuid
 
-# Cargar variables de entorno
-load_dotenv()
+from db import db
 
 from financial_models import (
     Paciente, PacienteCreate, PacienteUpdate,
@@ -28,14 +24,6 @@ from auth import TokenData, get_current_user
 
 # Router para endpoints financieros
 financial_router = APIRouter(prefix="/financial", tags=["Financial"])
-
-# MongoDB Atlas Connection (same as server.py)
-MONGO_URL = os.environ.get('MONGODB_URI', os.environ.get('MONGO_URL', 'mongodb://localhost:27017'))
-DB_NAME = os.environ.get('DB_NAME', 'family_health_db')
-client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
-db = client[DB_NAME]
-
-print(f"🔗 financial_routes.py conectado a MongoDB: {DB_NAME}")
 
 
 # ========== FUNCIÓN HELPER: UNIFICACIÓN DE PACIENTES ==========
@@ -112,7 +100,13 @@ async def unificar_paciente_por_cedula(cedula: str, datos_adicionales: dict = No
         doc['created_at'] = doc['created_at'].isoformat()
         doc['updated_at'] = doc['updated_at'].isoformat()
         
-        await db.pacientes.insert_one(doc)
+        try:
+            await db.pacientes.insert_one(doc)
+        except DuplicateKeyError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ya existe un paciente con la cédula {cedula}",
+            )
         
         return nuevo_paciente
 
@@ -178,7 +172,10 @@ async def create_paciente(
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     
-    await db.pacientes.insert_one(doc)
+    try:
+        await db.pacientes.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Ya existe un paciente con esta cédula")
     return paciente
 
 
@@ -351,45 +348,29 @@ async def add_servicio_to_consulta(
     input: DetalleServicioCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Agregar servicio a una consulta existente"""
-    consulta = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
-    if not consulta:
+    """Agregar servicio a una consulta existente (actualización atómica)."""
+    from atomic_ops import agregar_servicio_consulta
+
+    exists = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 1})
+    if not exists:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
-    
-    # Crear nuevo servicio
+
+    subtotal = round(float(input.precio_unitario) * int(input.cantidad), 2)
     servicio = DetalleServicio(
         consulta_id=consulta_id,
         servicio=input.servicio,
         descripcion=input.descripcion,
         precio_unitario=input.precio_unitario,
         cantidad=input.cantidad,
-        subtotal=input.precio_unitario * input.cantidad
+        subtotal=subtotal,
     )
-    
-    # Recalcular totales
-    servicios = consulta.get('servicios', [])
+
     srv_doc = servicio.model_dump()
-    srv_doc['created_at'] = srv_doc['created_at'].isoformat()
-    servicios.append(srv_doc)
-    
-    total = sum(s.get('subtotal', 0) for s in servicios)
-    total_pagado = consulta.get('total_pagado', 0)
-    saldo = total - total_pagado
-    estado_pago = "pagado" if saldo <= 0 else ("parcial" if total_pagado > 0 else "pendiente")
-    
-    # Actualizar
-    await db.consultas_financieras.update_one(
-        {"id": consulta_id},
-        {"$set": {
-            "servicios": servicios,
-            "total": total,
-            "saldo": saldo,
-            "estado_pago": estado_pago,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
-    updated = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
+    srv_doc["created_at"] = srv_doc["created_at"].isoformat()
+
+    updated = await agregar_servicio_consulta(consulta_id, srv_doc, subtotal)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Consulta no encontrada")
     return updated
 
 
@@ -401,12 +382,13 @@ async def registrar_pago(
     input: PagoCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Registrar pago/abono a una consulta, respetando descuentos aplicados."""
-    consulta = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
-    if not consulta:
+    """Registrar pago/abono a una consulta (actualización atómica de saldo y estado)."""
+    from atomic_ops import registrar_pago_consulta
+
+    exists = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 1})
+    if not exists:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
-    
-    # Crear pago
+
     pago = Pago(
         consulta_id=consulta_id,
         fecha=input.fecha or datetime.now(timezone.utc).strftime('%Y-%m-%d'),
@@ -416,56 +398,22 @@ async def registrar_pago(
         recibido_por=current_user.username,
         notas=input.notas
     )
-    
-    # Actualizar lista de pagos
-    pagos = consulta.get('pagos', [])
+
     pago_doc = pago.model_dump()
     pago_doc['created_at'] = pago_doc['created_at'].isoformat()
-    
-    # Aplicar descuento si viene en el pago
-    descuento_aplicado = getattr(input, 'descuento_aplicado', 0) or 0
+
+    descuento_aplicado = float(input.descuento_aplicado or 0)
     if descuento_aplicado > 0:
         pago_doc['descuento_aplicado'] = descuento_aplicado
-    
-    pagos.append(pago_doc)
-    
-    # Recalcular totales
-    # El total efectivo = total original - descuento acumulado
-    total_original = consulta.get('total', 0)
-    descuento_previo = consulta.get('descuento_aplicado', 0) or 0
-    descuento_total = descuento_previo + descuento_aplicado
-    total_efectivo = max(0, total_original - descuento_total)
-    
-    total_pagado = sum(p.get('monto', 0) for p in pagos)
-    saldo = round(max(0, total_efectivo - total_pagado), 2)
-    
-    # Determinar estado de pago
-    if saldo <= 0.01:
-        estado_pago = "pagado"
-        saldo = 0
-    elif total_pagado > 0:
-        estado_pago = "parcial"
-    else:
-        estado_pago = "pendiente"
-    
-    # Actualizar
-    update_fields = {
-        "pagos": pagos,
-        "total_pagado": round(total_pagado, 2),
-        "saldo": saldo,
-        "estado_pago": estado_pago,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    if descuento_aplicado > 0:
-        update_fields["descuento_aplicado"] = descuento_total
-        update_fields["total_con_descuento"] = total_efectivo
-    
-    await db.consultas_financieras.update_one(
-        {"id": consulta_id},
-        {"$set": update_fields}
+
+    updated = await registrar_pago_consulta(
+        consulta_id,
+        pago_doc,
+        float(input.monto),
+        descuento_aplicado,
     )
-    
-    updated = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Consulta no encontrada")
     return updated
 
 
@@ -1086,48 +1034,18 @@ async def eliminar_pago(
     pago_id: str,
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Eliminar un pago de una consulta y recalcular saldos"""
-    consulta = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
-    if not consulta:
+    """Eliminar un pago de una consulta y recalcular saldos (atómico)."""
+    from atomic_ops import eliminar_pago_consulta
+
+    updated = await eliminar_pago_consulta(consulta_id, pago_id)
+    if not updated:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
-    
-    # Filtrar el pago a eliminar
-    pagos = [p for p in consulta.get('pagos', []) if p.get('id') != pago_id]
-    
-    if len(pagos) == len(consulta.get('pagos', [])):
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-    
-    # Recalcular totales
-    total = consulta.get('total', 0)
-    total_pagado = sum(p.get('monto', 0) for p in pagos)
-    saldo = total - total_pagado
-    
-    # Determinar estado de pago
-    if saldo <= 0:
-        estado_pago = "pagado"
-        saldo = 0
-    elif total_pagado > 0:
-        estado_pago = "parcial"
-    else:
-        estado_pago = "pendiente"
-    
-    # Actualizar
-    await db.consultas_financieras.update_one(
-        {"id": consulta_id},
-        {"$set": {
-            "pagos": pagos,
-            "total_pagado": total_pagado,
-            "saldo": saldo,
-            "estado_pago": estado_pago,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
+
     return {
         "message": "Pago eliminado exitosamente",
-        "total_pagado": total_pagado,
-        "saldo": saldo,
-        "estado_pago": estado_pago
+        "total_pagado": updated.get("total_pagado", 0),
+        "saldo": updated.get("saldo", 0),
+        "estado_pago": updated.get("estado_pago", "pendiente"),
     }
 
 

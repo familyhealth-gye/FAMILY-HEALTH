@@ -22,6 +22,7 @@ pwd_context = CryptContext(
     deprecated="auto"
 )
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 class Token(BaseModel):
@@ -80,6 +81,14 @@ def decode_token(token: str) -> TokenData:
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> TokenData:
     token = credentials.credentials
     return decode_token(token)
+
+
+def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+) -> Optional[TokenData]:
+    if credentials is None:
+        return None
+    return decode_token(credentials.credentials)
 
 
 def require_role(required_role: str):

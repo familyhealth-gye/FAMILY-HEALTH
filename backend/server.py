@@ -2,7 +2,6 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import uuid
@@ -13,11 +12,20 @@ import io
 import csv
 from collections import defaultdict
 from datetime import datetime, timezone
+from pymongo.errors import DuplicateKeyError
 
-# Importar módulo financiero
-from financial_routes import financial_router, unificar_paciente_por_cedula
+from db import db, ensure_indexes, close_client
 
 app = FastAPI(title="Family Health API", description="Sistema Clínico Multiespecialidad SaaS", version="2.0")
+
+
+@app.on_event("startup")
+async def startup_db():
+    await ensure_indexes()
+
+
+# Importar módulo financiero (después de db para evitar doble cliente)
+from financial_routes import financial_router, unificar_paciente_por_cedula
 
 
 def calcular_edad_desde_fecha(fecha_nacimiento: str) -> int:
@@ -86,62 +94,99 @@ from medical_history_models import (
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
-    get_current_user, require_role, Token, TokenData, UserLogin
+    get_current_user, require_role,
+    Token, TokenData, UserLogin, optional_security, decode_token,
 )
+from fastapi.security import HTTPAuthorizationCredentials
 from pdf_generator import generate_prescription_pdf, generate_certificado_pdf
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection - 100% LOCAL
-load_dotenv()
-# MongoDB Atlas Connection
-# MongoDB Atlas Connection
-MONGO_URL = os.environ.get('MONGODB_URI', os.environ.get('MONGO_URL', 'mongodb://localhost:27017'))
-DB_NAME = os.environ.get('DB_NAME', 'family_health_db')
-client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
-db = client[DB_NAME]
-print(f"✅ Conectando a MongoDB: {DB_NAME}")
-
 # ========== AUTH ENDPOINTS ==========
 
-@api_router.post("/auth/register", response_model=UserResponse)
-async def register(user_input: UserCreate):
-    # Check if user exists
+async def _persist_new_user(user_input: UserCreate, *, bootstrap: bool = False) -> UserResponse:
+    """Crea usuario en BD. En bootstrap fuerza rol Administrador."""
     existing = await db.users.find_one({"username": user_input.username})
     if existing:
         raise HTTPException(status_code=400, detail="Usuario ya existe")
-    
-    # Create user
+
     hashed_password = get_password_hash(user_input.password)
     user_dict = user_input.model_dump()
-    user_dict.pop('password')
-    user_dict['hashed_password'] = hashed_password
-    
-    # Si es Doctor y no tiene doctor_id, crear automáticamente el doctor
-    if user_dict.get('role') == 'Doctor' and not user_dict.get('doctor_id'):
+    user_dict.pop("password")
+    user_dict["hashed_password"] = hashed_password
+
+    if bootstrap:
+        user_dict["role"] = "Administrador"
+    elif user_dict.get("role") == "Doctor" and not user_dict.get("doctor_id"):
         doctor_id = str(uuid.uuid4())
         doctor_dict = {
             "id": doctor_id,
-            "nombre": user_dict['nombre_completo'],
-            "especialidad": user_dict.get('especialidad', 'General'),
+            "nombre": user_dict["nombre_completo"],
+            "especialidad": user_dict.get("especialidad", "General"),
             "subespecialidad": "",
-            "porcentaje": 50.0,  # Por defecto 50%
+            "porcentaje": 50.0,
             "telefono": "",
-            "email": user_dict['email'],
+            "email": user_dict["email"],
             "cedula": "",
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.doctors.insert_one(doctor_dict)
-        user_dict['doctor_id'] = doctor_id
-    
+        user_dict["doctor_id"] = doctor_id
+
     user_obj = User(**user_dict)
     doc = user_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
+    doc["created_at"] = doc["created_at"].isoformat()
+
     await db.users.insert_one(doc)
-    
     return UserResponse(**user_obj.model_dump())
+
+
+@api_router.get("/auth/setup-status")
+async def auth_setup_status():
+    """Indica si el sistema necesita crear el primer administrador (instalación nueva)."""
+    user_count = await db.users.count_documents({})
+    return {
+        "needs_setup": user_count == 0,
+        "user_count": user_count,
+    }
+
+
+@api_router.post("/auth/register", response_model=UserResponse)
+async def register(
+    user_input: UserCreate,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+):
+    """
+    Registro de usuarios.
+    - Sin usuarios en BD: permite crear el primer Administrador (bootstrap, sin token).
+    - Con usuarios: solo un Administrador autenticado puede registrar.
+    """
+    user_count = await db.users.count_documents({})
+
+    if user_count == 0:
+        if await db.users.find_one({}, {"_id": 1}):
+            raise HTTPException(
+                status_code=409,
+                detail="La instalación inicial ya fue completada. Inicie sesión.",
+            )
+        return await _persist_new_user(user_input, bootstrap=True)
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Debe iniciar sesión como Administrador para registrar usuarios",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    current_user = decode_token(credentials.credentials)
+    if current_user.role != "Administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo un Administrador puede registrar nuevos usuarios",
+        )
+
+    return await _persist_new_user(user_input, bootstrap=False)
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(credentials: UserLogin):
@@ -2229,7 +2274,10 @@ async def get_categories():
 
 # Doctor endpoints
 @api_router.post("/doctors", response_model=Doctor)
-async def create_doctor(input: DoctorCreate):
+async def create_doctor(
+    input: DoctorCreate,
+    current_user: TokenData = Depends(get_current_user),
+):
     doctor_obj = Doctor(**input.model_dump())
     doc = doctor_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
@@ -2237,7 +2285,7 @@ async def create_doctor(input: DoctorCreate):
     return doctor_obj
 
 @api_router.get("/doctors", response_model=List[Doctor])
-async def get_doctors():
+async def get_doctors(current_user: TokenData = Depends(get_current_user)):
     doctors = await db.doctors.find({}, {"_id": 0}).to_list(1000)
     for doctor in doctors:
         if isinstance(doctor['created_at'], str):
@@ -2247,7 +2295,11 @@ async def get_doctors():
     return doctors
 
 @api_router.put("/doctors/{doctor_id}", response_model=Doctor)
-async def update_doctor(doctor_id: str, input: DoctorUpdate):
+async def update_doctor(
+    doctor_id: str,
+    input: DoctorUpdate,
+    current_user: TokenData = Depends(get_current_user),
+):
     existing = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Doctor no encontrado")
@@ -2260,7 +2312,10 @@ async def update_doctor(doctor_id: str, input: DoctorUpdate):
     return Doctor(**updated)
 
 @api_router.delete("/doctors/{doctor_id}")
-async def delete_doctor(doctor_id: str):
+async def delete_doctor(
+    doctor_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
     result = await db.doctors.delete_one({"id": doctor_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Doctor no encontrado")
@@ -2268,7 +2323,10 @@ async def delete_doctor(doctor_id: str):
 
 # Appointment endpoints
 @api_router.post("/appointments", response_model=Appointment)
-async def create_appointment(input: AppointmentCreate):
+async def create_appointment(
+    input: AppointmentCreate,
+    current_user: TokenData = Depends(get_current_user),
+):
     """
     Crear cita con unificación automática de paciente por cédula.
     Si la cédula ya existe, actualiza datos vacíos del paciente (no sobreescribe).
@@ -2340,7 +2398,7 @@ async def create_appointment(input: AppointmentCreate):
     return appointment_obj
 
 @api_router.get("/appointments", response_model=List[Appointment])
-async def get_appointments():
+async def get_appointments(current_user: TokenData = Depends(get_current_user)):
     appointments = await db.appointments.find({}, {"_id": 0}).to_list(1000)
     for appointment in appointments:
         if isinstance(appointment['created_at'], str):
@@ -2350,7 +2408,11 @@ async def get_appointments():
     return appointments
 
 @api_router.put("/appointments/{appointment_id}", response_model=Appointment)
-async def update_appointment(appointment_id: str, input: AppointmentUpdate):
+async def update_appointment(
+    appointment_id: str,
+    input: AppointmentUpdate,
+    current_user: TokenData = Depends(get_current_user),
+):
     existing = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
@@ -2373,7 +2435,10 @@ async def update_appointment(appointment_id: str, input: AppointmentUpdate):
     return Appointment(**updated)
 
 @api_router.delete("/appointments/{appointment_id}")
-async def delete_appointment(appointment_id: str):
+async def delete_appointment(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
     result = await db.appointments.delete_one({"id": appointment_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
@@ -2450,11 +2515,17 @@ async def create_invoice(
     doc = invoice.model_dump()
     doc["created_at"] = doc["created_at"].isoformat()
     doc["detalles"] = detalles_final
-    await db.invoices.insert_one(doc)
+    try:
+        await db.invoices.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El número de factura {numero} ya existe",
+        )
     return invoice
 
 @api_router.get("/invoices", response_model=List[Invoice])
-async def get_invoices():
+async def get_invoices(current_user: TokenData = Depends(get_current_user)):
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
     for invoice in invoices:
         if isinstance(invoice['created_at'], str):
@@ -2462,7 +2533,7 @@ async def get_invoices():
     return invoices
 
 @api_router.get("/invoices/monthly-totals")
-async def get_monthly_totals():
+async def get_monthly_totals(current_user: TokenData = Depends(get_current_user)):
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
     monthly_totals = defaultdict(float)
     for invoice in invoices:
@@ -2471,7 +2542,7 @@ async def get_monthly_totals():
     return {"monthly_totals": dict(monthly_totals)}
 
 @api_router.get("/invoices/export")
-async def export_invoices():
+async def export_invoices(current_user: TokenData = Depends(get_current_user)):
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
     output = io.StringIO()
     writer = csv.writer(output)
@@ -2485,7 +2556,11 @@ async def export_invoices():
                            headers={"Content-Disposition": "attachment; filename=facturas_family_health.csv"})
 
 @api_router.put("/invoices/{invoice_id}", response_model=Invoice)
-async def update_invoice(invoice_id: str, input: InvoiceUpdate):
+async def update_invoice(
+    invoice_id: str,
+    input: InvoiceUpdate,
+    current_user: TokenData = Depends(get_current_user),
+):
     existing = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
@@ -2503,7 +2578,10 @@ async def update_invoice(invoice_id: str, input: InvoiceUpdate):
     return Invoice(**updated)
 
 @api_router.delete("/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: str):
+async def delete_invoice(
+    invoice_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
     result = await db.invoices.delete_one({"id": invoice_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
@@ -2557,29 +2635,25 @@ async def delete_inventory_item(item_id: str):
     return {"message": "Item eliminado exitosamente"}
 
 @api_router.post("/inventory/movements", response_model=InventoryMovement)
-async def create_inventory_movement(input: InventoryMovementCreate):
-    item = await db.inventory.find_one({"id": input.item_id}, {"_id": 0})
-    if not item:
+async def create_inventory_movement(
+    input: InventoryMovementCreate,
+    current_user: TokenData = Depends(get_current_user),
+):
+    from atomic_ops import apply_inventory_movement
+
+    item_before = await db.inventory.find_one({"id": input.item_id}, {"_id": 0, "nombre": 1})
+    if not item_before:
         raise HTTPException(status_code=404, detail="Item no encontrado")
-    
-    if input.tipo == "entrada":
-        new_quantity = item['cantidad'] + input.cantidad
-    elif input.tipo == "salida":
-        if item['cantidad'] < input.cantidad:
-            raise HTTPException(status_code=400, detail="Cantidad insuficiente en inventario")
-        new_quantity = item['cantidad'] - input.cantidad
-    else:
-        raise HTTPException(status_code=400, detail="Tipo inválido")
-    
-    await db.inventory.update_one({"id": input.item_id}, {"$set": {"cantidad": new_quantity}})
-    
+
+    await apply_inventory_movement(input.item_id, input.cantidad, input.tipo)
+
     movement_dict = input.model_dump()
-    movement_dict['item_nombre'] = item['nombre']
+    movement_dict["item_nombre"] = item_before["nombre"]
     movement_obj = InventoryMovement(**movement_dict)
-    
+
     doc = movement_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
+    doc["created_at"] = doc["created_at"].isoformat()
+
     await db.inventory_movements.insert_one(doc)
     return movement_obj
 
@@ -4334,13 +4408,9 @@ async def historial_pagos_doctores(doctor_id: Optional[str] = None, current_user
 # ========== FACTURACIÓN — NUEVOS ENDPOINTS ==========
 
 async def _siguiente_numero_factura(establecimiento="001", punto_emision="001"):
-    last = await db.invoices.find_one({"numero_factura": {"$regex": f"^{establecimiento}-{punto_emision}-"}}, {"_id": 0, "numero_factura": 1}, sort=[("numero_factura", -1)])
-    if last:
-        try: seq = int(last["numero_factura"].split("-")[-1]) + 1
-        except: seq = 1
-    else:
-        seq = 1
-    return f"{establecimiento}-{punto_emision}-{str(seq).zfill(9)}"
+    from atomic_ops import siguiente_numero_factura
+
+    return await siguiente_numero_factura(establecimiento, punto_emision)
 
 
 def _calcular_totales_factura(detalles, iva_pct=0.0):
@@ -4386,7 +4456,7 @@ async def get_invoice_pdf(invoice_id: str, current_user: TokenData = Depends(get
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    await close_client()
 
 # Registrar router financiero
 app.include_router(financial_router, prefix="/api")
