@@ -287,19 +287,36 @@ function App() {
     setLoading(false);
   };
 
+  // PARCHE 4 — handleEditAppointment preserva todos los campos del paciente
   const handleEditAppointment = (appointment) => {
     setEditingAppointment(appointment);
     setAppointmentForm({
-      nombre_completo: appointment.nombre_completo,
-      cedula: appointment.cedula,
+      tipo_documento: appointment.tipo_documento || "cedula",
+      nombre_completo: appointment.nombre_completo || "",
+      cedula: appointment.cedula || "",
       fecha_nacimiento: appointment.fecha_nacimiento || "",
-      telefono: appointment.telefono,
-      especialidad: appointment.especialidad,
-      doctor_id: appointment.doctor_id,
+      sexo: appointment.sexo || "",
+      email: appointment.email || "",
+      telefono: appointment.telefono || "",
+      whatsapp: appointment.whatsapp || "",
+      tiene_whatsapp: appointment.tiene_whatsapp ?? true,
+      es_menor: appointment.es_menor || false,
+      representante_nombre: appointment.representante_nombre || "",
+      representante_cedula: appointment.representante_cedula || "",
+      representante_telefono: appointment.representante_telefono || "",
+      representante_whatsapp: appointment.representante_whatsapp || "",
+      representante_email: appointment.representante_email || "",
+      representante_parentesco: appointment.representante_parentesco || "",
+      factura_nombre: appointment.factura_nombre || "",
+      factura_cedula_ruc: appointment.factura_cedula_ruc || "",
+      factura_email: appointment.factura_email || "",
+      factura_direccion: appointment.factura_direccion || "",
+      especialidad: appointment.especialidad || "",
+      doctor_id: appointment.doctor_id || "",
       fecha: appointment.fecha ? new Date(appointment.fecha) : null,
-      hora: appointment.hora,
-      tipo_pago: appointment.tipo_pago,
-      observaciones: appointment.observaciones
+      hora: appointment.hora || "",
+      tipo_pago: appointment.tipo_pago || "none",
+      observaciones: appointment.observaciones || ""
     });
     setAppointmentDialog(true);
   };
@@ -318,10 +335,26 @@ function App() {
 
   const resetAppointmentForm = () => {
     setAppointmentForm({
+      tipo_documento: "cedula",
       nombre_completo: "",
       cedula: "",
       fecha_nacimiento: "",
+      sexo: "",
+      email: "",
       telefono: "",
+      whatsapp: "",
+      tiene_whatsapp: true,
+      es_menor: false,
+      representante_nombre: "",
+      representante_cedula: "",
+      representante_telefono: "",
+      representante_whatsapp: "",
+      representante_email: "",
+      representante_parentesco: "",
+      factura_nombre: "",
+      factura_cedula_ruc: "",
+      factura_email: "",
+      factura_direccion: "",
       especialidad: "",
       doctor_id: "",
       fecha: null,
@@ -332,53 +365,81 @@ function App() {
     setEditingAppointment(null);
   };
 
-  // Buscar paciente por cédula y autocompletar datos
+  // PARCHE 3 — Autocomplete desde /financial/pacientes con token y fallback a citas
   const handleCedulaChange = async (cedula) => {
-    // Actualizar cédula
-    setAppointmentForm({...appointmentForm, cedula});
+    setAppointmentForm(prev => ({ ...prev, cedula }));
 
-    // Si la cédula tiene al menos 10 dígitos, buscar paciente
-    if (cedula.length >= 10) {
-      setSearchingPatient(true);
+    if (cedula.length < 10) return;
+
+    setSearchingPatient(true);
+    try {
+      const authHeaders = { Authorization: `Bearer ${token}` };
+      let paciente = null;
+
+      // 1. Fuente primaria: módulo de pacientes (datos más completos)
       try {
-        // Buscar en todas las citas anteriores
-        const response = await axios.get(`${API}/appointments`);
-        const allAppointments = response.data;
-        
-        // Encontrar la última cita de este paciente
-        const patientAppointment = allAppointments
-          .filter(apt => apt.cedula === cedula)
-          .sort((a, b) => new Date(b.created_at || b.fecha) - new Date(a.created_at || a.fecha))[0];
-        
-        if (patientAppointment) {
-          // Autocompletar datos del paciente
-          setAppointmentForm({
-            ...appointmentForm,
-            cedula,
-            tipo_documento: patientAppointment.tipo_documento || "cedula",
-            nombre_completo: patientAppointment.nombre_completo,
-            fecha_nacimiento: patientAppointment.fecha_nacimiento || "",
-            edad: patientAppointment.edad ? patientAppointment.edad.toString() : "",
-            sexo: patientAppointment.sexo || "",
-            telefono: patientAppointment.telefono || "",
-            whatsapp: patientAppointment.whatsapp || "",
-            email: patientAppointment.email || "",
-            es_menor: patientAppointment.es_menor || false,
-            representante_nombre: patientAppointment.representante_nombre || "",
-            representante_cedula: patientAppointment.representante_cedula || "",
-            representante_telefono: patientAppointment.representante_telefono || "",
-            representante_whatsapp: patientAppointment.representante_whatsapp || "",
-            representante_email: patientAppointment.representante_email || "",
-            representante_parentesco: patientAppointment.representante_parentesco || "",
-            // No autocompletar especialidad ni doctor (puede querer otra especialidad)
-          });
-          toast.success(`✓ Paciente: ${patientAppointment.nombre_completo}`, {
-            duration: 2000
-          });
-        }
-      } catch (error) {
-        console.error("Error buscando paciente:", error);
+        const resPac = await axios.get(
+          `${API}/financial/pacientes?search=${cedula}`,
+          { headers: authHeaders }
+        );
+        paciente = (resPac.data || []).find(p => p.cedula === cedula) || null;
+      } catch { /* continuar al fallback */ }
+
+      // 2. Fallback: historial de citas
+      if (!paciente) {
+        try {
+          const resApts = await axios.get(`${API}/appointments`, { headers: authHeaders });
+          const match = (resApts.data || [])
+            .filter(apt => apt.cedula === cedula)
+            .sort((a, b) => new Date(b.created_at || b.fecha) - new Date(a.created_at || a.fecha))[0];
+          if (match) {
+            paciente = {
+              nombre: match.nombre_completo,
+              cedula: match.cedula,
+              fecha_nacimiento: match.fecha_nacimiento || "",
+              telefono: match.telefono || "",
+              whatsapp: match.whatsapp || "",
+              email: match.email || "",
+              sexo: match.sexo || "",
+              es_menor: match.es_menor || false,
+              representante_nombre: match.representante_nombre || "",
+              representante_cedula: match.representante_cedula || "",
+              representante_telefono: match.representante_telefono || "",
+              representante_whatsapp: match.representante_whatsapp || "",
+              representante_email: match.representante_email || "",
+              representante_parentesco: match.representante_parentesco || "",
+            };
+          }
+        } catch { /* sin resultados */ }
       }
+
+      if (paciente) {
+        setAppointmentForm(prev => ({
+          ...prev,
+          cedula,
+          nombre_completo: paciente.nombre || paciente.nombre_completo || prev.nombre_completo,
+          fecha_nacimiento: paciente.fecha_nacimiento || prev.fecha_nacimiento,
+          sexo: paciente.sexo || prev.sexo,
+          telefono: paciente.telefono || prev.telefono,
+          whatsapp: paciente.whatsapp || prev.whatsapp,
+          email: paciente.email || prev.email,
+          es_menor: paciente.es_menor ?? prev.es_menor,
+          representante_nombre: paciente.representante_nombre || prev.representante_nombre,
+          representante_cedula: paciente.representante_cedula || prev.representante_cedula,
+          representante_telefono: paciente.representante_telefono || prev.representante_telefono,
+          representante_whatsapp: paciente.representante_whatsapp || prev.representante_whatsapp,
+          representante_email: paciente.representante_email || prev.representante_email,
+          representante_parentesco: paciente.representante_parentesco || prev.representante_parentesco,
+          // especialidad y doctor_id se preservan intactos
+        }));
+        toast.success(
+          `✓ Paciente: ${paciente.nombre || paciente.nombre_completo}`,
+          { duration: 2000 }
+        );
+      }
+    } catch (error) {
+      console.error("Error buscando paciente:", error);
+    } finally {
       setSearchingPatient(false);
     }
   };
@@ -650,7 +711,18 @@ function App() {
                 <h2 className="section-title">Gestión de Citas</h2>
                 <p className="section-subtitle">Agenda y administra las citas de pacientes</p>
               </div>
-              <Dialog open={appointmentDialog} onOpenChange={(open) => { setAppointmentDialog(open); if (!open) resetAppointmentForm(); }}>
+              {/* PARCHE 5 — Pre-asignar doctor_id y especialidad al Doctor al abrir nueva cita */}
+              <Dialog open={appointmentDialog} onOpenChange={(open) => {
+                if (open && !editingAppointment && user?.role === "Doctor" && user?.doctor_id) {
+                  setAppointmentForm(prev => ({
+                    ...prev,
+                    doctor_id: user.doctor_id,
+                    especialidad: user.especialidad || prev.especialidad
+                  }));
+                }
+                setAppointmentDialog(open);
+                if (!open) resetAppointmentForm();
+              }}>
                 <DialogTrigger asChild>
                   <Button className="add-button" data-testid="add-appointment-button">
                     <UserPlus className="button-icon" />
@@ -662,9 +734,9 @@ function App() {
                     <DialogTitle>{editingAppointment ? "Editar Cita" : "Agendar Nueva Cita"}</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleAppointmentSubmit}>
-                    {/* Role-based form: Doctor sees minimal, Counter sees all */}
+                    {/* PARCHE 2 — Banner informativo con aviso de solo lectura para Doctor en modo edición */}
                     {user?.role !== "Administrador" && user?.role !== "Recepcion" && editingAppointment && (
-                      <div style={{ background:"#e0f7fa", borderRadius:"8px", padding:"10px 14px", marginBottom:"12px", fontSize:"13px" }}>
+                      <div style={{ background:"#e0f7fa", border:"1.5px solid #0891b2", borderRadius:"8px", padding:"10px 14px", marginBottom:"12px", fontSize:"13px" }}>
                         <p style={{ margin:"0 0 4px", fontWeight:"700", color:"#005f73" }}>
                           📋 {appointmentForm.nombre_completo}
                         </p>
@@ -672,11 +744,14 @@ function App() {
                           Cédula: {appointmentForm.cedula} · {appointmentForm.telefono}
                           {appointmentForm.fecha_nacimiento && ` · Nac: ${appointmentForm.fecha_nacimiento}`}
                         </p>
+                        <p style={{ margin:"6px 0 0", color:"#0369a1", fontSize:"12px", fontWeight:"600" }}>
+                          ℹ️ Los datos del paciente no pueden modificarse desde aquí. Use el módulo de Pacientes si necesita corregirlos.
+                        </p>
                       </div>
                     )}
                     <div className="form-grid">
-                      {/* Patient fields — hidden for doctor role on returning patients */}
-                      {(user?.role === "Administrador" || user?.role === "Recepcion" || !appointmentForm.cedula) && (
+                      {/* PARCHE 1 — Campos demográficos visibles para Doctor en cita nueva */}
+                      {(user?.role === "Administrador" || user?.role === "Recepcion" || !editingAppointment || !appointmentForm.cedula) && (
                         <>
                           <div className="form-field">
                             <Label>Nombre Completo</Label>
