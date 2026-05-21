@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 # Configuration
-BACKEND_URL = "https://patient-payments-2.preview.emergentagent.com/api"
+BACKEND_URL = "http://localhost:10000/api"
 TEST_USER = {
     "username": "admin_test",
     "password": "admin123",
