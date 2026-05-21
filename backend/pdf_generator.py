@@ -24,31 +24,29 @@ def _draw_header_footer(canvas_obj, doc):
     canvas_obj.saveState()
     w, h = doc.pagesize
 
-    # Barra superior — azul oscuro (distinto al logo turquesa)
-    canvas_obj.setFillColor(COLOR_AZUL)
-    canvas_obj.rect(0, h - 1.1*inch, w, 1.1*inch, fill=1, stroke=0)
+# Barra superior — degradado simulado con dos rectángulos
+    canvas_obj.setFillColor(colors.HexColor('#003d52'))
+    canvas_obj.rect(0, h - 0.85*inch, w, 0.85*inch, fill=1, stroke=0)
+    # Franja inferior del header — celeste médico suave
+    canvas_obj.setFillColor(colors.HexColor('#0891b2'))
+    canvas_obj.rect(0, h - 0.88*inch, w, 0.06*inch, fill=1, stroke=0)
 
     # Logo
     if os.path.exists(LOGO_PATH):
         try:
-            canvas_obj.drawImage(LOGO_PATH, 0.2*inch, h - 1.0*inch,
-                                  width=0.85*inch, height=0.85*inch,
+            canvas_obj.drawImage(LOGO_PATH, 0.18*inch, h - 0.80*inch,
+                                  width=0.68*inch, height=0.68*inch,
                                   preserveAspectRatio=True, mask='auto')
         except Exception:
             pass
 
-    # Texto encabezado
+    # Texto encabezado — compacto en una línea y media
     canvas_obj.setFillColor(colors.white)
-    canvas_obj.setFont("Helvetica-Bold", 8.5)
-    canvas_obj.drawString(1.2*inch, h - 0.42*inch, "CENTRO DE ESPECIALIDADES FAMILY HEALTH")
-    canvas_obj.setFont("Helvetica", 7.5)
-    canvas_obj.drawString(1.2*inch, h - 0.58*inch, "CONTACTOS: 096-291-2170  /  04-500-7012")
-    canvas_obj.drawString(1.2*inch, h - 0.72*inch, "DIRECCIÓN: MUCHO LOTE 2 MZ 2833 VILLA 15  |  FAMILYHEALTH.GYE")
-
-    # Línea verde decorativa
-    canvas_obj.setFillColor(COLOR_VERDE)
-    canvas_obj.rect(0, h - 1.15*inch, w, 0.07*inch, fill=1, stroke=0)
-
+    canvas_obj.setFont("Helvetica-Bold", 8)
+    canvas_obj.drawString(1.0*inch, h - 0.32*inch, "CENTRO DE ESPECIALIDADES FAMILY HEALTH")
+    canvas_obj.setFont("Helvetica", 6.8)
+    canvas_obj.drawString(1.0*inch, h - 0.48*inch, "CONTACTOS: 096-291-2170  /  04-500-7012   |   MUCHO LOTE 2 MZ 2833 VILLA 15  |  FAMILYHEALTH.GYE")
+   
     # Marca de agua logo centro (muy tenue)
     if os.path.exists(LOGO_PATH):
         try:
@@ -99,8 +97,8 @@ def generate_prescription_pdf(prescription_data: dict) -> BytesIO:
         _draw_header_footer(canvas_obj, doc)
 
     doc = SimpleDocTemplate(buffer, pagesize=MEDIA_HOJA,
-                            rightMargin=0.45*inch, leftMargin=0.45*inch,
-                            topMargin=1.25*inch, bottomMargin=0.6*inch)
+                            rightMargin=0.4*inch, leftMargin=0.4*inch,
+                            topMargin=0.98*inch, bottomMargin=0.52*inch)
     elems = []
 
     elems.append(Paragraph("RECETA MÉDICA", s['titulo']))
@@ -152,10 +150,10 @@ def generate_prescription_pdf(prescription_data: dict) -> BytesIO:
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('BOX', (0,0), (-1,-1), 0.4, COLOR_TURQUESA),
         ('LINEBEFORE', (1,0), (1,0), 0.8, COLOR_TURQUESA),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
-        ('LEFTPADDING', (0,0), (-1,-1), 6),
-        ('RIGHTPADDING', (0,0), (-1,-1), 6),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 40),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 5),
+        ('RIGHTPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
     ]))
     elems.append(t_dual)
 
