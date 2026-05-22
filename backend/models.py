@@ -613,6 +613,12 @@ class SuperficieDental(BaseModel):
     diagnostico: str = "sano"  # sano, caries, restauracion, etc.
     color: str = ""  # Color para visualización (se calcula en frontend)
     notas: str = ""
+    aprobado_paciente: bool = False
+    proforma_id: Optional[str] = None
+    sesion_appointment_id: Optional[str] = None
+    ejecutado_en_sesion: Optional[str] = None
+    precio_catalogo_id: Optional[str] = None
+    estado_pipeline: str = "creado"
 
 
 class DienteFDI(BaseModel):
@@ -691,6 +697,11 @@ class OdontogramaClinico(BaseModel):
     # Auditoría
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    proformas_generadas: List[str] = []
+    sesiones_programadas: List[str] = []
+    aprobado_total: bool = False
+    fecha_aprobacion: Optional[str] = None
+    aprobado_por: Optional[str] = None
 
 
 class OdontogramaCreate(BaseModel):
@@ -786,6 +797,13 @@ class ProcedimientoDental(BaseModel):
     fecha_programada: str = ""
     fecha_realizado: str = ""
     notas: str = ""
+    aprobado_paciente: bool = False
+    proforma_id: Optional[str] = None
+    sesion_appointment_id: Optional[str] = None
+    ejecutado_en_sesion: Optional[str] = None
+    precio_catalogo_id: Optional[str] = None
+    estado_pipeline: str = "creado"
+
 
 
 class FaseTratamiento(BaseModel):
@@ -837,6 +855,12 @@ class PlanTratamiento(BaseModel):
     fecha_actualizacion: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    proformas_generadas: List[str] = []
+    sesiones_programadas: List[str] = []
+    aprobado_total: bool = False
+    fecha_aprobacion: Optional[str] = None
+    aprobado_por: Optional[str] = None
+
 
 
 class PlanTratamientoCreate(BaseModel):
@@ -858,6 +882,13 @@ class ProcedimientoCreate(BaseModel):
     precio: float = 0.0
     superficies_afectadas: List[str] = []
     notas: str = ""
+    aprobado_paciente: bool = False
+    proforma_id: Optional[str] = None
+    sesion_appointment_id: Optional[str] = None
+    ejecutado_en_sesion: Optional[str] = None
+    precio_catalogo_id: Optional[str] = None
+    estado_pipeline: str = "creado"
+
 
 
 class ProcedimientoUpdate(BaseModel):
