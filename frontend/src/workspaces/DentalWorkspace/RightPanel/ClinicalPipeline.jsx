@@ -1,5 +1,6 @@
 import React from 'react';
 import PipelineItem from './PipelineItem';
+import { Layers } from 'lucide-react';
 
 const ClinicalPipeline = ({ plan, onRefresh }) => {
   if (!plan) {
@@ -9,7 +10,8 @@ const ClinicalPipeline = ({ plan, onRefresh }) => {
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Clinical Pipeline</h3>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <p className="text-sm text-slate-400">No hay plan de tratamiento activo para este paciente.</p>
+          <Layers className="w-8 h-8 text-slate-200 mb-2" />
+          <p className="text-sm text-slate-400 font-medium">No hay plan de tratamiento activo</p>
         </div>
       </div>
     );
@@ -26,23 +28,26 @@ const ClinicalPipeline = ({ plan, onRefresh }) => {
   });
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-white shadow-inner">
       <div className="p-4 border-b bg-slate-50 shrink-0 flex justify-between items-center">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Clinical Pipeline</h3>
-        <span className="text-[10px] bg-medical-100 text-medical-700 px-2 py-0.5 rounded-full font-bold">
-          {procedimientos.length} PROC
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-medical-600" />
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Clinical Pipeline</h3>
+        </div>
+        <span className="text-[10px] bg-medical-600 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">
+          {procedimientos.length}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-200">
         {Object.keys(fases).sort().map(faseNum => (
           <div key={faseNum} className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-medical-600 bg-medical-50 px-2 py-0.5 rounded border border-medical-100">
-                FASE {faseNum}
+            <div className="flex items-center gap-2 sticky top-0 bg-white/80 backdrop-blur-sm py-1 z-10">
+              <span className="text-[10px] font-black text-medical-700 bg-medical-50 px-2 py-0.5 rounded border border-medical-100 shadow-sm uppercase">
+                Fase {faseNum}
               </span>
               <div className="h-[1px] flex-1 bg-slate-100"></div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-3 pl-2 border-l-2 border-slate-50 ml-2">
               {fases[faseNum].map(proc => (
                 <PipelineItem
                   key={proc.id}
@@ -56,8 +61,8 @@ const ClinicalPipeline = ({ plan, onRefresh }) => {
         ))}
 
         {procedimientos.length === 0 && (
-          <div className="text-sm text-slate-400 text-center py-10">
-            No hay procedimientos registrados en este plan.
+          <div className="text-sm text-slate-300 text-center py-20 italic">
+            Sin procedimientos registrados.
           </div>
         )}
       </div>

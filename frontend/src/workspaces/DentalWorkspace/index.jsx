@@ -19,6 +19,24 @@ const DentalWorkspace = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('center');
 
+  // Load draft state from localStorage on mount
+  useEffect(() => {
+    const draft = localStorage.getItem(`dental_v2_draft_${appointmentId}`);
+    if (draft) {
+      try {
+        const parsed = JSON.parse(draft);
+        if (parsed.selectedTooth) setSelectedTooth(parsed.selectedTooth);
+        if (parsed.activeTab) setActiveTab(parsed.activeTab);
+      } catch (e) {}
+    }
+  }, [appointmentId]);
+
+  // Persist draft state to localStorage
+  useEffect(() => {
+    const draft = { selectedTooth, activeTab };
+    localStorage.setItem(`dental_v2_draft_${appointmentId}`, JSON.stringify(draft));
+  }, [selectedTooth, activeTab, appointmentId]);
+
   const fetchPlan = useCallback(async (cedula) => {
     if (!cedula) return;
     try {
@@ -64,28 +82,35 @@ const DentalWorkspace = () => {
         ...procedureData,
         estado_pipeline: 'creado'
       });
-      toast.success("Procedimiento agregado al pipeline");
+      toast.success("Agregado al pipeline");
       fetchPlan(appointment.paciente_cedula);
     } catch (error) {
       console.error("Error adding procedure:", error);
-      toast.error("Error al agregar procedimiento");
+      toast.error("Error al agregar");
     }
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-white">Cargando Workspace...</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center bg-white font-sans">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-8 h-8 border-4 border-medical-200 border-t-medical-600 rounded-full animate-spin"></div>
+      <p className="text-slate-500 font-bold text-xs uppercase tracking-widest">Cargando Workspace V2</p>
+    </div>
+  </div>;
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden text-slate-900 font-sans">
       <DentalHeader appointment={appointment} />
 
       <main className="flex flex-1 overflow-hidden relative">
-        <aside className={`${activeTab === 'left' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[260px] border-r bg-white flex-col shrink-0 z-20 absolute lg:relative h-full`}>
+        {/* Left Panel */}
+        <aside className={`${activeTab === 'left' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[260px] border-r bg-white flex-col shrink-0 z-20 absolute lg:relative h-full shadow-xl lg:shadow-none`}>
           <SessionForm appointment={appointment} />
           <PreviousSessions patientId={appointment?.paciente_id} />
         </aside>
 
-        <section className={`${activeTab === 'center' ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col overflow-hidden bg-slate-50`}>
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col items-center">
+        {/* Center Panel */}
+        <section className={`${activeTab === 'center' ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col overflow-hidden bg-slate-50 relative z-10`}>
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col items-center scrollbar-hide">
             <OdontogramaV2
               selectedTooth={selectedTooth}
               onSelectTooth={setSelectedTooth}
@@ -98,28 +123,30 @@ const DentalWorkspace = () => {
               />
             )}
           </div>
-          <div className="p-4 border-t bg-white shrink-0">
+          <div className="p-4 border-t bg-white shrink-0 shadow-lg">
             <QuickActions onAddProcedure={(proc) => handleAddProcedure(proc)} />
           </div>
         </section>
 
-        <aside className={`${activeTab === 'right' ? 'flex' : 'hidden'} md:flex w-full md:w-[340px] border-l bg-white flex-col shrink-0 z-20 absolute md:relative right-0 h-full`}>
+        {/* Right Panel */}
+        <aside className={`${activeTab === 'right' ? 'flex' : 'hidden'} md:flex w-full md:w-[340px] border-l bg-white flex-col shrink-0 z-20 absolute md:relative right-0 h-full shadow-xl md:shadow-none`}>
           <ClinicalPipeline plan={plan} onRefresh={() => fetchPlan(appointment.paciente_cedula)} />
         </aside>
       </main>
 
-      <div className="md:hidden h-16 border-t bg-white flex items-center justify-around shrink-0 pb-safe">
-        <button onClick={() => setActiveTab('left')} className={`flex flex-col items-center gap-1 ${activeTab === 'left' ? 'text-medical-600' : 'text-slate-400'}`}>
+      {/* Navigation */}
+      <div className="md:hidden h-16 border-t bg-white flex items-center justify-around shrink-0 pb-safe z-30">
+        <button onClick={() => setActiveTab('left')} className={`flex flex-col items-center gap-1 w-full h-full justify-center transition-colors ${activeTab === 'left' ? 'text-medical-600 bg-medical-50/50' : 'text-slate-400'}`}>
           <History className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Historia</span>
+          <span className="text-[10px] font-bold uppercase tracking-tighter">Historia</span>
         </button>
-        <button onClick={() => setActiveTab('center')} className={`flex flex-col items-center gap-1 ${activeTab === 'center' ? 'text-medical-600' : 'text-slate-400'}`}>
+        <button onClick={() => setActiveTab('center')} className={`flex flex-col items-center gap-1 w-full h-full justify-center transition-colors ${activeTab === 'center' ? 'text-medical-600 bg-medical-50/50' : 'text-slate-400'}`}>
           <Smile className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Odontograma</span>
+          <span className="text-[10px] font-bold uppercase tracking-tighter">Odonto</span>
         </button>
-        <button onClick={() => setActiveTab('right')} className={`flex flex-col items-center gap-1 ${activeTab === 'right' ? 'text-medical-600' : 'text-slate-400'}`}>
+        <button onClick={() => setActiveTab('right')} className={`flex flex-col items-center gap-1 w-full h-full justify-center transition-colors ${activeTab === 'right' ? 'text-medical-600 bg-medical-50/50' : 'text-slate-400'}`}>
           <ClipboardList className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Pipeline</span>
+          <span className="text-[10px] font-bold uppercase tracking-tighter">Pipeline</span>
         </button>
       </div>
     </div>
