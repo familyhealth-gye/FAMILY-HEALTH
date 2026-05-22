@@ -1,3 +1,4 @@
+import { ENABLE_DENTAL_V2 } from "@/lib/constants";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -535,6 +536,17 @@ export const AppointmentsWithAttention = ({
                       <Play className="button-icon" size={14} />
                       {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
                     </Button>
+                  {ENABLE_DENTAL_V2 && appointment.especialidad === "Odontología" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.location.href = `/odontologia-v2/${appointment.id}`}
+                      className="ml-2 border-purple-200 text-purple-700 hover:bg-purple-50"
+                    >
+                      Workspace V2
+                    </Button>
+                  )}
+
                   )}
                   {appointment.estado === "Pendiente de Pago" && user?.role === "Doctor" && (
                     <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={`resume-attention-${appointment.id}`} title="Reanudar para completar historia clínica">
