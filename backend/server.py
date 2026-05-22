@@ -40,6 +40,7 @@ from routers.ia import router as ia_router
 from routers.odontology import router as odontology_router
 from routers.medical_history import router as medical_history_router
 from routers.billing import router as billing_router
+from routers.clinical import router as clinical_router
 
 # CORS configuration
 origins = ["*"]
@@ -117,6 +118,7 @@ app.include_router(ia_router, prefix="/api")
 app.include_router(odontology_router, prefix="/api")
 app.include_router(medical_history_router, prefix="/api")
 app.include_router(billing_router, prefix="/api")
+app.include_router(clinical_router, prefix="/api")
 app.include_router(financial_router, prefix="/api")
 
 

@@ -1,20 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import "@/App.css";
-import axios from "axios";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
-import { CalendarIcon, Edit, UserPlus, Stethoscope, Users, FileText, Package, DollarSign, Download, ClipboardList, LogOut, UserCog, Receipt, CreditCard, ListChecks, Smile } from "lucide-react";
+import { Stethoscope, Users, FileText, Package, DollarSign, ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile, UserPlus, Edit } from "lucide-react";
+
 import { InvoicesTab } from "@/components/InvoicesTab";
+import { AbonosTab } from "@/components/AbonosTab";
 import { InventoryTab } from "@/components/InventoryTab";
 import { PaymentsTab } from "@/components/PaymentsTab";
 import { UsersTab } from "@/components/UsersTab";
@@ -30,14 +26,15 @@ import { ProcedimientoRapidoTab } from "@/components/ProcedimientoRapidoTab";
 import { LaboratorioTab } from "@/components/LaboratorioTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
-import { formatearEdad, validarFechaNacimiento } from "@/lib/edadUtils";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { useAuth } from "@/hooks/useAuth";
+import { MainLayout } from "@/components/layout/MainLayout";
+import apiClient from "@/lib/axios";
+import { getAllAppData } from "@/services/dataService";
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const { user, token, isAuthenticated, login, loading: authLoading } = useAuth();
+
   const [users, setUsers] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -50,1173 +47,359 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [monthlyTotals, setMonthlyTotals] = useState({});
-  
-  // Log para debugging de especialidades
-  useEffect(() => {
-    console.log("🔍 SPECIALTIES STATE:", specialties);
-    console.log("🔍 SPECIALTIES LENGTH:", specialties.length);
-  }, [specialties]);
-  
-  // Doctor form
-  const [doctorDialog, setDoctorDialog] = useState(false);
-  const [editingDoctor, setEditingDoctor] = useState(null);
-  const [doctorForm, setDoctorForm] = useState({ nombre: "", especialidad: "", porcentaje: 50 });
-  
-  // Appointment form
-  const [appointmentDialog, setAppointmentDialog] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState(null);
-  const [searchingPatient, setSearchingPatient] = useState(false);
-  const [appointmentForm, setAppointmentForm] = useState({
-    tipo_documento: "cedula",
-    nombre_completo: "",
-    cedula: "",
-    fecha_nacimiento: "",
-    sexo: "",
-    email: "",
-    telefono: "",
-    whatsapp: "",
-    tiene_whatsapp: true,
-    es_menor: false,
-    representante_nombre: "",
-    representante_cedula: "",
-    representante_telefono: "",
-    representante_whatsapp: "",
-    representante_email: "",
-    representante_parentesco: "",
-    factura_nombre: "",
-    factura_cedula_ruc: "",
-    factura_email: "",
-    factura_direccion: "",
-    especialidad: "",
-    doctor_id: "",
-    fecha: null,
-    hora: "",
-    tipo_pago: "none",
-    observaciones: ""
-  });
-  
-  // Search
-  const [searchDoctor, setSearchDoctor] = useState("");
-  const [searchAppointment, setSearchAppointment] = useState("");
-  const [searchInvoice, setSearchInvoice] = useState("");
-  const [searchInventory, setSearchInventory] = useState("");
 
-  useEffect(() => {
-    // Check if user is logged in
-    const savedToken = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
+  const fetchData = useCallback(async () => {
+    if (!isAuthenticated) return;
     
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    }
-  }, []);
-
-  useEffect(() => {
-    if (token) {
-      fetchData();
-    }
-  }, [token]);
-  
-  useEffect(() => {
-  // Health check del backend (solo para verificar conexión)
-  fetch(`${BACKEND_URL}/healthz`)
-    .then(() => console.log("Backend activo"))
-    .catch(() => console.log("Backend no disponible - verificar conexión"));
-}, []);
-
-  const fetchData = async () => {
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    
+    setLoading(true);
     try {
-      const promises = [
-        axios.get(`${API}/doctors`, { headers }),
-        axios.get(`${API}/appointments`, { headers }),
-        axios.get(`${API}/especialidades`, { headers }),  // CORREGIDO: /especialidades en lugar de /specialties
-        axios.get(`${API}/categories`, { headers }),
-        axios.get(`${API}/invoices`, { headers }),
-        axios.get(`${API}/inventory`, { headers }),
-        axios.get(`${API}/doctor-payments`, { headers }),
-        axios.get(`${API}/invoices/monthly-totals`, { headers }),
-        axios.get(`${API}/medical-history`, { headers }),
-        axios.get(`${API}/prescriptions`, { headers })
-      ];
-
-      // Only fetch users if admin
-      if (user && user.role === "Administrador") {
-        promises.push(axios.get(`${API}/users`, { headers }));
-      }
-
-      const results = await Promise.all(promises);
-      
-      console.log("🔍 ESPECIALIDADES RECIBIDAS:", results[2].data);
+      const results = await getAllAppData(user?.role === "Administrador");
       
       setDoctors(results[0].data);
       setAppointments(results[1].data);
-      // Las especialidades vienen como array de objetos con campo 'nombre'
+
       const especialidadesArray = Array.isArray(results[2].data) 
         ? results[2].data.map(e => e.nombre) 
         : [];
-      console.log("✅ ESPECIALIDADES PROCESADAS:", especialidadesArray);
       setSpecialties(especialidadesArray);
-      setCategories(results[3].data.categories);
+
+      setCategories(results[3].data.categories || []);
       setInvoices(results[4].data);
       setInventory(results[5].data);
       setDoctorPayments(results[6].data);
-      setMonthlyTotals(results[7].data.monthly_totals);
+      setMonthlyTotals(results[7].data.monthly_totals || {});
       setMedicalHistories(results[8].data);
       setPrescriptions(results[9].data);
       
-      if (results[10]) {
+      if (user?.role === "Administrador" && results[10]) {
         setUsers(results[10].data);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
-      if (error.response?.status === 401) {
-        handleLogout();
-      } else {
-        toast.error("Error al cargar los datos");
-      }
+      toast.error("Error al cargar datos del sistema");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [isAuthenticated, user?.role]);
 
-  const handleLogin = (userData) => {
-    setUser(userData);
-    setToken(localStorage.getItem("token"));
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    setUser(null);
-    setToken(null);
-    toast.info("Sesión cerrada");
-  };
+  // Doctor state & handlers
+  const [doctorDialog, setDoctorDialog] = useState(false);
+  const [editingDoctor, setEditingDoctor] = useState(null);
+  const [doctorForm, setDoctorForm] = useState({ nombre: "", especialidad: "", porcentaje: 50 });
 
-  if (!user) {
-    return <Login onLogin={handleLogin} />;
-  }
-
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-
-  // Doctor handlers
-  const handleDoctorSubmit = async (e) => {
+  const handleSaveDoctor = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (editingDoctor) {
-        await axios.put(`${API}/doctors/${editingDoctor.id}`, doctorForm, { headers: authHeaders });
+        await apiClient.put(`/doctors/${editingDoctor.id}`, doctorForm);
         toast.success("Doctor actualizado exitosamente");
       } else {
-        await axios.post(`${API}/doctors`, doctorForm, { headers: authHeaders });
+        await apiClient.post("/doctors", doctorForm);
         toast.success("Doctor registrado exitosamente");
       }
       setDoctorDialog(false);
-      resetDoctorForm();
+      setEditingDoctor(null);
+      setDoctorForm({ nombre: "", especialidad: "", porcentaje: 50 });
       fetchData();
     } catch (error) {
-      console.error("Error:", error);
       toast.error("Error al guardar el doctor");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
-
-  const handleEditDoctor = (doctor) => {
-    setEditingDoctor(doctor);
-    setDoctorForm({ nombre: doctor.nombre, especialidad: doctor.especialidad, porcentaje: doctor.porcentaje || 50 });
-    setDoctorDialog(true);
   };
 
   const handleDeleteDoctor = async (id) => {
     if (!window.confirm("¿Está seguro de eliminar este doctor?")) return;
     try {
-      await axios.delete(`${API}/doctors/${id}`, { headers: authHeaders });
-      toast.success("Doctor eliminado exitosamente");
+      await apiClient.delete(`/doctors/${id}`);
+      toast.success("Doctor eliminado");
       fetchData();
     } catch (error) {
-      console.error("Error:", error);
       toast.error("Error al eliminar el doctor");
     }
   };
 
-  const resetDoctorForm = () => {
-    setDoctorForm({ nombre: "", especialidad: "", porcentaje: 50 });
-    setEditingDoctor(null);
-  };
-
-  // Appointment handlers
-  const handleAppointmentSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const data = {
-        ...appointmentForm,
-        especialidad: appointmentForm.especialidad || "",
-        fecha_nacimiento: appointmentForm.fecha_nacimiento || "",
-        fecha: appointmentForm.fecha ? format(appointmentForm.fecha, "yyyy-MM-dd") : ""
-      };
-      
-      console.log("📝 DATOS DEL FORMULARIO A ENVIAR:");
-      console.log("  - Nombre:", data.nombre_completo);
-      console.log("  - Cédula:", data.cedula);
-      console.log("  - Fecha Nacimiento:", data.fecha_nacimiento);
-      console.log("  - Teléfono:", data.telefono);
-      console.log("  - Especialidad:", data.especialidad);
-      console.log("  - Doctor ID:", data.doctor_id);
-
-      // NO enviar edad - se calcula automáticamente
-      delete data.edad;
-      
-      if (editingAppointment) {
-        const response = await axios.put(`${API}/appointments/${editingAppointment.id}`, data, { headers: authHeaders });
-        console.log("✅ Respuesta actualización:", response.data);
-        toast.success("Cita actualizada exitosamente");
-      } else {
-        const response = await axios.post(`${API}/appointments`, data, { headers: authHeaders });
-        console.log("✅ Respuesta creación:", response.data);
-        toast.success("Cita agendada exitosamente");
-      }
-      setAppointmentDialog(false);
-      resetAppointmentForm();
-      fetchData();
-    } catch (error) {
-      console.error("❌ Error completo:", error);
-      console.error("❌ Respuesta error:", error.response?.data);
-      toast.error(error.response?.data?.detail || "Error al guardar la cita");
-    }
-    setLoading(false);
-  };
-
-  // PARCHE 4 — handleEditAppointment preserva todos los campos del paciente
-  const handleEditAppointment = (appointment) => {
-    setEditingAppointment(appointment);
-    setAppointmentForm({
-      tipo_documento: appointment.tipo_documento || "cedula",
-      nombre_completo: appointment.nombre_completo || "",
-      cedula: appointment.cedula || "",
-      fecha_nacimiento: appointment.fecha_nacimiento || "",
-      sexo: appointment.sexo || "",
-      email: appointment.email || "",
-      telefono: appointment.telefono || "",
-      whatsapp: appointment.whatsapp || "",
-      tiene_whatsapp: appointment.tiene_whatsapp ?? true,
-      es_menor: appointment.es_menor || false,
-      representante_nombre: appointment.representante_nombre || "",
-      representante_cedula: appointment.representante_cedula || "",
-      representante_telefono: appointment.representante_telefono || "",
-      representante_whatsapp: appointment.representante_whatsapp || "",
-      representante_email: appointment.representante_email || "",
-      representante_parentesco: appointment.representante_parentesco || "",
-      factura_nombre: appointment.factura_nombre || "",
-      factura_cedula_ruc: appointment.factura_cedula_ruc || "",
-      factura_email: appointment.factura_email || "",
-      factura_direccion: appointment.factura_direccion || "",
-      especialidad: appointment.especialidad || "",
-      doctor_id: appointment.doctor_id || "",
-      fecha: appointment.fecha ? new Date(appointment.fecha) : null,
-      hora: appointment.hora || "",
-      tipo_pago: appointment.tipo_pago || "none",
-      observaciones: appointment.observaciones || ""
-    });
-    setAppointmentDialog(true);
-  };
-
-  const handleDeleteAppointment = async (id) => {
-    if (!window.confirm("¿Está seguro de eliminar esta cita?")) return;
-    try {
-      await axios.delete(`${API}/appointments/${id}`, { headers: authHeaders });
-      toast.success("Cita eliminada exitosamente");
-      fetchData();
-    } catch (error) {
-      console.error("Error:", error);
-      toast.error("Error al eliminar la cita");
-    }
-  };
-
-  const resetAppointmentForm = () => {
-    setAppointmentForm({
-      tipo_documento: "cedula",
-      nombre_completo: "",
-      cedula: "",
-      fecha_nacimiento: "",
-      sexo: "",
-      email: "",
-      telefono: "",
-      whatsapp: "",
-      tiene_whatsapp: true,
-      es_menor: false,
-      representante_nombre: "",
-      representante_cedula: "",
-      representante_telefono: "",
-      representante_whatsapp: "",
-      representante_email: "",
-      representante_parentesco: "",
-      factura_nombre: "",
-      factura_cedula_ruc: "",
-      factura_email: "",
-      factura_direccion: "",
-      especialidad: "",
-      doctor_id: "",
-      fecha: null,
-      hora: "",
-      tipo_pago: "none",
-      observaciones: ""
-    });
-    setEditingAppointment(null);
-  };
-
-  // PARCHE 3 — Autocomplete desde /financial/pacientes con token y fallback a citas
-  const handleCedulaChange = async (cedula) => {
-    setAppointmentForm(prev => ({ ...prev, cedula }));
-
-    if (cedula.length < 10) return;
-
-    setSearchingPatient(true);
-    try {
-      const authHeaders = { Authorization: `Bearer ${token}` };
-      let paciente = null;
-
-      // 1. Fuente primaria: módulo de pacientes (datos más completos)
-      try {
-        const resPac = await axios.get(
-          `${API}/financial/pacientes?search=${cedula}`,
-          { headers: authHeaders }
-        );
-        paciente = (resPac.data || []).find(p => p.cedula === cedula) || null;
-      } catch { /* continuar al fallback */ }
-
-      // 2. Fallback: historial de citas
-      if (!paciente) {
-        try {
-          const resApts = await axios.get(`${API}/appointments`, { headers: authHeaders });
-          const match = (resApts.data || [])
-            .filter(apt => apt.cedula === cedula)
-            .sort((a, b) => new Date(b.created_at || b.fecha) - new Date(a.created_at || a.fecha))[0];
-          if (match) {
-            paciente = {
-              nombre: match.nombre_completo,
-              cedula: match.cedula,
-              fecha_nacimiento: match.fecha_nacimiento || "",
-              telefono: match.telefono || "",
-              whatsapp: match.whatsapp || "",
-              email: match.email || "",
-              sexo: match.sexo || "",
-              es_menor: match.es_menor || false,
-              representante_nombre: match.representante_nombre || "",
-              representante_cedula: match.representante_cedula || "",
-              representante_telefono: match.representante_telefono || "",
-              representante_whatsapp: match.representante_whatsapp || "",
-              representante_email: match.representante_email || "",
-              representante_parentesco: match.representante_parentesco || "",
-            };
-          }
-        } catch { /* sin resultados */ }
-      }
-
-      if (paciente) {
-        setAppointmentForm(prev => ({
-          ...prev,
-          cedula,
-          nombre_completo: paciente.nombre || paciente.nombre_completo || prev.nombre_completo,
-          fecha_nacimiento: paciente.fecha_nacimiento || prev.fecha_nacimiento,
-          sexo: paciente.sexo || prev.sexo,
-          telefono: paciente.telefono || prev.telefono,
-          whatsapp: paciente.whatsapp || prev.whatsapp,
-          email: paciente.email || prev.email,
-          es_menor: paciente.es_menor ?? prev.es_menor,
-          representante_nombre: paciente.representante_nombre || prev.representante_nombre,
-          representante_cedula: paciente.representante_cedula || prev.representante_cedula,
-          representante_telefono: paciente.representante_telefono || prev.representante_telefono,
-          representante_whatsapp: paciente.representante_whatsapp || prev.representante_whatsapp,
-          representante_email: paciente.representante_email || prev.representante_email,
-          representante_parentesco: paciente.representante_parentesco || prev.representante_parentesco,
-          // especialidad y doctor_id se preservan intactos
-        }));
-        toast.success(
-          `✓ Paciente: ${paciente.nombre || paciente.nombre_completo}`,
-          { duration: 2000 }
-        );
-      }
-    } catch (error) {
-      console.error("Error buscando paciente:", error);
-    } finally {
-      setSearchingPatient(false);
-    }
-  };
-
-  const openWhatsApp = (telefono) => {
-    const phone = telefono.replace(/[^0-9]/g, "");
-    const url = `https://wa.me/593${phone}`;
-    window.open(url, "_blank");
-  };
-
-  const filteredDoctors = doctors.filter(d => 
-    d.nombre.toLowerCase().includes(searchDoctor.toLowerCase()) ||
-    d.especialidad.toLowerCase().includes(searchDoctor.toLowerCase())
-  );
-
-  const filteredAppointments = appointments.filter(a => 
-    a.nombre_completo.toLowerCase().includes(searchAppointment.toLowerCase()) ||
-    a.cedula.includes(searchAppointment) ||
-    a.doctor_nombre.toLowerCase().includes(searchAppointment.toLowerCase())
-  );
+  if (authLoading) return <div className="flex items-center justify-center h-screen">Cargando...</div>;
+  if (!isAuthenticated) return <Login onLogin={login} />;
 
   return (
-    <div className="App">
-      {/* Header */}
-      <header className="medical-header">
-        <div className="header-content">
-          <div className="logo-section">
-            <img src="/logo.png" alt="Family Health" className="logo-image" />
-            <div>
-              <h1 data-testid="app-title" className="clinic-name">Family Health</h1>
-              <p className="clinic-location">Toledo Externo, Mz 2833 V15 - Guayaquil</p>
-            </div>
-          </div>
-          <div className="user-section">
-            <div style={{ textAlign:"right" }}>
-              <div className="user-name">{user.nombre_completo || user.nombre || user.username}</div>
-              <div style={{ display:"flex", gap:"6px", justifyContent:"flex-end", marginTop:"2px" }}>
-                {user.especialidad && (
-                  <span style={{ background:"rgba(255,255,255,0.2)", color:"white", borderRadius:"10px", padding:"1px 8px", fontSize:"11px" }}>
-                    {user.especialidad}
-                  </span>
-                )}
-                <span className="user-role">{user.role}</span>
-              </div>
-            </div>
-            <Button variant="ghost" onClick={handleLogout} className="logout-button">
-              <LogOut className="button-icon" />
-              Salir
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="main-container">
-        <Tabs defaultValue="appointments" className="tabs-container">
-          <TabsList className="tabs-list tabs-list-extended">
-            <TabsTrigger value="appointments" data-testid="appointments-tab">
+    <MainLayout>
+      <Tabs defaultValue="appointments" className="tabs-container">
+        <TabsList className="tabs-list tabs-list-extended">
+          <TabsTrigger value="appointments">
+            <Users className="tab-icon" />
+            Citas
+          </TabsTrigger>
+          {user.role === "Administrador" && (
+            <TabsTrigger value="doctors">
+              <Stethoscope className="tab-icon" />
+              Doctores
+            </TabsTrigger>
+          )}
+          {user.role === "Doctor" && (
+            <TabsTrigger value="pacientes">
               <Users className="tab-icon" />
-              Citas
+              Pacientes
             </TabsTrigger>
-            {user.role === "Administrador" && (
-              <TabsTrigger value="doctors" data-testid="doctors-tab">
-                <Stethoscope className="tab-icon" />
-                Doctores
-              </TabsTrigger>
-            )}
-            {/* Tab Pacientes solo para Doctores */}
-            {user.role === "Doctor" && (
-              <TabsTrigger value="pacientes" data-testid="pacientes-tab">
-                <Users className="tab-icon" />
-                Pacientes
-              </TabsTrigger>
-            )}
-            {/* Tab Historias para Admin y Recepción */}
-            {(user.role === "Administrador" || user.role === "Recepcion") && (
-              <TabsTrigger value="history" data-testid="history-tab">
-                <ClipboardList className="tab-icon" />
-                Historias
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="prescriptions" data-testid="prescriptions-tab">
+          )}
+          {(user.role === "Administrador" || user.role === "Recepcion") && (
+            <TabsTrigger value="history">
+              <ClipboardList className="tab-icon" />
+              Historias
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="prescriptions">
+            <FileText className="tab-icon" />
+            Recetas
+          </TabsTrigger>
+          {(user.role === "Administrador" || user.role === "Recepcion") && (
+            <TabsTrigger value="invoices">
               <FileText className="tab-icon" />
-              Recetas
+              Facturas
             </TabsTrigger>
-            {(user.role === "Administrador" || user.role === "Recepcion") && (
-              <TabsTrigger value="invoices" data-testid="invoices-tab">
-                <FileText className="tab-icon" />
-                Facturas
+          )}
+          {user.role === "Administrador" && (
+            <>
+              <TabsTrigger value="inventory">
+                <Package className="tab-icon" />
+                Inventario
               </TabsTrigger>
-            )}
-            {user.role === "Administrador" && (
-              <>
-                <TabsTrigger value="inventory" data-testid="inventory-tab">
-                  <Package className="tab-icon" />
-                  Inventario
-                </TabsTrigger>
-                <TabsTrigger value="payments" data-testid="payments-tab">
-                  <DollarSign className="tab-icon" />
-                  Pagos
-                </TabsTrigger>
-                <TabsTrigger value="users" data-testid="users-tab">
-                  <UserCog className="tab-icon" />
-                  Usuarios
-                </TabsTrigger>
-              </>
-            )}
-            {(user.role === "Administrador" || user.role === "Recepcion") && (
-              <>
-                <TabsTrigger value="facturacion" data-testid="facturacion-tab">
-                  <span className="tab-icon">🧾</span>
-                  Facturación
-                </TabsTrigger>
-                <TabsTrigger value="proformas" data-testid="proformas-tab">
-                  <Receipt className="tab-icon" />
-                  Proformas
-                </TabsTrigger>
-                <TabsTrigger value="procedimientos" data-testid="procedimientos-tab">
-                  <span className="tab-icon">💉</span>
-                  Procedimientos
-                </TabsTrigger>
-                <TabsTrigger value="laboratorio" data-testid="laboratorio-tab">
-                  <span className="tab-icon">🔬</span>
-                  Laboratorio
-                </TabsTrigger>
-                <TabsTrigger value="caja" data-testid="caja-tab">
-                  <CreditCard className="tab-icon" />
-                  Caja
-                </TabsTrigger>
-              </>
-            )}
-            {user.role === "Administrador" && (
-              <TabsTrigger value="config-sri"
-                data-testid="config-sri-tab"
-                className="tabs-list button"
-              >
-                <span className="tab-icon">🔏</span>
-                <span>Config. SRI</span>
+              <TabsTrigger value="payments">
+                <DollarSign className="tab-icon" />
+                Pagos
               </TabsTrigger>
-            )}
-            {user.role === "Administrador" && (
-              <TabsTrigger value="config-ia"
-                data-testid="config-ia-tab"
-                className="tabs-list button"
-              >
-                <span className="tab-icon">🤖</span>
-                <span>Config. IA</span>
+              <TabsTrigger value="users">
+                <UserCog className="tab-icon" />
+                Usuarios
               </TabsTrigger>
-            )}
-            {user.role === "Administrador" && (
-              <TabsTrigger value="catalogo" data-testid="catalogo-tab">
-                <ListChecks className="tab-icon" />
-                Catálogo
+            </>
+          )}
+          {(user.role === "Administrador" || user.role === "Recepcion") && (
+            <>
+              <TabsTrigger value="proformas">
+                <Receipt className="tab-icon" />
+                Proformas
               </TabsTrigger>
-            )}
-            {(user.role === "Administrador" || user.especialidad === "Odontología") && (
-              <TabsTrigger value="odontograma" data-testid="odontograma-tab">
+              <TabsTrigger value="abonos">
+                <CreditCard className="tab-icon" />
+                Abonos
+              </TabsTrigger>
+            </>
+          )}
+          {(user.role === "Administrador" || user.role === "Recepcion") && (
+            <TabsTrigger value="caja">
+              <DollarSign className="tab-icon" />
+              Caja
+            </TabsTrigger>
+          )}
+          {user.role === "Doctor" && (
+            <>
+              <TabsTrigger value="odontograma-standalone">
                 <Smile className="tab-icon" />
                 Odontograma
               </TabsTrigger>
-            )}
-          </TabsList>
-
-          {/* Doctors Tab - Admin Only - Simplificado: Listado + Editar Porcentaje */}
-          {user.role === "Administrador" && (
-            <TabsContent value="doctors" className="tab-content">
-              <div className="section-header">
-                <div>
-                  <h2 className="section-title">Gestión de Doctores</h2>
-                  <p className="section-subtitle">Listado y porcentajes de comisión</p>
-                </div>
-              </div>
-
-            <div className="search-box">
-              <Input
-                data-testid="search-doctor-input"
-                placeholder="Buscar doctor por nombre o especialidad..."
-                value={searchDoctor}
-                onChange={(e) => setSearchDoctor(e.target.value)}
-              />
-            </div>
-
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Especialidad</th>
-                    <th>% Comisión</th>
-                    <th className="actions-column">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDoctors.map((doctor) => (
-                    <tr key={doctor.id} data-testid={`doctor-row-${doctor.id}`}>
-                      <td>{doctor.nombre}</td>
-                      <td><span className="badge">{doctor.especialidad}</span></td>
-                      <td>
-                        <span className="badge" style={{background: '#DBEAFE', color: '#1E40AF'}}>
-                          {doctor.porcentaje || 50}%
-                        </span>
-                      </td>
-                      <td className="actions-cell">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditDoctor(doctor)}
-                              data-testid={`edit-doctor-${doctor.id}`}
-                            >
-                              <Edit className="action-icon" />
-                            </Button>
-                          </DialogTrigger>
-                        </Dialog>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filteredDoctors.length === 0 && (
-                <div className="empty-state">
-                  <Stethoscope className="empty-icon" />
-                  <p>No hay doctores registrados</p>
-                </div>
-              )}
-            </div>
-            
-            {/* Dialog para editar porcentaje */}
-            <Dialog open={doctorDialog} onOpenChange={(open) => { setDoctorDialog(open); if (!open) resetDoctorForm(); }}>
-              <DialogContent className="dialog-content">
-                <DialogHeader>
-                  <DialogTitle>Editar Porcentaje de Comisión</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleDoctorSubmit}>
-                  <div className="form-grid">
-                    <div className="form-field full-width">
-                      <Label>Doctor: {editingDoctor?.nombre}</Label>
-                      <p style={{color: '#6B7280', fontSize: '0.875rem'}}>{editingDoctor?.especialidad}</p>
-                    </div>
-                    <div className="form-field full-width">
-                      <Label>Porcentaje de Comisión (%)</Label>
-                      <Input
-                        data-testid="doctor-percentage-input"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={doctorForm.porcentaje}
-                        onChange={(e) => setDoctorForm({...doctorForm, porcentaje: parseFloat(e.target.value)})}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" disabled={loading} data-testid="save-doctor-button">
-                      {loading ? "Guardando..." : "Guardar"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </TabsContent>
+              <TabsTrigger value="ia-medica">
+                <Smile className="tab-icon" />
+                IA Médica
+              </TabsTrigger>
+            </>
           )}
+          {user.role === "Administrador" && (
+             <TabsTrigger value="config">
+                <UserCog className="tab-icon" />
+                Config
+             </TabsTrigger>
+          )}
+        </TabsList>
 
-          {/* Appointments Tab */}
-          <TabsContent value="appointments" className="tab-content">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">Gestión de Citas</h2>
-                <p className="section-subtitle">Agenda y administra las citas de pacientes</p>
+        <TabsContent value="appointments" className="tab-content">
+          <AppointmentsWithAttention
+            appointments={appointments}
+            doctors={doctors}
+            specialties={specialties}
+            fetchData={fetchData}
+          />
+        </TabsContent>
+
+        {user.role === "Administrador" && (
+          <TabsContent value="doctors" className="tab-content">
+            <div className="tab-header">
+              <div className="tab-header-info">
+                <h2 className="tab-title">Gestión de Doctores</h2>
+                <p className="tab-description">Administre el personal médico y sus especialidades.</p>
               </div>
-              {/* PARCHE 5 — Pre-asignar doctor_id y especialidad al Doctor al abrir nueva cita */}
-              <Dialog open={appointmentDialog} onOpenChange={(open) => {
-                if (open && !editingAppointment && user?.role === "Doctor" && user?.doctor_id) {
-                  setAppointmentForm(prev => ({
-                    ...prev,
-                    doctor_id: user.doctor_id,
-                    especialidad: user.especialidad || prev.especialidad
-                  }));
-                }
-                setAppointmentDialog(open);
-                if (!open) resetAppointmentForm();
-              }}>
+              <Dialog open={doctorDialog} onOpenChange={setDoctorDialog}>
                 <DialogTrigger asChild>
-                  <Button className="add-button" data-testid="add-appointment-button">
+                  <Button onClick={() => { setEditingDoctor(null); setDoctorForm({ nombre: "", especialidad: "", porcentaje: 50 }); }} className="bg-medical-600 hover:bg-medical-700">
                     <UserPlus className="button-icon" />
-                    Nueva Cita
+                    Nuevo Doctor
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="dialog-content dialog-wide">
+                <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>{editingAppointment ? "Editar Cita" : "Agendar Nueva Cita"}</DialogTitle>
+                    <DialogTitle>{editingDoctor ? 'Editar Doctor' : 'Nuevo Doctor'}</DialogTitle>
                   </DialogHeader>
-                  <form onSubmit={handleAppointmentSubmit}>
-                    {/* PARCHE 2 — Banner informativo con aviso de solo lectura para Doctor en modo edición */}
-                    {user?.role !== "Administrador" && user?.role !== "Recepcion" && editingAppointment && (
-                      <div style={{ background:"#e0f7fa", border:"1.5px solid #0891b2", borderRadius:"8px", padding:"10px 14px", marginBottom:"12px", fontSize:"13px" }}>
-                        <p style={{ margin:"0 0 4px", fontWeight:"700", color:"#005f73" }}>
-                          📋 {appointmentForm.nombre_completo}
-                        </p>
-                        <p style={{ margin:0, color:"#555" }}>
-                          Cédula: {appointmentForm.cedula} · {appointmentForm.telefono}
-                          {appointmentForm.fecha_nacimiento && ` · Nac: ${appointmentForm.fecha_nacimiento}`}
-                        </p>
-                        <p style={{ margin:"6px 0 0", color:"#0369a1", fontSize:"12px", fontWeight:"600" }}>
-                          ℹ️ Los datos del paciente no pueden modificarse desde aquí. Use el módulo de Pacientes si necesita corregirlos.
-                        </p>
-                      </div>
-                    )}
-                    <div className="form-grid">
-                      {/* PARCHE 1 — Campos demográficos visibles para Doctor en cita nueva */}
-                      {(user?.role === "Administrador" || user?.role === "Recepcion" || !editingAppointment || !appointmentForm.cedula) && (
-                        <>
-                          <div className="form-field">
-                            <Label>Nombre Completo</Label>
-                            <Input
-                              data-testid="appointment-name-input"
-                              value={appointmentForm.nombre_completo}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, nombre_completo: e.target.value})}
-                              required
-                            />
-                          </div>
-                          <div className="form-field">
-                            <Label>Cédula *</Label>
-                            <div style={{ position: 'relative' }}>
-                              <Input
-                                data-testid="appointment-cedula-input"
-                                value={appointmentForm.cedula}
-                                onChange={(e) => handleCedulaChange(e.target.value)}
-                                placeholder="Ingrese cédula (se autocompletará si existe)"
-                                required
-                              />
-                              {searchingPatient && (
-                                <div style={{ 
-                                  position: 'absolute', 
-                                  right: '10px', 
-                                  top: '50%', 
-                                  transform: 'translateY(-50%)',
-                                  color: '#00a8cc',
-                                  fontSize: '0.875rem'
-                                }}>
-                                  Buscando...
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="form-field">
-                            <Label>Fecha de Nacimiento *</Label>
-                            <Input
-                              data-testid="appointment-birthdate-input"
-                              type="date"
-                              value={appointmentForm.fecha_nacimiento}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, fecha_nacimiento: e.target.value})}
-                              max={new Date().toISOString().split('T')[0]}
-                              required
-                            />
-                            {appointmentForm.fecha_nacimiento && validarFechaNacimiento(appointmentForm.fecha_nacimiento) && (
-                              <p className="text-sm text-gray-600 mt-1">
-                                Edad: <span className="font-semibold">{formatearEdad(appointmentForm.fecha_nacimiento)}</span>
-                              </p>
-                            )}
-                          </div>
-                          <div className="form-field">
-                            <Label>Teléfono</Label>
-                            <Input
-                              data-testid="appointment-phone-input"
-                              value={appointmentForm.telefono}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, telefono: e.target.value})}
-                              placeholder="0999999999"
-                              required
-                            />
-                          </div>
-                          <div className="form-field">
-                            <Label>Email (opcional — para RIDE y plan nutricional)</Label>
-                            <Input
-                              type="email"
-                              value={appointmentForm.email}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, email: e.target.value})}
-                              placeholder="paciente@email.com"
-                            />
-                          </div>
-                        </>
-                      )}
-                      <div className="form-field">
-                        <Label>Especialidad</Label>
-                        <Select
-                          value={appointmentForm.especialidad}
-                          onValueChange={(value) => {
-                            console.log("Especialidad seleccionada:", value);
-                            setAppointmentForm(prev => ({
-                              ...prev,
-                              especialidad: value
-                            }));
-                          }}
-                        >
-                          <SelectTrigger data-testid="appointment-specialty-select">
-                            <SelectValue placeholder="Seleccione especialidad" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {specialties.map((spec) => (
-                              <SelectItem key={spec} value={spec}>{spec}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="form-field">
-                        <Label>Doctor</Label>
-                        <Select
-                          value={appointmentForm.doctor_id}
-                          onValueChange={(value) => setAppointmentForm({...appointmentForm, doctor_id: value})}
-                        >
-                          <SelectTrigger data-testid="appointment-doctor-select">
-                            <SelectValue placeholder="Seleccione doctor" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {doctors
-                              .filter(d => {
-                                if (!appointmentForm.especialidad) return true;
-                                const norm = s => s?.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() || '';
-                                return norm(d.especialidad) === norm(appointmentForm.especialidad);
-                              })
-                              .map((doctor) => (
-                                <SelectItem key={doctor.id} value={doctor.id}>
-                                  {doctor.nombre} - {doctor.especialidad}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="form-field">
-                        <Label>Fecha</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="date-picker"
-                              data-testid="appointment-date-picker"
-                            >
-                              <CalendarIcon className="calendar-icon" />
-                              {appointmentForm.fecha ? format(appointmentForm.fecha, "PPP", { locale: es }) : "Seleccionar fecha"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent>
-                            <Calendar
-                              mode="single"
-                              selected={appointmentForm.fecha}
-                              onSelect={(date) => setAppointmentForm({...appointmentForm, fecha: date})}
-                              locale={es}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="form-field">
-                        <Label>Hora</Label>
-                        <Input
-                          data-testid="appointment-time-input"
-                          type="time"
-                          value={appointmentForm.hora}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, hora: e.target.value})}
-                          required
-                        />
-                      </div>
-                      <div className="form-field">
-                        <Label>Tipo de Pago (Opcional)</Label>
-                        <Select
-                          value={appointmentForm.tipo_pago}
-                          onValueChange={(value) => setAppointmentForm({...appointmentForm, tipo_pago: value})}
-                        >
-                          <SelectTrigger data-testid="appointment-payment-select">
-                            <SelectValue placeholder="Se define al momento del cobro" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Sin definir</SelectItem>
-                            <SelectItem value="Efectivo">Efectivo</SelectItem>
-                            <SelectItem value="Transferencia">Transferencia</SelectItem>
-                            <SelectItem value="Seguro">Seguro</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="form-field full-width">
-                        <Label>Observaciones</Label>
-                        <Textarea
-                          data-testid="appointment-observations-input"
-                          value={appointmentForm.observaciones}
-                          onChange={(e) => setAppointmentForm({...appointmentForm, observaciones: e.target.value})}
-                          rows={3}
-                        />
-                      </div>
+                  <form onSubmit={handleSaveDoctor} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nombre Completo</Label>
+                      <Input id="name" value={doctorForm.nombre} onChange={(e) => setDoctorForm({...doctorForm, nombre: e.target.value})} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="specialty">Especialidad</Label>
+                      <Select value={doctorForm.especialidad} onValueChange={(val) => setDoctorForm({...doctorForm, especialidad: val})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione especialidad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {specialties.map(s => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="percentage">Porcentaje Ganancia (%)</Label>
+                      <Input id="percentage" type="number" value={doctorForm.porcentaje} onChange={(e) => setDoctorForm({...doctorForm, porcentaje: parseFloat(e.target.value)})} required />
                     </div>
                     <DialogFooter>
-                      <Button type="submit" disabled={loading} data-testid="save-appointment-button">
-                        {loading ? "Guardando..." : "Guardar Cita"}
-                      </Button>
+                      <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>
             </div>
-
-            <div className="search-box">
-              <Input
-                data-testid="search-appointment-input"
-                placeholder="Buscar por nombre, cédula o doctor..."
-                value={searchAppointment}
-                onChange={(e) => setSearchAppointment(e.target.value)}
-              />
-            </div>
-
-            <div className="table-container">
-              <AppointmentsWithAttention
-                filteredAppointments={filteredAppointments}
-                user={user}
-                token={token}
-                handleEditAppointment={handleEditAppointment}
-                handleDeleteAppointment={handleDeleteAppointment}
-                openWhatsApp={openWhatsApp}
-                fetchData={fetchData}
-              />
-            </div>
-          </TabsContent>
-
-          {/* Pacientes Tab - Solo para Doctores */}
-          {user.role === "Doctor" && (
-            <TabsContent value="pacientes">
-              <PacientesTab user={user} token={token} />
-            </TabsContent>
-          )}
-
-          {/* Medical History Tab - Solo para Admin y Recepción */}
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
-          <TabsContent value="history" className="tab-content">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">Historias Clínicas</h2>
-                <p className="section-subtitle">
-                  {medicalHistories.length} registros médicos
-                </p>
-              </div>
-            </div>
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Paciente</th>
-                    <th>Doctor</th>
-                    <th>Diagnóstico</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {medicalHistories.map((history) => (
-                    <tr key={history.id}>
-                      <td>{history.fecha}</td>
-                      <td>{history.paciente_nombre}</td>
-                      <td>{history.doctor_nombre}</td>
-                      <td>{history.diagnostico}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {medicalHistories.length === 0 && (
-                <div className="empty-state">
-                  <ClipboardList className="empty-icon" />
-                  <p>No hay historias clínicas registradas</p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-          )}
-
-          {/* Prescriptions Tab */}
-          <TabsContent value="prescriptions" className="tab-content">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">Recetas Médicas</h2>
-                <p className="section-subtitle">
-                  {(() => {
-                    const filtered = user?.role === "Doctor" && user?.doctor_id
-                      ? prescriptions.filter(p => p.doctor_id === user.doctor_id)
-                      : prescriptions;
-                    return `${filtered.length} recetas emitidas`;
-                  })()}
-                </p>
-              </div>
-            </div>
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Paciente</th>
-                    <th>Doctor</th>
-                    <th>Diagnóstico</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const filtered = user?.role === "Doctor" && user?.doctor_id
-                      ? prescriptions.filter(p => p.doctor_id === user.doctor_id)
-                      : prescriptions;
-                    return filtered.map((prescription) => (
-                      <tr key={prescription.id}>
-                        <td>{prescription.fecha}</td>
-                        <td>{prescription.paciente_nombre}</td>
-                        <td>{prescription.doctor_nombre}</td>
-                        <td>{prescription.diagnostico}</td>
-                        <td>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              try {
-                                const response = await axios.get(
-                                  `${API}/prescriptions/${prescription.id}/pdf`,
-                                  { 
-                                    headers: { Authorization: `Bearer ${token}` },
-                                    responseType: 'blob' 
-                                  }
-                                );
-                                const url = window.URL.createObjectURL(new Blob([response.data]));
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.setAttribute('download', `receta_${prescription.paciente_cedula}.pdf`);
-                                document.body.appendChild(link);
-                                link.click();
-                                link.remove();
-                                toast.success("Receta descargada");
-                              } catch (error) {
-                                toast.error("Error al descargar receta");
-                              }
-                            }}
-                          >
-                          <Download className="button-icon" />
-                          PDF
-                        </Button>
-                      </td>
-                    </tr>
-                    ));
-                  })()}
-                </tbody>
-              </table>
-              {(() => {
-                const filtered = user?.role === "Doctor" && user?.doctor_id
-                  ? prescriptions.filter(p => p.doctor_id === user.doctor_id)
-                  : prescriptions;
-                return filtered.length === 0 && (
-                  <div className="empty-state">
-                    <FileText className="empty-icon" />
-                    <p>No hay recetas registradas</p>
+            <div className="grid-container">
+              {doctors.map((doctor) => (
+                <div key={doctor.id} className="card-item">
+                  <div className="card-content">
+                    <div className="card-info">
+                      <h3 className="card-name">{doctor.nombre}</h3>
+                      <p className="card-subtitle">{doctor.especialidad}</p>
+                      <p className="card-detail">Ganancia: {doctor.porcentaje}%</p>
+                    </div>
+                    <div className="card-actions">
+                      <Button variant="ghost" size="icon" onClick={() => { setEditingDoctor(doctor); setDoctorForm({ nombre: doctor.nombre, especialidad: doctor.especialidad, porcentaje: doctor.porcentaje }); setDoctorDialog(true); }}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteDoctor(doctor.id)} className="text-red-500">
+                        <Users className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                );
-              })()}
+                </div>
+              ))}
             </div>
           </TabsContent>
+        )}
 
-          {/* Invoices Tab */}
-          <TabsContent value="invoices">
-            <InvoicesTab 
-              invoices={invoices} 
-              searchInvoice={searchInvoice} 
-              setSearchInvoice={setSearchInvoice}
-              monthlyTotals={monthlyTotals}
-              token={token}
-            />
+        {user.role === "Doctor" && (
+          <TabsContent value="pacientes" className="tab-content">
+            <PacientesTab />
           </TabsContent>
+        )}
 
-          {/* Inventory Tab */}
-          <TabsContent value="inventory">
-            <InventoryTab 
-              inventory={inventory} 
-              searchInventory={searchInventory} 
-              setSearchInventory={setSearchInventory}
-            />
-          </TabsContent>
-
-          {/* Payments Tab */}
-          <TabsContent value="payments">
-            <PaymentsTab 
-              doctorPayments={doctorPayments} 
-              fetchData={fetchData}
-            />
-          </TabsContent>
-
-          {/* Users Tab - Admin Only */}
-          {user.role === "Administrador" && (
-            <TabsContent value="users">
-              {/* Botón de migración — corregir edades de pacientes viejos */}
-              <div style={{ background:"#fffbeb", border:"1.5px solid #fbbf24", borderRadius:"10px", padding:"14px 16px", marginBottom:"16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <div>
-                  <p style={{ margin:0, fontWeight:"700", color:"#92400e", fontSize:"13px" }}>🔧 Migración: Corregir edades (pacientes anteriores)</p>
-                  <p style={{ margin:"2px 0 0", color:"#b45309", fontSize:"12px" }}>Recalcula la edad de todos los pacientes que tienen edad=0 pero sí tienen fecha de nacimiento registrada.</p>
-                </div>
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/migrar-edades`, {
-                        method: "POST",
-                        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
-                      });
-                      const data = await res.json();
-                      alert(`✅ ${data.mensaje}\n\nTotal procesados: ${data.total_procesados}\nActualizados: ${data.actualizados}\nSin fecha de nacimiento: ${data.sin_fecha_nacimiento}`);
-                    } catch (e) {
-                      alert("Error al ejecutar la migración: " + e.message);
-                    }
-                  }}
-                  style={{ padding:"8px 16px", background:"#d97706", color:"white", border:"none", borderRadius:"8px", fontSize:"13px", fontWeight:"700", cursor:"pointer", flexShrink:0, marginLeft:"12px" }}>
-                  ▶ Ejecutar migración
-                </button>
+        <TabsContent value="prescriptions" className="tab-content">
+          {/* Implementación simplificada para mantener compatibilidad */}
+          <div className="tab-header">
+            <h2 className="tab-title">Recetas Médicas</h2>
+          </div>
+          <div className="grid-container">
+            {prescriptions.map(p => (
+              <div key={p.id} className="card-item">
+                <p><b>Paciente:</b> {p.paciente_nombre}</p>
+                <p><b>Fecha:</b> {p.fecha}</p>
+                <Button variant="outline" size="sm" onClick={() => window.open(`${process.env.REACT_APP_BACKEND_URL}/api/prescriptions/${p.id}/pdf`, '_blank')}>
+                  Ver PDF
+                </Button>
               </div>
-              <UsersTab 
-                users={users}
-                fetchData={fetchData}
-                token={token}
-                user={user}
-              />
+            ))}
+          </div>
+        </TabsContent>
+
+        {(user.role === "Administrador" || user.role === "Recepcion") && (
+          <TabsContent value="invoices" className="tab-content">
+            <InvoicesTab invoices={invoices} doctors={doctors} monthlyTotals={monthlyTotals} fetchData={fetchData} />
+          </TabsContent>
+        )}
+
+        {user.role === "Administrador" && (
+          <>
+            <TabsContent value="inventory" className="tab-content">
+              <InventoryTab inventory={inventory} categories={categories} fetchData={fetchData} />
             </TabsContent>
-          )}
-
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
-            <TabsContent value="facturacion">
-              <FacturacionTab token={token} user={user} />
+            <TabsContent value="payments" className="tab-content">
+              <PaymentsTab doctors={doctors} doctorPayments={doctorPayments} fetchData={fetchData} />
             </TabsContent>
-          )}
-
-          {/* Proformas Tab - Admin & Recepcion */}
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
-            <TabsContent value="proformas">
-              <ProformasTab token={token} />
+            <TabsContent value="users" className="tab-content">
+              <UsersTab users={users} doctors={doctors} specialties={specialties} fetchData={fetchData} />
             </TabsContent>
-          )}
+          </>
+        )}
 
-          {/* Abonos Tab - Admin & Recepcion */}
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
-            <>
-              <TabsContent value="procedimientos">
-                <ProcedimientoRapidoTab token={token} user={user} />
-              </TabsContent>
-              <TabsContent value="laboratorio">
-                <LaboratorioTab token={token} user={user} />
-              </TabsContent>
-              <TabsContent value="caja">
-                <CajaTab />
-              </TabsContent>
-            </>
-          )}
-
-          {/* Catálogo de Servicios Tab - Admin Only */}
-          {user.role === "Administrador" && (
-            <TabsContent value="catalogo">
-              <CatalogoServiciosTab token={token} />
+        {(user.role === "Administrador" || user.role === "Recepcion") && (
+          <>
+            <TabsContent value="proformas" className="tab-content">
+              <ProformasTab />
             </TabsContent>
-          )}
-
-          {user.role === "Administrador" && (
-            <TabsContent value="config-ia">
-              <ConfiguracionIA token={token} />
+            <TabsContent value="abonos" className="tab-content">
+              <AbonosTab />
             </TabsContent>
-          )}
-
-          {user.role === "Administrador" && (
-            <TabsContent value="config-sri">
-              <ConfiguracionSRI token={token} />
+            <TabsContent value="caja" className="tab-content">
+              <CajaTab />
             </TabsContent>
-          )}
+          </>
+        )}
 
-          {/* Odontograma Clínico Tab - Admin y Doctores de Odontología */}
-          {(user.role === "Administrador" || user.especialidad === "Odontología") && (
-            <TabsContent value="odontograma">
-              <OdontogramaStandalone token={token} user={user} />
+        {user.role === "Doctor" && (
+          <>
+            <TabsContent value="odontograma-standalone" className="tab-content">
+              <OdontogramaStandalone />
             </TabsContent>
-          )}
+            <TabsContent value="ia-medica" className="tab-content">
+              <div className="p-4 bg-white rounded-lg shadow">
+                <ConfiguracionIA />
+              </div>
+            </TabsContent>
+          </>
+        )}
 
-        </Tabs>
-      </main>
-    </div>
+        {user.role === "Administrador" && (
+          <TabsContent value="config" className="tab-content">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FacturacionTab />
+              <ConfiguracionSRI />
+              <CatalogoServiciosTab />
+              <ConfiguracionIA />
+              <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-100">
+                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-medical-600" />
+                    Mantenimiento de Datos
+                 </h3>
+                 <Button variant="outline" onClick={async () => {
+                    try {
+                      const res = await apiClient.post("/admin/migrar-edades");
+                      toast.success(res.data.mensaje);
+                    } catch (e) {
+                      toast.error("Error en migración");
+                    }
+                 }}>
+                    Migrar Edades de Pacientes
+                 </Button>
+              </div>
+            </div>
+          </TabsContent>
+        )}
+      </Tabs>
+    </MainLayout>
   );
 }
+
+// Estos son componentes que estaban en App.js pero que no fueron importados explícitamente arriba
+// Se deberían mover a sus propios archivos eventualmente.
 
 export default App;
