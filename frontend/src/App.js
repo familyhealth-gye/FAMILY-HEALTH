@@ -26,13 +26,16 @@ import { ProcedimientoRapidoTab } from "@/components/ProcedimientoRapidoTab";
 import { LaboratorioTab } from "@/components/LaboratorioTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
+import { Routes, Route, Navigate } from "react-router-dom";
+import DentalWorkspace from "@/workspaces/DentalWorkspace";
+import { ENABLE_DENTAL_V2 } from "@/lib/constants";
 
 import { useAuth } from "@/hooks/useAuth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import apiClient from "@/lib/axios";
 import { getAllAppData } from "@/services/dataService";
 
-function App() {
+function LegacyApp() {
   const { user, token, isAuthenticated, login, loading: authLoading } = useAuth();
 
   const [users, setUsers] = useState([]);
@@ -401,5 +404,21 @@ function App() {
 
 // Estos son componentes que estaban en App.js pero que no fueron importados explícitamente arriba
 // Se deberían mover a sus propios archivos eventualmente.
+
+
+
+function App() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) return null;
+
+  return (
+    <Routes>
+      <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+      <Route path="/odontologia-v2/:appointmentId" element={isAuthenticated ? <DentalWorkspace /> : <Navigate to="/login" />} />
+      <Route path="/*" element={isAuthenticated ? <LegacyApp /> : <Navigate to="/login" />} />
+    </Routes>
+  );
+}
 
 export default App;
