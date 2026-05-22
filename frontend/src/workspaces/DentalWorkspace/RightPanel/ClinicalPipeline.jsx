@@ -1,17 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PipelineItem from './PipelineItem';
-import { Layers } from 'lucide-react';
+import PipelineHistoryDrawer from './PipelineHistoryDrawer';
+import { Layers, History, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-const ClinicalPipeline = ({ plan, onRefresh }) => {
+const ClinicalPipeline = ({ plan, onRefresh, appointmentId }) => {
+  const [showHistory, setShowHistory] = useState(false);
+
   if (!plan) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full bg-white">
         <div className="p-4 border-b bg-slate-50 shrink-0">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Clinical Pipeline</h3>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <Layers className="w-8 h-8 text-slate-200 mb-2" />
-          <p className="text-sm text-slate-400 font-medium">No hay plan de tratamiento activo</p>
+          <p className="text-sm text-slate-400 font-medium">No hay plan activo</p>
         </div>
       </div>
     );
@@ -28,16 +32,23 @@ const ClinicalPipeline = ({ plan, onRefresh }) => {
   });
 
   return (
-    <div className="flex flex-col h-full bg-white shadow-inner">
+    <div className="flex flex-col h-full bg-white shadow-inner relative">
       <div className="p-4 border-b bg-slate-50 shrink-0 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-medical-600" />
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Clinical Pipeline</h3>
         </div>
-        <span className="text-[10px] bg-medical-600 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">
-          {procedimientos.length}
-        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full text-slate-400 hover:text-medical-600"
+          onClick={() => setShowHistory(true)}
+          title="Ver historial del plan"
+        >
+          <History className="w-4 h-4" />
+        </Button>
       </div>
+
       <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-200">
         {Object.keys(fases).sort().map(faseNum => (
           <div key={faseNum} className="space-y-3">
@@ -54,6 +65,7 @@ const ClinicalPipeline = ({ plan, onRefresh }) => {
                   procedure={proc}
                   planId={plan.id}
                   onRefresh={onRefresh}
+                  currentAppointmentId={appointmentId}
                 />
               ))}
             </div>
@@ -66,6 +78,12 @@ const ClinicalPipeline = ({ plan, onRefresh }) => {
           </div>
         )}
       </div>
+
+      <PipelineHistoryDrawer
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        plan={plan}
+      />
     </div>
   );
 };
