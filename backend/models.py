@@ -901,3 +901,42 @@ class ProcedimientoUpdate(BaseModel):
     fecha_programada: Optional[str] = None
     fecha_realizado: Optional[str] = None
     notas: Optional[str] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PIPELINE AUDIT LOG
+# Registro inmutable de cambios de estado en el pipeline clínico.
+# Reutilizable para cualquier especialidad futura.
+# ─────────────────────────────────────────────────────────────────────────────
+class PipelineAuditLog(BaseModel):
+    """
+    Entrada de auditoría para cambios en el pipeline clínico.
+    Colección: pipeline_audit_log (append-only, nunca se modifica).
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Referencia al objeto auditado
+    entity_type: str           # "procedimiento" | "plan" | "proforma"
+    entity_id: str             # ID del procedimiento o plan
+    plan_id: str               # Siempre presente para trazabilidad
+    paciente_cedula: str = ""
+
+    # Cambio registrado
+    accion: str                # "cambio_estado" | "cambio_precio" | "aprobacion" | "ejecucion"
+    estado_anterior: Optional[str] = None
+    estado_nuevo: Optional[str] = None
+    valor_anterior: Optional[float] = None  # para cambio_precio
+    valor_nuevo: Optional[float] = None
+
+    # Actor
+    usuario: str               # username
+    rol: str                   # role del usuario
+    motivo: Optional[str] = None  # nota opcional
+
+    # Timestamp
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}

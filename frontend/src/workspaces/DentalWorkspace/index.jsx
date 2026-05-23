@@ -99,8 +99,9 @@ const DentalWorkspace = () => {
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden text-slate-900 font-sans">
       <DentalHeader
         appointment={appointment}
-        saving={pipeline.saving}
+        syncStatus={pipeline.syncStatus}
         totals={pipeline.totals}
+          onCerrarConsulta={pipeline.cerrarConsulta}
       />
 
       <main className="flex flex-1 overflow-hidden relative">
@@ -114,7 +115,7 @@ const DentalWorkspace = () => {
             appointmentId={appointmentId}
             sessionNote={pipeline.sessionNote}
             onNoteChange={pipeline.handleSessionNoteChange}
-            saving={pipeline.saving}
+            syncStatus={pipeline.syncStatus}
           />
           <PreviousSessions patientId={appointment?.paciente_id} />
         </aside>
@@ -167,6 +168,7 @@ const DentalWorkspace = () => {
             updateProcedureState={pipeline.updateProcedureState}
             deleteProcedure={pipeline.deleteProcedure}
             totals={pipeline.totals}
+          onCerrarConsulta={pipeline.cerrarConsulta}
           />
         </aside>
       </main>

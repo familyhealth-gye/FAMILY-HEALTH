@@ -37,7 +37,7 @@ from routers.users import router as users_router
 from routers.catalogs import router as catalogs_router
 from routers.config import router as config_router
 from routers.ia import router as ia_router
-from routers.odontology import router as odontology_router
+from routers.odontology import router as odontology_router, nota_session_router
 from routers.medical_history import router as medical_history_router
 from routers.billing import router as billing_router
 from routers.clinical import router as clinical_router
@@ -116,6 +116,7 @@ app.include_router(catalogs_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
 app.include_router(ia_router, prefix="/api")
 app.include_router(odontology_router, prefix="/api")
+app.include_router(nota_session_router, prefix="/api")
 app.include_router(medical_history_router, prefix="/api")
 app.include_router(billing_router, prefix="/api")
 app.include_router(clinical_router, prefix="/api")

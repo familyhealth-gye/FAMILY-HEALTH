@@ -28,6 +28,7 @@ import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { Login } from "@/pages/Login";
 import { Routes, Route, Navigate } from "react-router-dom";
 import DentalWorkspace from "@/workspaces/DentalWorkspace";
+import FinancialWorkspace from "@/workspaces/FinancialWorkspace";
 import { ENABLE_DENTAL_V2 } from "@/lib/constants";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -125,28 +126,6 @@ function LegacyApp() {
     } catch (error) {
       toast.error("Error al eliminar el doctor");
     }
-  };
-
-
-  const handleEditAppointment = (appointment) => {
-    // Implementación placeholder o real si se desea
-    toast.info("Función de edición en desarrollo");
-  };
-
-  const handleDeleteAppointment = async (id) => {
-    if (!window.confirm("¿Eliminar cita?")) return;
-    try {
-      await apiClient.delete(`/appointments/${id}`);
-      toast.success("Cita eliminada");
-      fetchData();
-    } catch (e) {
-      toast.error("Error al eliminar");
-    }
-  };
-
-  const openWhatsApp = (telefono) => {
-    if (!telefono) return toast.error("Sin teléfono");
-    window.open(`https://wa.me/${telefono}`, "_blank");
   };
 
   if (authLoading) return <div className="flex items-center justify-center h-screen">Cargando...</div>;
@@ -247,10 +226,10 @@ function LegacyApp() {
             filteredAppointments={appointments}
             user={user}
             token={token}
-            handleEditAppointment={handleEditAppointment}
-            handleDeleteAppointment={handleDeleteAppointment}
-            openWhatsApp={openWhatsApp}
             fetchData={fetchData}
+            handleEditAppointment={() => {}}
+            handleDeleteAppointment={() => {}}
+            openWhatsApp={() => {}}
           />
         </TabsContent>
 
@@ -440,6 +419,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+      <Route path="/financiero" element={isAuthenticated && ENABLE_DENTAL_V2 ? <FinancialWorkspace /> : <Navigate to="/" />} />
       <Route path="/odontologia-v2/:appointmentId" element={isAuthenticated ? <DentalWorkspace /> : <Navigate to="/login" />} />
       <Route path="/*" element={isAuthenticated ? <LegacyApp /> : <Navigate to="/login" />} />
     </Routes>
