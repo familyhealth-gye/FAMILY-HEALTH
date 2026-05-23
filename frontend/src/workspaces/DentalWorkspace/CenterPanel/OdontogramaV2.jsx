@@ -24,7 +24,7 @@ const getToothClasses = (tooth, selectedTooth, toothStates) => {
     ${baseColor} ${selectedRing}`;
 };
 
-const Quadrant = ({ range, reverse, selectedTooth, toothStates, onSelectTooth }) => {
+const Quadrant = React.memo(({ range, reverse, selectedTooth, toothStates, onSelectTooth }) => {
   const teeth = reverse ? [...range].reverse() : range;
   return (
     <div className="flex gap-1.5 md:gap-2">
@@ -48,7 +48,7 @@ const Quadrant = ({ range, reverse, selectedTooth, toothStates, onSelectTooth })
       })}
     </div>
   );
-};
+});
 
 const LEGEND = [
   { label: 'Propuesto',  key: 'propuesto'  },
@@ -105,4 +105,11 @@ const OdontogramaV2 = ({ selectedTooth, onSelectTooth, toothStates = {} }) => {
   );
 };
 
-export default OdontogramaV2;
+// React.memo evita re-renders cuando toothStates no cambia
+export default React.memo(OdontogramaV2, (prev, next) => {
+  // Solo re-render si selectedTooth o toothStates cambian
+  return (
+    prev.selectedTooth === next.selectedTooth &&
+    JSON.stringify(prev.toothStates) === JSON.stringify(next.toothStates)
+  );
+});

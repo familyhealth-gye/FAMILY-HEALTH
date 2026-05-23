@@ -1,40 +1,54 @@
 /**
- * useTreatmentPipeline.js  — v2 con persistencia real
+ * useTreatmentPipeline.js — v3 hardened
  *
- * Cambios vs v1:
- * - autosave nota-sesion conectado al backend (PATCH /appointments/:id/nota-sesion)
- * - localStorage como capa de resiliencia, no fuente de verdad
- * - indicadores de estado: 'idle' | 'saving' | 'saved' | 'error'
- * - rollback real en updateProcedureState y deleteProcedure
- * - _registrar_auditoria llamado desde cerrar-consulta (backend lo maneja)
+ * Cambios vs v2:
+ * - Integra useRetryQueue para resiliencia offline
+ * - Envía plan_version en cada mutación (bloqueo optimista)
+ * - Detecta conflicto 409 y muestra warning clínico
+ * - syncStatus extendido: 'conflict' como estado separado
+ * - updateProcedureState retorna las transiciones disponibles del backend
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/axios';
 import { PIPELINE_STATE_PRIORITY } from '../engine/clinical_rules';
+import { useRetryQueue } from './useRetryQueue';
 
 const DEBOUNCE_MS = 1400;
 
 export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointment }) => {
   const [plan, setPlan]             = useState(null);
   const [loading, setLoading]       = useState(true);
-  const [syncStatus, setSyncStatus] = useState('idle'); // 'idle'|'saving'|'saved'|'error'
+  const [syncStatus, setSyncStatus] = useState('idle'); // 'idle'|'saving'|'saved'|'error'|'conflict'
   const [sessionNote, setSessionNote] = useState('');
 
-  const debounceRef    = useRef(null);
-  const prevPlanRef    = useRef(null); // para rollback
+  const debounceRef = useRef(null);
+  const { enqueue } = useRetryQueue();
 
-  // ─── FETCH PLAN ────────────────────────────────────────────────────────────
+  const setSyncTemp = (status, resetAfterMs = 2500) => {
+    setSyncStatus(status);
+    if (status !== 'conflict') {
+      setTimeout(() => setSyncStatus('idle'), resetAfterMs);
+    }
+  };
+
+  // ── FETCH ─────────────────────────────────────────────────────────────────
   const fetchPlan = useCallback(async (silent = false) => {
     if (!pacienteCedula) return;
     if (!silent) setLoading(true);
     try {
       const res = await apiClient.get(`/plan-tratamiento/paciente/${pacienteCedula}`);
-      setPlan(res.data || null);
-      prevPlanRef.current = res.data || null;
+      const data = res.data || null;
+      // Normalizar campos legacy
+      if (data) {
+        data.proformas_generadas  = data.proformas_generadas  ?? [];
+        data.sesiones_programadas = data.sesiones_programadas ?? [];
+        data.version              = data.version              ?? 1;
+      }
+      setPlan(data);
     } catch (err) {
-      if (!silent) console.error('[Pipeline] fetchPlan error:', err);
+      if (!silent) console.error('[Pipeline] fetchPlan:', err);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -42,7 +56,7 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
 
   useEffect(() => { fetchPlan(); }, [fetchPlan]);
 
-  // ─── CREAR PLAN SI NO EXISTE ────────────────────────────────────────────────
+  // ── ENSURE PLAN ────────────────────────────────────────────────────────────
   const ensurePlan = useCallback(async () => {
     if (plan?.id) return plan.id;
     if (!appointment) return null;
@@ -54,22 +68,21 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
         doctor_id:       appointment.doctor_id       || '',
         doctor_nombre:   appointment.doctor_nombre   || '',
       });
-      const newPlan = { ...res.data, procedimientos: [] };
+      const newPlan = { ...res.data, procedimientos: [], version: 1 };
       setPlan(newPlan);
-      prevPlanRef.current = newPlan;
       return res.data.id;
-    } catch (err) {
+    } catch {
       toast.error('No se pudo crear el plan de tratamiento.');
       return null;
     }
   }, [plan, appointment]);
 
-  // ─── AGREGAR PROCEDIMIENTO (optimistic) ────────────────────────────────────
+  // ── ADD PROCEDURE (optimistic) ─────────────────────────────────────────────
   const addProcedure = useCallback(async (procedureData) => {
     const planId = await ensurePlan();
     if (!planId) return;
 
-    const tempId  = `temp_${Date.now()}`;
+    const tempId   = `temp_${Date.now()}`;
     const tempProc = { id: tempId, estado_pipeline: 'creado', ...procedureData, _optimistic: true };
 
     setPlan(prev => prev
@@ -80,30 +93,35 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
 
     try {
       await apiClient.post(`/plan-tratamiento/${planId}/procedimiento`, {
-        ...procedureData,
-        estado_pipeline: 'creado',
+        ...procedureData, estado_pipeline: 'creado',
       });
       await fetchPlan(true);
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 2000);
+      setSyncTemp('saved');
     } catch (err) {
+      // Optimistic rollback
       setPlan(prev => prev
         ? { ...prev, procedimientos: (prev.procedimientos || []).filter(p => p.id !== tempId) }
         : null
       );
-      setSyncStatus('error');
-      toast.error('Error al agregar procedimiento. Reintentando…');
-      setTimeout(() => setSyncStatus('idle'), 4000);
+      // Encolar para retry
+      enqueue({
+        method: 'POST',
+        url:    `/api/plan-tratamiento/${planId}/procedimiento`,
+        data:   { ...procedureData, estado_pipeline: 'creado' },
+        label:  `Agregar ${procedureData.procedimiento || 'procedimiento'}`,
+      });
+      setSyncTemp('error', 4000);
     }
-  }, [ensurePlan, fetchPlan]);
+  }, [ensurePlan, fetchPlan, enqueue]);
 
-  // ─── ACTUALIZAR ESTADO (optimistic + rollback) ──────────────────────────────
+  // ── UPDATE STATE (optimistic + conflict detection) ─────────────────────────
   const updateProcedureState = useCallback(async (procId, nuevoEstado, extraData = {}) => {
     if (!plan?.id) return;
 
-    // Snapshot para rollback
-    const snapshot = JSON.parse(JSON.stringify(plan));
+    const snapshot       = JSON.parse(JSON.stringify(plan));
+    const currentVersion = plan.version ?? 1;
 
+    // Optimistic update
     setPlan(prev => {
       if (!prev) return prev;
       return {
@@ -116,33 +134,61 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
     setSyncStatus('saving');
 
     try {
-      await apiClient.put(
-        `/plan-tratamiento/${plan.id}/procedimiento/${procId}/estado?nuevo_estado=${nuevoEstado}`
+      const res = await apiClient.put(
+        `/plan-tratamiento/${plan.id}/procedimiento/${procId}/estado`,
+        null,
+        { params: { nuevo_estado: nuevoEstado, plan_version: currentVersion, source: 'doctor_workspace' } }
       );
+
       if (Object.keys(extraData).length > 0) {
         await apiClient.put(
           `/plan-tratamiento/${plan.id}/procedimiento/${procId}`,
           extraData
         );
       }
+
       await fetchPlan(true);
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 2000);
+      setSyncTemp('saved');
+
+      // Retornar transiciones disponibles del backend
+      return res.data?.transiciones_disponibles || [];
+
     } catch (err) {
-      // Rollback al snapshot
-      setPlan(snapshot);
-      prevPlanRef.current = snapshot;
-      setSyncStatus('error');
-      toast.error(err.response?.data?.detail || 'Error al actualizar estado. Se revirtió el cambio.');
-      setTimeout(() => setSyncStatus('idle'), 4000);
+      setPlan(snapshot); // rollback
+
+      if (err.response?.status === 409) {
+        // Conflicto de versión — el plan fue modificado por otro usuario
+        setSyncStatus('conflict');
+        toast.error(
+          '⚠️ Conflicto de edición: otro usuario modificó este plan. Recargando…',
+          { duration: 6000 }
+        );
+        setTimeout(() => {
+          fetchPlan(true);
+          setSyncStatus('idle');
+        }, 2000);
+        return;
+      }
+
+      if (err.response?.status === 422) {
+        // Transición inválida — error de negocio, no de red
+        const detail = err.response?.data?.detail;
+        const msg = typeof detail === 'object' ? detail.message : (detail || 'Transición no permitida.');
+        toast.error(msg);
+        setSyncTemp('error', 3000);
+        return;
+      }
+
+      setSyncTemp('error', 4000);
+      toast.error('Error al actualizar estado. Se revirtió el cambio.');
     }
   }, [plan, fetchPlan]);
 
-  // ─── ELIMINAR PROCEDIMIENTO (optimistic + rollback) ─────────────────────────
+  // ── DELETE (optimistic + retry) ────────────────────────────────────────────
   const deleteProcedure = useCallback(async (procId) => {
     if (!plan?.id) return;
-
     const snapshot = JSON.parse(JSON.stringify(plan));
+
     setPlan(prev => prev
       ? { ...prev, procedimientos: (prev.procedimientos || []).filter(p => p.id !== procId) }
       : null
@@ -151,46 +197,36 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
 
     try {
       await apiClient.delete(`/plan-tratamiento/${plan.id}/procedimiento/${procId}`);
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 2000);
-    } catch (err) {
+      setSyncTemp('saved');
+    } catch {
       setPlan(snapshot);
-      setSyncStatus('error');
+      setSyncTemp('error', 4000);
       toast.error('Error al eliminar. Se revirtió el cambio.');
-      setTimeout(() => setSyncStatus('idle'), 4000);
     }
   }, [plan, fetchPlan]);
 
-  // ─── CERRAR CONSULTA (Doctor → Counter) ────────────────────────────────────
+  // ── CERRAR CONSULTA ────────────────────────────────────────────────────────
   const cerrarConsulta = useCallback(async (motivo = '') => {
-    if (!plan?.id) {
-      toast.error('No hay plan activo para cerrar.');
-      return false;
-    }
+    if (!plan?.id) { toast.error('No hay plan activo.'); return false; }
     setSyncStatus('saving');
     try {
-      const res = await apiClient.post(
-        `/plan-tratamiento/${plan.id}/cerrar-consulta`,
-        { motivo }
-      );
+      const res = await apiClient.post(`/plan-tratamiento/${plan.id}/cerrar-consulta`, { motivo });
       await fetchPlan(true);
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 2000);
+      setSyncTemp('saved');
       toast.success(`✅ ${res.data.message}`);
       return true;
     } catch (err) {
-      setSyncStatus('error');
+      setSyncTemp('error', 4000);
       toast.error(err.response?.data?.detail || 'Error al cerrar consulta.');
-      setTimeout(() => setSyncStatus('idle'), 4000);
       return false;
     }
   }, [plan, fetchPlan]);
 
-  // ─── AUTOSAVE NOTA DE SESIÓN ────────────────────────────────────────────────
+  // ── AUTOSAVE NOTA (debounced + retry queue) ────────────────────────────────
   const handleSessionNoteChange = useCallback((value) => {
     setSessionNote(value);
 
-    // localStorage: capa de resiliencia inmediata (no fuente de verdad)
+    // localStorage inmediato — capa de resiliencia
     if (appointmentId) {
       try {
         const draft = JSON.parse(localStorage.getItem(`dental_draft_${appointmentId}`) || '{}');
@@ -204,55 +240,50 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
       setSyncStatus('saving');
       try {
         await apiClient.patch(`/appointments/${appointmentId}/nota-sesion`, { nota: value });
-        setSyncStatus('saved');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-      } catch (err) {
-        // No toast — falla silenciosamente, localStorage ya tiene el dato
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 4000);
+        setSyncTemp('saved');
+      } catch {
+        // Falla silenciosa — localStorage ya tiene el dato
+        // Encolar retry para cuando vuelva la conexión
+        enqueue({
+          method: 'PATCH',
+          url:    `/api/appointments/${appointmentId}/nota-sesion`,
+          data:   { nota: value },
+          label:  'Guardar nota de sesión',
+        });
+        setSyncTemp('error', 4000);
       }
     }, DEBOUNCE_MS);
-  }, [appointmentId]);
+  }, [appointmentId, enqueue]);
 
-  // Recuperar nota: primero del backend (si existe), fallback a localStorage
+  // Cargar nota: backend primero, localStorage como fallback
   useEffect(() => {
     if (!appointmentId) return;
-    const loadNote = async () => {
+    const load = async () => {
       try {
         const res = await apiClient.get(`/appointments/${appointmentId}`);
-        const backendNote = res.data?.nota_sesion_clinica;
-        if (backendNote) {
-          setSessionNote(backendNote);
-          return;
-        }
+        if (res.data?.nota_sesion_clinica) { setSessionNote(res.data.nota_sesion_clinica); return; }
       } catch {}
-      // Fallback a localStorage
       try {
         const draft = JSON.parse(localStorage.getItem(`dental_draft_${appointmentId}`) || '{}');
         if (draft.sessionNote) setSessionNote(draft.sessionNote);
       } catch {}
     };
-    loadNote();
+    load();
   }, [appointmentId]);
 
-  // ─── HELPERS DE LECTURA (memoizados) ────────────────────────────────────────
+  // ── HELPERS MEMOIZADOS ─────────────────────────────────────────────────────
   const toothStates = useMemo(() => {
     const states = {};
     if (!plan?.procedimientos) return states;
     plan.procedimientos.forEach(proc => {
       const tooth = proc.diente_numero;
       if (!tooth || tooth === '0') return;
-
       const state           = proc.estado_pipeline || 'creado';
       const currentPriority = PIPELINE_STATE_PRIORITY[states[tooth]] || 0;
-      const newPriority     = PIPELINE_STATE_PRIORITY[state] || 0;
-
+      const newPriority     = PIPELINE_STATE_PRIORITY[state]         || 0;
       if (newPriority > currentPriority) states[tooth] = state;
-
       const nombre = proc.procedimiento?.toLowerCase() || '';
-      if (nombre.includes('extrac') || nombre.includes('ausente')) {
-        states[tooth] = 'extraido';
-      }
+      if (nombre.includes('extrac') || nombre.includes('ausente')) states[tooth] = 'extraido';
     });
     return states;
   }, [plan]);

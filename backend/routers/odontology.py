@@ -4,6 +4,11 @@ from datetime import datetime, timezone
 
 from db import db
 from auth import TokenData, get_current_user, require_role
+from telemetry import t_consulta_cerrada, t_conflicto_detectado
+from pipeline_transitions import (
+    validate_transition, can_edit_clinically,
+    get_valid_transitions, TransitionError, CLINICAL_LOCK_STATES
+)
 from models import (
     Odontogram, OdontogramCreate, OdontogramUpdate, ToothState,
     OdontogramaClinico, OdontogramaCreate, OdontogramaUpdate, DienteFDI, SuperficieDental,
@@ -466,25 +471,42 @@ async def actualizar_procedimiento(
     plan_id: str,
     procedimiento_id: str,
     proc_update: ProcedimientoUpdate,
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
-    """Actualizar un procedimiento del plan"""
+    """
+    Actualiza datos clínicos de un procedimiento (no su estado).
+    Bloquea edición si el procedimiento está en estado terminal/clínicamente bloqueado.
+    """
     plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
-    procedimientos = plan.get('procedimientos', [])
+    procedimientos = plan.get("procedimientos", [])
     actualizado = False
 
     for i, proc in enumerate(procedimientos):
-        if proc.get('id') == procedimiento_id:
-            for key, value in proc_update.model_dump(exclude_unset=True).items():
-                if value is not None:
-                    procedimientos[i][key] = value
-            if proc_update.estado == 'realizado':
-                procedimientos[i]['fecha_realizado'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-            actualizado = True
-            break
+        if proc.get("id") != procedimiento_id:
+            continue
+
+        estado_actual = proc.get("estado_pipeline", "creado")
+
+        # Bloquear edición clínica en estados terminales
+        if not can_edit_clinically(estado_actual):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "CLINICAL_LOCK",
+                    "message": f"El procedimiento en estado '{estado_actual}' no puede editarse clínicamente.",
+                },
+            )
+
+        for key, value in proc_update.model_dump(exclude_unset=True).items():
+            if value is not None:
+                procedimientos[i][key] = value
+        if proc_update.estado == "realizado":
+            procedimientos[i]["fecha_realizado"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        actualizado = True
+        break
 
     if not actualizado:
         raise HTTPException(status_code=404, detail="Procedimiento no encontrado")
@@ -575,74 +597,108 @@ async def actualizar_estado_procedimiento(
     plan_id: str,
     proc_id: str,
     nuevo_estado: str,
-    current_user: TokenData = Depends(get_current_user)
+    plan_version: Optional[int] = None,   # bloqueo optimista: cliente envía version actual
+    source: str = "api",
+    current_user: TokenData = Depends(get_current_user),
 ):
     """
-    Actualiza el estado de un procedimiento dentro del pipeline odontológico.
-    Valida roles y transiciones permitidas.
+    Actualiza el estado de un procedimiento.
+    Valida transiciones mediante pipeline_transitions.py.
+    Implementa bloqueo optimista con plan_version.
     """
     if nuevo_estado not in VALID_PIPELINE_STATES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Estado no válido. Estados posibles: {', '.join(VALID_PIPELINE_STATES)}"
-        )
+        raise HTTPException(400, detail=f"Estado inválido: {nuevo_estado}")
 
-    # Restricciones de Rol
-    if nuevo_estado == "cobrado" and current_user.role == "Doctor":
-        raise HTTPException(
-            status_code=403,
-            detail="Los doctores no pueden marcar procedimientos como 'cobrado'. Esta acción es para Recepción/Administración."
-        )
-
-    if nuevo_estado == "realizado" and current_user.role == "Recepcion":
-        raise HTTPException(
-            status_code=403,
-            detail="El personal de recepción no puede marcar procedimientos como 'realizado'. Esta acción es para el Doctor."
-        )
-
-    # Obtener el plan
     plan = await db.planes_tratamiento.find_one({"id": plan_id}, {"_id": 0})
     if not plan:
-        raise HTTPException(status_code=404, detail="Plan de tratamiento no encontrado")
+        raise HTTPException(404, detail="Plan no encontrado")
 
-    procedimientos = plan.get('procedimientos', [])
+    # ── Bloqueo optimista ──────────────────────────────────────────────────────
+    server_version = plan.get("version", 1)
+    if plan_version is not None and plan_version != server_version:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "VERSION_CONFLICT",
+                "message": "El plan fue modificado por otro usuario. Recarga antes de continuar.",
+                "version_local": plan_version,
+                "version_server": server_version,
+            },
+        )
+
+    procedimientos = plan.get("procedimientos", [])
     found = False
+    proc_snapshot = None
+
     for proc in procedimientos:
-        if proc.get('id') == proc_id:
-            old_state = proc.get('estado_pipeline', 'creado')
+        if proc.get("id") != proc_id:
+            continue
 
-            proc['estado_pipeline'] = nuevo_estado
+        estado_actual = proc.get("estado_pipeline", "creado")
+        proc_snapshot = dict(proc)  # snapshot para auditoría
 
-            # Sincronizar con el campo 'estado' legacy
-            if nuevo_estado == "realizado":
-                proc['estado'] = "realizado"
-                proc['fecha_realizado'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-            elif nuevo_estado == "cancelado":
-                proc['estado'] = "cancelado"
+        # ── Validar transición via motor ───────────────────────────────────────
+        try:
+            validate_transition(estado_actual, nuevo_estado, current_user.role)
+        except TransitionError as e:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": e.code, "message": str(e)},
+            )
 
-            # Auditoría simple en notas
-            timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
-            log_entry = f"[{timestamp}] Estado cambiado de '{old_state}' a '{nuevo_estado}' por {current_user.username} ({current_user.role})."
-            proc['notas'] = (proc.get('notas', '') + '\n' + log_entry).strip()
+        # ── Aplicar cambio ─────────────────────────────────────────────────────
+        proc["estado_pipeline"] = nuevo_estado
 
-            found = True
-            break
+        if nuevo_estado == "realizado":
+            proc["estado"] = "realizado"
+            proc["fecha_realizado"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        elif nuevo_estado == "cancelado":
+            proc["estado"] = "cancelado"
+
+        timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        log = f"[{timestamp_str}] {estado_actual} → {nuevo_estado} por {current_user.username} ({current_user.role})."
+        proc["notas"] = (proc.get("notas", "") + "\n" + log).strip()
+        found = True
+        break
 
     if not found:
-        raise HTTPException(status_code=404, detail="Procedimiento no encontrado en el plan")
+        raise HTTPException(404, detail="Procedimiento no encontrado en el plan")
 
+    now = datetime.now(timezone.utc)
     await db.planes_tratamiento.update_one(
         {"id": plan_id},
         {
             "$set": {
                 "procedimientos": procedimientos,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "fecha_actualizacion": datetime.now(timezone.utc).strftime('%Y-%m-%d')
-            }
-        }
+                "updated_at": now.isoformat(),
+                "fecha_actualizacion": now.strftime("%Y-%m-%d"),
+            },
+            "$inc": {"version": 1},  # incremento atómico
+        },
     )
 
-    return {"message": "Estado actualizado", "nuevo_estado": nuevo_estado}
+    # ── Auditoría expandida ────────────────────────────────────────────────────
+    await _registrar_auditoria(
+        entity_type="procedimiento",
+        entity_id=proc_id,
+        plan_id=plan_id,
+        paciente_cedula=plan.get("paciente_cedula", ""),
+        accion="cambio_estado",
+        estado_anterior=proc_snapshot.get("estado_pipeline") if proc_snapshot else None,
+        estado_nuevo=nuevo_estado,
+        usuario=current_user.username,
+        actor_role=current_user.role,
+        source=source,
+        before_state=proc_snapshot,
+        metadata={"plan_version": server_version, "version_nueva": server_version + 1},
+    )
+
+    return {
+        "message": "Estado actualizado",
+        "nuevo_estado": nuevo_estado,
+        "version": server_version + 1,
+        "transiciones_disponibles": get_valid_transitions(nuevo_estado, current_user.role),
+    }
 
 
 @router.get("/plan-tratamiento/cola-financiera")
@@ -653,15 +709,26 @@ async def obtener_cola_financiera(
     Retorna planes en estado 'propuesto' que no tienen proformas generadas.
     Listo para el workflow de counter/recepción.
     """
+    # Soporta docs legacy donde proformas_generadas puede no existir.
+    # $size:0 falla si el campo no existe — usamos $or + $exists para cobertura total.
     query = {
         "procedimientos": {
             "$elemMatch": {"estado_pipeline": "propuesto"}
         },
-        "proformas_generadas": {"$size": 0}
+        "$or": [
+            {"proformas_generadas": {"$size": 0}},
+            {"proformas_generadas": {"$exists": False}},
+        ],
     }
 
     cursor = db.planes_tratamiento.find(query, {"_id": 0}).sort("fecha_creacion", 1)
     planes = await cursor.to_list(length=100)
+
+    # Normalizar campos legacy faltantes para el frontend
+    for plan in planes:
+        plan.setdefault("proformas_generadas", [])
+        plan.setdefault("sesiones_programadas", [])
+        plan.setdefault("version", 1)
 
     return planes
 
@@ -675,16 +742,28 @@ async def _registrar_auditoria(
     plan_id: str,
     accion: str,
     usuario: str,
-    rol: str,
+    actor_role: str,
     paciente_cedula: str = "",
     estado_anterior: str = None,
     estado_nuevo: str = None,
     valor_anterior: float = None,
     valor_nuevo: float = None,
     motivo: str = None,
+    source: str = "api",
+    before_state: dict = None,
+    after_state: dict = None,
+    metadata: dict = None,
+    # Alias legacy para compatibilidad con llamadas anteriores
+    rol: str = None,
 ):
-    """Inserta entrada de auditoría. Fire-and-forget — nunca bloquea el flujo."""
+    """
+    Inserta entrada de auditoría expandida.
+    Fire-and-forget — nunca bloquea el flujo clínico.
+    """
     try:
+        # Compatibilidad: si se pasa 'rol' en lugar de 'actor_role'
+        effective_role = actor_role or rol or "unknown"
+
         log = PipelineAuditLog(
             entity_type=entity_type,
             entity_id=entity_id,
@@ -695,9 +774,13 @@ async def _registrar_auditoria(
             estado_nuevo=estado_nuevo,
             valor_anterior=valor_anterior,
             valor_nuevo=valor_nuevo,
+            before_state=before_state or {},
+            after_state=after_state or {},
             usuario=usuario,
-            rol=rol,
+            actor_role=effective_role,
             motivo=motivo,
+            source=source,
+            metadata=metadata or {},
         )
         doc = log.model_dump()
         doc["timestamp"] = doc["timestamp"].isoformat()
@@ -820,6 +903,14 @@ async def cerrar_consulta(
                 "cerrado_at": now_str,
             }
         }
+    )
+
+    await t_consulta_cerrada(
+        plan_id=plan_id,
+        paciente_cedula=plan.get("paciente_cedula", ""),
+        usuario=current_user.username,
+        n_procedimientos=promovidos,
+        total_estimado=sum(p.get("precio", 0) for p in procedimientos),
     )
 
     return {

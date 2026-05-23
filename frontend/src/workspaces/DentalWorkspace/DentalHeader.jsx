@@ -25,7 +25,13 @@ const SyncIndicator = ({ syncStatus }) => {
   );
   if (syncStatus === 'error') return (
     <div className="hidden sm:flex items-center gap-1.5 text-[9px] text-red-500 font-bold">
-      <WifiOff className="w-3 h-3" /> Error de sincronización
+      <WifiOff className="w-3 h-3" /> Sin conexión — reintentando
+    </div>
+  );
+  if (syncStatus === 'conflict') return (
+    <div className="hidden sm:flex items-center gap-1.5 text-[9px] text-orange-600 font-bold
+      bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full animate-pulse">
+      <AlertTriangle className="w-3 h-3" /> Conflicto de edición — recargando
     </div>
   );
   return (

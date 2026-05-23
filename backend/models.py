@@ -703,6 +703,9 @@ class OdontogramaClinico(BaseModel):
     fecha_aprobacion: Optional[str] = None
     aprobado_por: Optional[str] = None
 
+    # Control de concurrencia optimista
+    version: int = 1  # incrementa en cada write; frontend debe enviar version actual
+
 
 class OdontogramaCreate(BaseModel):
     paciente_id: str
@@ -861,6 +864,9 @@ class PlanTratamiento(BaseModel):
     fecha_aprobacion: Optional[str] = None
     aprobado_por: Optional[str] = None
 
+    # Control de concurrencia optimista
+    version: int = 1  # incrementa en cada write; frontend debe enviar version actual
+
 
 
 class PlanTratamientoCreate(BaseModel):
@@ -911,32 +917,48 @@ class ProcedimientoUpdate(BaseModel):
 class PipelineAuditLog(BaseModel):
     """
     Entrada de auditoría para cambios en el pipeline clínico.
-    Colección: pipeline_audit_log (append-only, nunca se modifica).
+    Colección: pipeline_audit_log (append-only — nunca se modifica ni elimina).
+    Sirve como trail legal/clínico.
     """
     model_config = ConfigDict(extra="ignore")
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
-    # Referencia al objeto auditado
-    entity_type: str           # "procedimiento" | "plan" | "proforma"
-    entity_id: str             # ID del procedimiento o plan
-    plan_id: str               # Siempre presente para trazabilidad
+    # ── Referencia ────────────────────────────────────────────────────────────
+    entity_type: str        # "procedimiento" | "plan" | "proforma" | "nota_sesion"
+    entity_id: str          # ID del objeto auditado
+    plan_id: str            # Siempre presente — permite reconstruir historial del plan
     paciente_cedula: str = ""
 
-    # Cambio registrado
-    accion: str                # "cambio_estado" | "cambio_precio" | "aprobacion" | "ejecucion"
+    # ── Qué cambió ────────────────────────────────────────────────────────────
+    accion: str             # "cambio_estado" | "cambio_precio" | "aprobacion" |
+                            # "ejecucion" | "cierre_consulta" | "generacion_proforma" |
+                            # "conflicto_detectado" | "rollback"
+
+    # Estados antes/después (snapshot completo para reconstrucción)
+    before_state: Optional[dict] = None   # estado completo del objeto antes
+    after_state: Optional[dict] = None    # estado completo del objeto después
+
+    # Shortcuts para queries frecuentes (redundan con before/after_state)
     estado_anterior: Optional[str] = None
     estado_nuevo: Optional[str] = None
-    valor_anterior: Optional[float] = None  # para cambio_precio
+    valor_anterior: Optional[float] = None
     valor_nuevo: Optional[float] = None
 
-    # Actor
-    usuario: str               # username
-    rol: str                   # role del usuario
-    motivo: Optional[str] = None  # nota opcional
+    # ── Actor ─────────────────────────────────────────────────────────────────
+    usuario: str            # username del actor
+    actor_role: str         # rol en el momento de la acción (inmutable aquí)
+    motivo: Optional[str] = None
 
-    # Timestamp
+    # ── Origen ────────────────────────────────────────────────────────────────
+    source: str = "api"     # "doctor_workspace" | "financial_workspace" | "api" | "system"
+
+    # ── Metadatos flexibles ───────────────────────────────────────────────────
+    metadata: dict = Field(default_factory=dict)
+    # Ejemplos de uso:
+    # {"ip": "...", "user_agent": "...", "plan_version": 3}
+    # {"conflicto": "version_mismatch", "version_local": 2, "version_server": 4}
+    # {"proforma_id": "...", "monto": 345.00}
+
+    # ── Timestamp ─────────────────────────────────────────────────────────────
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
