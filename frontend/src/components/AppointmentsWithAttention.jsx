@@ -444,10 +444,10 @@ export const AppointmentsWithAttention = ({
 
   // Filter appointments by doctor if user is a doctor
   // Solo filtrar por especialidad si el usuario tiene especialidad definida
-  let visibleAppointments = filteredAppointments;
+  let visibleAppointments = filteredAppointments ?? [];
   
   if (user?.role === "Doctor" && user?.doctor_id) {
-    visibleAppointments = filteredAppointments.filter(apt => {
+    visibleAppointments = visibleAppointments.filter(apt => {
       // Siempre filtrar por doctor_id
       if (apt.doctor_id !== user.doctor_id) return false;
       

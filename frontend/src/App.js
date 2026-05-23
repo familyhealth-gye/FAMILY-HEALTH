@@ -127,6 +127,28 @@ function LegacyApp() {
     }
   };
 
+
+  const handleEditAppointment = (appointment) => {
+    // Implementación placeholder o real si se desea
+    toast.info("Función de edición en desarrollo");
+  };
+
+  const handleDeleteAppointment = async (id) => {
+    if (!window.confirm("¿Eliminar cita?")) return;
+    try {
+      await apiClient.delete(`/appointments/${id}`);
+      toast.success("Cita eliminada");
+      fetchData();
+    } catch (e) {
+      toast.error("Error al eliminar");
+    }
+  };
+
+  const openWhatsApp = (telefono) => {
+    if (!telefono) return toast.error("Sin teléfono");
+    window.open(`https://wa.me/${telefono}`, "_blank");
+  };
+
   if (authLoading) return <div className="flex items-center justify-center h-screen">Cargando...</div>;
   if (!isAuthenticated) return <Login onLogin={login} />;
 
@@ -222,9 +244,12 @@ function LegacyApp() {
 
         <TabsContent value="appointments" className="tab-content">
           <AppointmentsWithAttention
-            appointments={appointments}
-            doctors={doctors}
-            specialties={specialties}
+            filteredAppointments={appointments}
+            user={user}
+            token={token}
+            handleEditAppointment={handleEditAppointment}
+            handleDeleteAppointment={handleDeleteAppointment}
+            openWhatsApp={openWhatsApp}
             fetchData={fetchData}
           />
         </TabsContent>
