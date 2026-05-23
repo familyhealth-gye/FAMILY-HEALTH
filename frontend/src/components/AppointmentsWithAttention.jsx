@@ -536,6 +536,7 @@ export const AppointmentsWithAttention = ({
                       <Play className="button-icon" size={14} />
                       {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
                     </Button>
+                  )}
                   {ENABLE_DENTAL_V2 && appointment.especialidad === "Odontología" && (
                     <Button
                       size="sm"
@@ -545,8 +546,6 @@ export const AppointmentsWithAttention = ({
                     >
                       Workspace V2
                     </Button>
-                  )}
-
                   )}
                   {appointment.estado === "Pendiente de Pago" && user?.role === "Doctor" && (
                     <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={`resume-attention-${appointment.id}`} title="Reanudar para completar historia clínica">
