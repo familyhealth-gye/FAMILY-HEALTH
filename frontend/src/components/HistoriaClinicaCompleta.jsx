@@ -8,6 +8,8 @@ import {
   Stethoscope, Pill, Clock, Download, Smile, ClipboardList
 } from "lucide-react";
 import { OdontogramaClinicoTab } from "./OdontogramaClinicoTab";
+import { NuevaCitaModal } from "./NuevaCitaModal";
+import { CalendarPlus } from "lucide-react";
 import { PlanTratamientoTab } from "./PlanTratamientoTab";
 import "./HistoriaClinicaCompleta.css";
 
@@ -22,6 +24,7 @@ export const HistoriaClinicaCompleta = ({
   especialidad = null 
 }) => {
   const [loading, setLoading] = useState(false);
+  const [showNuevaCita, setShowNuevaCita] = useState(false);
   const [consultas, setConsultas] = useState([]);
   const [recetas, setRecetas] = useState([]);
   const [selectedConsulta, setSelectedConsulta] = useState(null);
@@ -497,6 +500,14 @@ export const HistoriaClinicaCompleta = ({
           <ArrowLeft size={20} />
           Volver
         </Button>
+        <Button
+          size="sm"
+          onClick={() => setShowNuevaCita(true)}
+          style={{ marginLeft: "auto", background: "#0C4A6E", color: "white", display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: "700" }}
+        >
+          <CalendarPlus size={15} />
+          Agendar Cita
+        </Button>
         
         <div className="paciente-card">
           <div className="paciente-avatar">
@@ -746,6 +757,17 @@ export const HistoriaClinicaCompleta = ({
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Modal Nueva Cita - contexto fromPatient: no pide datos del paciente ni doctor */}
+      <NuevaCitaModal
+        isOpen={showNuevaCita}
+        onClose={() => setShowNuevaCita(false)}
+        onSuccess={() => {}}
+        token={token}
+        user={user}
+        paciente={paciente}
+        fromPatient={true}
+      />
     </div>
   );
 };

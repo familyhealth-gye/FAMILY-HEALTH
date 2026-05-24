@@ -117,7 +117,7 @@ const DentalWorkspace = () => {
             onNoteChange={pipeline.handleSessionNoteChange}
             syncStatus={pipeline.syncStatus}
           />
-          <PreviousSessions patientId={appointment?.paciente_id} />
+          <PreviousSessions patientId={appointment?.paciente_id} pacienteCedula={appointment?.paciente_cedula || appointment?.cedula} />
         </aside>
 
         {/* ── Center Panel ── */}

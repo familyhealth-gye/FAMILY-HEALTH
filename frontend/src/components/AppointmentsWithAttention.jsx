@@ -2,7 +2,8 @@ import { ENABLE_DENTAL_V2 } from "@/lib/constants";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Phone, Edit, Trash2, Play, Check, ArrowLeft } from "lucide-react";
+import { Phone, Edit, Trash2, Play, Check, ArrowLeft, CalendarPlus } from "lucide-react";
+import { NuevaCitaModal } from "./NuevaCitaModal";
 import { toast } from "sonner";
 import apiClient from "@/lib/axios";
 import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
@@ -25,6 +26,7 @@ export const AppointmentsWithAttention = ({
   fetchData 
 }) => {
   const [vistaAtencion, setVistaAtencion] = useState(false);
+  const [showNewAppointment, setShowNewAppointment] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [modoAtencion, setModoAtencion] = useState("historia"); // "historia" o "formulario"
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
@@ -434,11 +436,13 @@ export const AppointmentsWithAttention = ({
     return priority[a.estado || "Programada"] - priority[b.estado || "Programada"];
   });
 
+
+
   // Contenido de la lista de citas (se usa en el return condicional)
   const appointmentsContent = (
     <>
-      {/* Filtro de fecha */}
-      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', background: '#F0F9FF', padding: '1rem', borderRadius: '8px' }}>
+      {/* Filtro de fecha + Crear Cita */}
+      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', background: '#F0F9FF', padding: '1rem', borderRadius: '8px', flexWrap: 'wrap' }}>
         <Label style={{ fontWeight: 600, color: '#0C4A6E' }}>Mostrar citas del:</Label>
         <input
           type="date"
@@ -455,7 +459,26 @@ export const AppointmentsWithAttention = ({
         <span style={{ color: '#64748B', fontSize: '0.875rem' }}>
           ({sortedAppointments.length} citas)
         </span>
+        {(user?.role === "Administrador" || user?.role === "Recepcion" || user?.role === "Doctor") && (
+          <Button
+            size="sm"
+            style={{ marginLeft: 'auto', background: '#0C4A6E', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}
+            onClick={() => setShowNewAppointment(true)}
+          >
+            <CalendarPlus size={15} />
+            Crear Cita
+          </Button>
+        )}
       </div>
+
+      <NuevaCitaModal
+        isOpen={showNewAppointment}
+        onClose={() => setShowNewAppointment(false)}
+        onSuccess={fetchData}
+        token={token}
+        user={user}
+        fromPatient={false}
+      />
 
       <div className="table-container">
         {/* Vista tabla  escritorio y tablet */}

@@ -690,7 +690,7 @@ export const OdontologiaFormSimple = ({ appointment, token, onClose, onSuccess }
             <div style={{ ...S.sec }}>💊 MEDICAMENTOS</div>
             {(form.receta_medicamentos || [{ nombre:"", dosis:"", frecuencia:"", duracion:"", indicaciones:"" }]).map((med, idx) => (
               <div key={idx} style={{ background:"#f8fdff", borderRadius:"8px", padding:"10px", marginBottom:"8px", border:"1px solid #e0f7fa" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:"6px", marginBottom:"6px" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(100px, 1fr))", gap:"6px", marginBottom:"6px" }}>
                   <div>
                     <label style={S.label}>Medicamento</label>
                     <input value={med.nombre||""} onChange={e=>{

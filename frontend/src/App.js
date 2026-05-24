@@ -209,10 +209,6 @@ function LegacyApp({ user: propUser, token: propToken }) {
                 <Smile className="tab-icon" />
                 Odontograma
               </TabsTrigger>
-              <TabsTrigger value="ia-medica">
-                <Smile className="tab-icon" />
-                IA Médica
-              </TabsTrigger>
             </>
           )}
           {user?.role === "Administrador" && (
@@ -368,11 +364,6 @@ function LegacyApp({ user: propUser, token: propToken }) {
           <>
             <TabsContent value="odontograma-standalone" className="tab-content">
               <OdontogramaStandalone token={token} user={user} />
-            </TabsContent>
-            <TabsContent value="ia-medica" className="tab-content">
-              <div className="p-4 bg-white rounded-lg shadow">
-                <ConfiguracionIA token={token} />
-              </div>
             </TabsContent>
           </>
         )}
