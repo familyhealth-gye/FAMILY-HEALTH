@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Stethoscope, Users, FileText, Package, DollarSign, ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile, UserPlus, Edit } from "lucide-react";
+import { Stethoscope, Users, Trash2, FileText, Package, DollarSign, ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile, UserPlus, Edit } from "lucide-react";
 
 import { InvoicesTab } from "@/components/InvoicesTab";
 import { AbonosTab } from "@/components/AbonosTab";
