@@ -27,6 +27,9 @@ export const AppointmentsWithAttention = ({
 }) => {
   const [vistaAtencion, setVistaAtencion] = useState(false);
   const [showNewAppointment, setShowNewAppointment] = useState(false);
+  const [editingAppt, setEditingAppt] = useState(null);
+  const [editApptForm, setEditApptForm] = useState({});
+  const [savingEdit, setSavingEdit] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [modoAtencion, setModoAtencion] = useState("historia"); // "historia" o "formulario"
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
@@ -56,38 +59,38 @@ export const AppointmentsWithAttention = ({
   });
 
   const handleStartAttention = async (appointment) => {
-    console.log(" ======== INICIANDO/REANUDANDO ATENCIN ========");
+    console.log(" ======== INICIANDO/REANUDANDO ATENCIÓN ========");
     console.log(" Appointment original:", appointment);
     console.log(" Paciente ID:", appointment.paciente_id);
-    console.log(" Paciente Cdula:", appointment.paciente_cedula || appointment.cedula);
+    console.log(" Paciente Cédula:", appointment.paciente_cedula || appointment.cedula);
     console.log(" Usuario:", user?.role);
     console.log(" Especialidad usuario:", userEspecialidad);
     
-    // VALIDACIN: Solo validar si el usuario tiene especialidad definida
+    // VALIDACIÓN: Solo validar si el usuario tiene especialidad definida
     // Si no tiene especialidad (usuario legacy), permitir acceso
     if (user?.role === "Doctor" && userEspecialidad && appointment.especialidad !== userEspecialidad) {
       toast.error('No puede atender consultas de ' + appointment.especialidad + '. Su especialidad es ' + userEspecialidad + '.');
       return;
     }
     
-    // VALIDACIN: Verificar que el doctor_id coincida (si est definido)
+    // VALIDACIÓN: Verificar que el doctor_id coincida (si est definido)
     if (user?.role === "Doctor" && user.doctor_id && appointment.doctor_id !== user.doctor_id) {
       toast.error("No tiene permisos para atender esta consulta.");
       return;
     }
     
     try {
-      // Update appointment status to "En Atencin"
-      console.log(" Actualizando estado de cita a 'En Atencin'...");
+      // Update appointment status to "En Atención"
+      console.log(" Actualizando estado de cita a 'En Atención'...");
       await apiClient.put('/appointments/' + appointment.id,
-        { estado: "En Atencin" });
+        { estado: "En Atención" });
       console.log("OK Estado actualizado");
 
       // IMPORTANTE: Obtener datos completos del paciente si existe paciente_cedula
       let appointmentConDatosPaciente = { ...appointment };
       
       const cedula = appointment.paciente_cedula || appointment.cedula;
-      console.log(" Buscando datos completos del paciente con cdula:", cedula);
+      console.log(" Buscando datos completos del paciente con cédula:", cedula);
       
       if (cedula) {
         try {
@@ -118,9 +121,9 @@ export const AppointmentsWithAttention = ({
             
             console.log("OK Appointment enriquecido con datos del paciente:");
             console.log("   - Nombre:", appointmentConDatosPaciente.nombre_completo);
-            console.log("   - Cdula:", appointmentConDatosPaciente.cedula);
+            console.log("   - Cédula:", appointmentConDatosPaciente.cedula);
             console.log("   - Fecha Nacimiento:", appointmentConDatosPaciente.fecha_nacimiento);
-            console.log("   - Telfono:", appointmentConDatosPaciente.telefono);
+            console.log("   - Teléfono:", appointmentConDatosPaciente.telefono);
             console.log("   - Paciente ID:", appointmentConDatosPaciente.paciente_id);
           } else {
             console.warn("Saldo No se encontr paciente en sistema unificado, usando datos del appointment");
@@ -134,9 +137,9 @@ export const AppointmentsWithAttention = ({
       console.log(" Seteando appointment seleccionado con datos completos");
       setSelectedAppointment(appointmentConDatosPaciente);
       
-      // Para Odontologa, abrir vista completa de historia clnica
-      if (appointment.especialidad === "Odontologa") {
-        console.log(" Modo: Historia Clnica Odontolgica");
+      // Para Odontología, abrir vista completa de historia clínica
+      if (appointment.especialidad === "Odontología") {
+        console.log(" Modo: Historia Clínica Odontolgica");
         setModoAtencion("historia");
       } else {
         console.log(" Modo: Formulario General");
@@ -144,16 +147,69 @@ export const AppointmentsWithAttention = ({
       }
       
       setVistaAtencion(true);
-      console.log(" Vista de atencin abierta");
+      console.log(" Vista de atención abierta");
       console.log("========================================");
       
       await fetchData();
     } catch (error) {
-      console.error(" ======== ERROR AL INICIAR ATENCIN ========");
+      console.error(" ======== ERROR AL INICIAR ATENCIÓN ========");
       console.error(" Error completo:", error);
       console.error(" Response:", error.response?.data);
       console.error("========================================");
-      toast.error("Error al iniciar atencin: " + (error.response?.data?.detail || error.message));
+      toast.error("Error al iniciar atención: " + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  // ── Edición de cita ─────────────────────────────────────────────────────────
+  const handleEditAppt = (appt) => {
+    // Si el padre pasó un handler real, usarlo; si no, modal interno
+    if (handleEditAppointment) {
+      handleEditAppointment(appt);
+      return;
+    }
+    setEditApptForm({
+      nombre_completo: appt.nombre_completo || '',
+      cedula:          appt.cedula          || appt.paciente_cedula || '',
+      telefono:        appt.telefono        || '',
+      fecha:           appt.fecha           || '',
+      hora:            appt.hora            || '',
+      especialidad:    appt.especialidad    || '',
+      doctor_nombre:   appt.doctor_nombre   || '',
+      motivo:          appt.motivo          || '',
+      estado:          appt.estado          || 'Programada',
+    });
+    setEditingAppt(appt);
+  };
+
+  const handleSaveEditAppt = async () => {
+    if (!editingAppt?.id) return;
+    setSavingEdit(true);
+    try {
+      await apiClient.put('/appointments/' + editingAppt.id, editApptForm);
+      toast.success('Cita actualizada correctamente');
+      setEditingAppt(null);
+      if (fetchData) fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error al actualizar la cita');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // ── Eliminación de cita ───────────────────────────────────────────────────
+  const handleDeleteAppt = async (apptId) => {
+    // Si el padre pasó un handler real, usarlo
+    if (handleDeleteAppointment) {
+      handleDeleteAppointment(apptId);
+      return;
+    }
+    if (!window.confirm('¿Eliminar esta cita? Esta acción no se puede deshacer.')) return;
+    try {
+      await apiClient.delete('/appointments/' + apptId);
+      toast.success('Cita eliminada');
+      if (fetchData) fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error al eliminar la cita');
     }
   };
 
@@ -232,7 +288,7 @@ export const AppointmentsWithAttention = ({
         } catch { /* continuar */ }
       }
 
-      // 3. ltimo recurso: buscar por cdula
+      // 3. ltimo recurso: buscar por cédula
       if (!consulta && cedula) {
         try {
           const res3 = await apiClient.get('/financial/consultas');
@@ -243,7 +299,7 @@ export const AppointmentsWithAttention = ({
       }
 
       if (!consulta) {
-        toast.error("No se pudo crear la consulta financiera. Cierre primero la consulta mdica.");
+        toast.error("No se pudo crear la consulta financiera. Cierre primero la consulta médica.");
         return;
       }
 
@@ -351,11 +407,11 @@ export const AppointmentsWithAttention = ({
           const factEmail = apt.factura_email || (apt.es_menor && apt.representante_email ? apt.representante_email : apt.email || "");
           const serviciosConsulta = (consultaFinanciera?.servicios || []).length > 0
             ? consultaFinanciera.servicios.map(s => ({
-                descripcion: s.servicio || s.nombre || "Servicio mdico",
+                descripcion: s.servicio || s.nombre || "Servicio médico",
                 cantidad: s.cantidad || 1, precio_unitario: s.precio_unitario || 0,
                 descuento: 0, subtotal: (s.precio_unitario || 0) * (s.cantidad || 1),
               }))
-            : [{ descripcion: 'Consulta ' + apt.especialidad || "Mdica" + '', cantidad: 1,
+            : [{ descripcion: 'Consulta ' + apt.especialidad || "Médica" + '', cantidad: 1,
                 precio_unitario: montoFinal + descuentoFinal, descuento: descuentoFinal, subtotal: montoFinal }];
 
           const facturaRes = await apiClient.post('/invoices', {
@@ -430,9 +486,9 @@ export const AppointmentsWithAttention = ({
   // Filter by date (only show appointments for selected date)
   visibleAppointments = visibleAppointments.filter(apt => apt.fecha === dateFilter);
 
-  // Sort by estado priority: "En Atencin" first to allow recovery
+  // Sort by estado priority: "En Atención" first to allow recovery
   const sortedAppointments = [...visibleAppointments].sort((a, b) => {
-    const priority = { "En Atencin": 0, "Programada": 1, "Pendiente de Pago": 2, "Pagada": 3, "Cancelada": 4 };
+    const priority = { "En Atención": 0, "Programada": 1, "Pendiente de Pago": 2, "Pagada": 3, "Cancelada": 4 };
     return priority[a.estado || "Programada"] - priority[b.estado || "Programada"];
   });
 
@@ -471,6 +527,59 @@ export const AppointmentsWithAttention = ({
         )}
       </div>
 
+      {/* Modal Editar Cita */}
+      {editingAppt && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:'16px' }}>
+          <div style={{ background:'white', borderRadius:'14px', padding:'24px', width:'100%', maxWidth:'480px', boxShadow:'0 20px 60px rgba(0,0,0,0.25)', maxHeight:'90vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' }}>
+              <h3 style={{ margin:0, fontSize:'16px', fontWeight:'700', color:'#0C4A6E' }}>✏️ Editar Cita</h3>
+              <button onClick={() => setEditingAppt(null)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:'18px', color:'#9CA3AF' }}>✕</button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'12px' }}>
+              {[
+                { key:'nombre_completo', label:'Nombre', full:true, placeholder:'Nombre del paciente' },
+                { key:'cedula', label:'Cédula', placeholder:'0000000000' },
+                { key:'telefono', label:'Teléfono', placeholder:'09XXXXXXXX' },
+                { key:'fecha', label:'Fecha', type:'date' },
+                { key:'hora', label:'Hora', type:'time' },
+                { key:'doctor_nombre', label:'Doctor', placeholder:'Nombre del doctor' },
+                { key:'motivo', label:'Motivo', full:true, placeholder:'Motivo de consulta' },
+              ].map(({ key, label, full, placeholder, type }) => (
+                <div key={key} style={full ? { gridColumn:'1/-1' } : {}}>
+                  <label style={{ fontSize:'12px', fontWeight:'600', color:'#374151', display:'block', marginBottom:'4px' }}>{label}</label>
+                  <input
+                    type={type || 'text'}
+                    value={editApptForm[key] || ''}
+                    onChange={e => setEditApptForm(f => ({ ...f, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #BFDBFE', borderRadius:'8px', fontSize:'13px', boxSizing:'border-box' }}
+                  />
+                </div>
+              ))}
+              <div>
+                <label style={{ fontSize:'12px', fontWeight:'600', color:'#374151', display:'block', marginBottom:'4px' }}>Estado</label>
+                <select value={editApptForm.estado || ''} onChange={e => setEditApptForm(f => ({ ...f, estado: e.target.value }))}
+                  style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #BFDBFE', borderRadius:'8px', fontSize:'13px', boxSizing:'border-box' }}>
+                  {['Programada','En Atención','Pendiente de Pago','Atendido','Anulada'].map(e => (
+                    <option key={e} value={e}>{e}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:'10px' }}>
+              <button onClick={handleSaveEditAppt} disabled={savingEdit}
+                style={{ flex:1, padding:'11px', background: savingEdit ? '#93C5FD' : '#0C4A6E', color:'white', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:'700', cursor: savingEdit ? 'not-allowed' : 'pointer' }}>
+                {savingEdit ? 'Guardando...' : '✓ Guardar Cambios'}
+              </button>
+              <button onClick={() => setEditingAppt(null)}
+                style={{ padding:'11px 16px', background:'#F3F4F6', color:'#374151', border:'none', borderRadius:'8px', fontSize:'13px', cursor:'pointer' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <NuevaCitaModal
         isOpen={showNewAppointment}
         onClose={() => setShowNewAppointment(false)}
@@ -487,9 +596,9 @@ export const AppointmentsWithAttention = ({
             <tr>
               <th>Estado</th>
               <th>Paciente</th>
-              <th className="col-opcional">Cdula</th>
+              <th className="col-opcional">Cédula</th>
               <th className="col-opcional">Edad</th>
-              <th className="col-opcional">Telfono</th>
+              <th className="col-opcional">Teléfono</th>
               <th>Especialidad</th>
               <th className="col-opcional">Doctor</th>
               <th>Fecha</th>
@@ -521,13 +630,13 @@ export const AppointmentsWithAttention = ({
                 <td>{appointment.fecha}</td>
                 <td className="col-opcional">{appointment.hora}</td>
                 <td className="actions-cell">
-                  {(appointment.estado === "Programada" || appointment.estado === "En Atencin" || !appointment.estado) && user?.role === "Doctor" && (
+                  {(appointment.estado === "Programada" || appointment.estado === "En Atención" || !appointment.estado) && user?.role === "Doctor" && (
                     <Button size="sm" variant="default" onClick={() => handleStartAttention(appointment)} className="attention-button" data-testid={'start-attention-' + appointment.id + ''}>
                       <Play className="button-icon" size={14} />
-                      {appointment.estado === "En Atencin" ? "Continuar" : "Atender"}
+                      {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
                     </Button>
                   )}
-                  {ENABLE_DENTAL_V2 && appointment.especialidad === "Odontologa" && (
+                  {ENABLE_DENTAL_V2 && appointment.especialidad === "Odontología" && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -538,7 +647,7 @@ export const AppointmentsWithAttention = ({
                     </Button>
                   )}
                   {appointment.estado === "Pendiente de Pago" && user?.role === "Doctor" && (
-                    <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={'resume-attention-' + appointment.id + ''} title="Reanudar para completar historia clnica">
+                    <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={'resume-attention-' + appointment.id + ''} title="Reanudar para completar historia clínica">
                       <Play className="button-icon" size={14} />
                       Reanudar
                     </Button>
@@ -549,12 +658,12 @@ export const AppointmentsWithAttention = ({
                       Cobrar
                     </Button>
                   )}
-                  {appointment.estado !== "En Atencin" && (
+                  {appointment.estado !== "En Atención" && (
                     <>
-                      <Button variant="ghost" size="sm" onClick={() => handleEditAppointment(appointment)} data-testid={'edit-appointment-' + appointment.id + ''}>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditAppt(appointment)} data-testid={'edit-appointment-' + appointment.id + ''}>
                         <Edit className="action-icon" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAppointment(appointment.id)} data-testid={'delete-appointment-' + appointment.id + ''}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAppt(appointment.id)} data-testid={'delete-appointment-' + appointment.id + ''}>
                         <Trash2 className="action-icon delete-icon" />
                     </Button>
                   </>
@@ -574,7 +683,7 @@ export const AppointmentsWithAttention = ({
     </>
   );
 
-  // Si est en modo atencin, mostrar la vista correspondiente
+  // Si est en modo atención, mostrar la vista correspondiente
   if (vistaAtencion && selectedAppointment) {
     // Para otras especialidades: Formulario en vista amplia
     return (
@@ -599,7 +708,7 @@ export const AppointmentsWithAttention = ({
               </h2>
               <div className="patient-info-inline" style={{ flexWrap:"wrap", gap:"0.5rem", marginTop:"2px" }}>
                 <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
-                  <strong>Cdula:</strong> {selectedAppointment.cedula}
+                  <strong>Cédula:</strong> {selectedAppointment.cedula}
                 </span>
                 {selectedAppointment.fecha_nacimiento ? (
                   <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
@@ -608,12 +717,12 @@ export const AppointmentsWithAttention = ({
                       const nac = new Date(selectedAppointment.fecha_nacimiento + "T12:00:00");
                       let edad = hoy.getFullYear() - nac.getFullYear();
                       if (hoy.getMonth() < nac.getMonth() || (hoy.getMonth() === nac.getMonth() && hoy.getDate() < nac.getDate())) edad--;
-                      return '' + edad + ' aos';
+                      return '' + edad + ' años';
                     })()}
                   </span>
                 ) : selectedAppointment.edad > 0 ? (
                   <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
-                    <strong>Edad:</strong> {selectedAppointment.edad} aos
+                    <strong>Edad:</strong> {selectedAppointment.edad} años
                   </span>
                 ) : null}
                 {selectedAppointment.telefono && (
@@ -627,7 +736,8 @@ export const AppointmentsWithAttention = ({
         </div>
         
         <div className="atencion-contenido">
-          {selectedAppointment.especialidad === "Medicina General" && (
+          {(selectedAppointment.especialidad === "Medicina General" ||
+            selectedAppointment.especialidad === "Medicina") && (
             <MedicinaGeneralForm
               appointment={selectedAppointment}
               token={token}
@@ -639,7 +749,8 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {selectedAppointment.especialidad === "Odontologa" && (
+          {(selectedAppointment.especialidad === "Odontología" ||
+            selectedAppointment.especialidad === "Odontologia") && (
             <OdontologiaFormSimple
               appointment={selectedAppointment}
               token={token}
@@ -651,7 +762,8 @@ export const AppointmentsWithAttention = ({
             />
           )}
           
-          {selectedAppointment.especialidad === "Pediatra" && (
+          {(selectedAppointment.especialidad === "Pediatría" ||
+            selectedAppointment.especialidad === "Pediatria") && (
             <PediatriaForm
               appointment={selectedAppointment}
               token={token}
@@ -663,7 +775,8 @@ export const AppointmentsWithAttention = ({
             />
           )}
           
-          {selectedAppointment.especialidad === "Nutricin" && (
+          {(selectedAppointment.especialidad === "Nutrición" ||
+            selectedAppointment.especialidad === "Nutricion") && (
             <NutricionForm
               appointment={selectedAppointment}
               token={token}
@@ -672,7 +785,8 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {["Ginecologa","Obstetricia","Ginecologa/Obstetricia"].includes(selectedAppointment.especialidad) && (
+          {["Ginecología","Obstetricia","Ginecología/Obstetricia",
+             "Ginecologia","Ginecologia/Obstetricia"].includes(selectedAppointment.especialidad) && (
             <GinecologiaForm
               appointment={selectedAppointment}
               token={token}
@@ -681,7 +795,8 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {selectedAppointment.especialidad === "Ecografa" && (
+          {(selectedAppointment.especialidad === "Ecografía" ||
+            selectedAppointment.especialidad === "Ecografia") && (
             <EcografiaForm
               appointment={selectedAppointment}
               token={token}
@@ -690,13 +805,15 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {!["Medicina General","Pediatra","Odontologa","Nutricin",
-             "Ginecologa","Obstetricia","Ginecologa/Obstetricia","Ecografa"
+          {!["Medicina General","Pediatría","Odontología","Nutrición",
+             "Ginecología","Obstetricia","Ginecología/Obstetricia","Ecografía",
+             "Medicina","Odontologia","Nutricion","Pediatria",
+             "Ginecologia","Ginecologia/Obstetricia","Ecografia"
             ].includes(selectedAppointment.especialidad) && (
             <div style={{padding: '2rem', textAlign: 'center'}}>
-              <p>Historia clnica de <strong>{selectedAppointment.especialidad}</strong> prximamente.</p>
+              <p>Historia clínica de <strong>{selectedAppointment.especialidad}</strong> próximamente.</p>
               <p style={{marginTop: '1rem', color: '#64748B'}}>
-                Disponibles: Medicina General, Pediatra, Odontologa, Nutricin, Ginecologa y Ecografa.
+                Disponibles: Medicina General, Pediatría, Odontología, Nutrición, Ginecología y Ecografía.
               </p>
               <Button 
                 onClick={() => {

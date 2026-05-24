@@ -20,7 +20,7 @@
  *   fromPatient     bool         — true cuando se abre desde historia clínica
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CalendarPlus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -32,6 +32,37 @@ const ESPECIALIDADES = [
   "Odontología", "Medicina General", "Pediatría",
   "Ginecología", "Nutrición", "Ecografía",
 ];
+
+// Cache de doctores por especialidad
+const useDoctores = (especialidad, token) => {
+  const [doctores, setDoctores] = useState([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  const fetchDoctores = useCallback(async () => {
+    if (!especialidad || !token) { setDoctores([]); return; }
+    setLoadingDocs(true);
+    try {
+      const res = await axios.get(`${API}/doctors`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const todos = Array.isArray(res.data) ? res.data : [];
+      // Filtrar por especialidad — comparación normalizada
+      const norm = (s) => (s || "").trim().toLowerCase();
+      const filtrados = todos.filter(d =>
+        norm(d.especialidad) === norm(especialidad) ||
+        norm(d.especialidades?.join(",") || "") .includes(norm(especialidad))
+      );
+      setDoctores(filtrados.length > 0 ? filtrados : todos);
+    } catch {
+      setDoctores([]);
+    } finally {
+      setLoadingDocs(false);
+    }
+  }, [especialidad, token]);
+
+  useEffect(() => { fetchDoctores(); }, [fetchDoctores]);
+  return { doctores, loadingDocs };
+};
 
 const defaultForm = (user, paciente, fromPatient) => ({
   nombre_completo: paciente?.nombre_completo || paciente?.nombre || "",
@@ -55,6 +86,7 @@ export const NuevaCitaModal = ({
   fromPatient = false,
 }) => {
   const [form, setForm]       = useState(() => defaultForm(user, paciente, fromPatient));
+  const { doctores, loadingDocs } = useDoctores(form.especialidad, token);
   const [saving, setSaving]   = useState(false);
 
   // Resetear form cuando cambia el contexto o se abre el modal
@@ -180,9 +212,27 @@ export const NuevaCitaModal = ({
                 <label style={lbl}>Cédula</label>
                 <input
                   value={form.cedula}
-                  onChange={e => set("cedula", e.target.value)}
+                  onChange={async e => {
+                    const cedula = e.target.value;
+                    set("cedula", cedula);
+                    // Autocompletar si la cédula tiene 10 dígitos
+                    if (cedula.length === 10 && token) {
+                      try {
+                        const res = await axios.get(
+                          `${API}/financial/pacientes?search=${cedula}`,
+                          { headers: { Authorization: `Bearer ${token}` } }
+                        );
+                        const pac = (res.data || []).find(p => p.cedula === cedula);
+                        if (pac) {
+                          set("nombre_completo", pac.nombre || pac.nombre_completo || form.nombre_completo);
+                          set("telefono", pac.telefono || form.telefono);
+                        }
+                      } catch {}
+                    }
+                  }}
                   placeholder="0000000000"
                   style={inp}
+                  maxLength={13}
                 />
               </div>
               <div>
@@ -241,16 +291,36 @@ export const NuevaCitaModal = ({
             )}
           </div>
 
-          {/* Doctor — solo en modo Agenda */}
+          {/* Doctor — solo en modo Agenda, select dinámico por especialidad */}
           {!fromPatient && (
             <div>
               <label style={lbl}>Doctor</label>
-              <input
-                value={form.doctor_nombre}
-                onChange={e => set("doctor_nombre", e.target.value)}
-                placeholder="Nombre del doctor"
-                style={inp}
-              />
+              {doctores.length > 0 ? (
+                <select
+                  value={form.doctor_id || ""}
+                  onChange={e => {
+                    const d = doctores.find(d => d.id === e.target.value);
+                    set("doctor_id", d?.id || "");
+                    set("doctor_nombre", d?.nombre || d?.nombre_completo || "");
+                  }}
+                  style={inp}
+                >
+                  <option value="">Seleccionar doctor...</option>
+                  {doctores.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.nombre || d.nombre_completo}
+                      {d.especialidad ? ` — ${d.especialidad}` : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={form.doctor_nombre}
+                  onChange={e => set("doctor_nombre", e.target.value)}
+                  placeholder={loadingDocs ? "Cargando doctores..." : "Nombre del doctor"}
+                  style={{ ...inp, background: loadingDocs ? "#F9FAFB" : "white" }}
+                />
+              )}
             </div>
           )}
 

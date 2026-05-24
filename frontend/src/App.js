@@ -225,9 +225,9 @@ function LegacyApp({ user: propUser, token: propToken }) {
             user={user}
             token={token}
             fetchData={fetchData}
-            handleEditAppointment={() => {}}
-            handleDeleteAppointment={() => {}}
-            openWhatsApp={() => {}}
+            handleEditAppointment={null}
+            handleDeleteAppointment={null}
+            openWhatsApp={(phone) => { if(phone) window.open('https://wa.me/' + phone.replace(/[^0-9]/g,''), '_blank'); }}
           />
         </TabsContent>
 
@@ -292,7 +292,7 @@ function LegacyApp({ user: propUser, token: propToken }) {
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteDoctor(doctor.id)} className="text-red-500">
-                        <Users className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>

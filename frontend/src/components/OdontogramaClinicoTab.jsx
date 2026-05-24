@@ -241,8 +241,35 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
           onOdontogramaLoaded(ultimoOdontograma.id);
         }
       } else {
-        // Crear nuevo odontograma
-        await crearNuevoOdontograma();
+        // Antes de crear, verificar si existe odontograma en formato legacy
+        let legacyFound = false;
+        if (pacienteCedula) {
+          try {
+            const legacyRes = await axios.get(
+              `${API}/odontogramas-clinicos/cedula/${pacienteCedula}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const legacyData = Array.isArray(legacyRes.data) ? legacyRes.data : [];
+            if (legacyData.length > 0) {
+              // Existe en legacy — cargar sin crear nuevo
+              const legacyOdonto = legacyData[0];
+              setOdontograma(legacyOdonto);
+              setTipoDenticion(legacyOdonto.tipo_denticion || "permanente");
+              setDiagnosticoGeneral(legacyOdonto.diagnostico_general || "");
+              setHigieneOral(legacyOdonto.higiene_oral || "");
+              setEstadoEncias(legacyOdonto.estado_encias || "");
+              setObservaciones(legacyOdonto.observaciones || "");
+              if (onOdontogramaLoaded) onOdontogramaLoaded(legacyOdonto.id);
+              legacyFound = true;
+            }
+          } catch (legacyErr) {
+            console.log("No existe odontograma legacy tampoco:", legacyErr.message);
+          }
+        }
+        if (!legacyFound) {
+          // Realmente no existe — crear nuevo
+          await crearNuevoOdontograma();
+        }
       }
     } catch (error) {
       console.error("Error al buscar odontograma:", error);
