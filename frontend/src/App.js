@@ -36,8 +36,10 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import apiClient from "@/lib/axios";
 import { getAllAppData } from "@/services/dataService";
 
-function LegacyApp() {
-  const { user, token, isAuthenticated, login, loading: authLoading } = useAuth();
+function LegacyApp({ user: propUser, token: propToken }) {
+  const { user: authUser, token: authToken, isAuthenticated, login, loading: authLoading } = useAuth();
+  const user = propUser || authUser;
+  const token = propToken || authToken;
 
   const [users, setUsers] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -129,7 +131,7 @@ function LegacyApp() {
   };
 
   if (authLoading) return <div className="flex items-center justify-center h-screen">Cargando...</div>;
-  if (!isAuthenticated) return <Login onLogin={login} />;
+  if (!isAuthenticated) return <Login />;
 
   return (
     <MainLayout>
@@ -139,19 +141,19 @@ function LegacyApp() {
             <Users className="tab-icon" />
             Citas
           </TabsTrigger>
-          {user.role === "Administrador" && (
+          {user?.role === "Administrador" && (
             <TabsTrigger value="doctors">
               <Stethoscope className="tab-icon" />
               Doctores
             </TabsTrigger>
           )}
-          {user.role === "Doctor" && (
+          {user?.role === "Doctor" && (
             <TabsTrigger value="pacientes">
               <Users className="tab-icon" />
               Pacientes
             </TabsTrigger>
           )}
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
+          {(user?.role === "Administrador" || user?.role === "Recepcion") && (
             <TabsTrigger value="history">
               <ClipboardList className="tab-icon" />
               Historias
@@ -161,13 +163,13 @@ function LegacyApp() {
             <FileText className="tab-icon" />
             Recetas
           </TabsTrigger>
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
+          {(user?.role === "Administrador" || user?.role === "Recepcion") && (
             <TabsTrigger value="invoices">
               <FileText className="tab-icon" />
               Facturas
             </TabsTrigger>
           )}
-          {user.role === "Administrador" && (
+          {user?.role === "Administrador" && (
             <>
               <TabsTrigger value="inventory">
                 <Package className="tab-icon" />
@@ -183,7 +185,7 @@ function LegacyApp() {
               </TabsTrigger>
             </>
           )}
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
+          {(user?.role === "Administrador" || user?.role === "Recepcion") && (
             <>
               <TabsTrigger value="proformas">
                 <Receipt className="tab-icon" />
@@ -195,13 +197,13 @@ function LegacyApp() {
               </TabsTrigger>
             </>
           )}
-          {(user.role === "Administrador" || user.role === "Recepcion") && (
+          {(user?.role === "Administrador" || user?.role === "Recepcion") && (
             <TabsTrigger value="caja">
               <DollarSign className="tab-icon" />
               Caja
             </TabsTrigger>
           )}
-          {user.role === "Doctor" && (
+          {user?.role === "Doctor" && (
             <>
               <TabsTrigger value="odontograma-standalone">
                 <Smile className="tab-icon" />
@@ -213,7 +215,7 @@ function LegacyApp() {
               </TabsTrigger>
             </>
           )}
-          {user.role === "Administrador" && (
+          {user?.role === "Administrador" && (
              <TabsTrigger value="config">
                 <UserCog className="tab-icon" />
                 Config
@@ -233,7 +235,7 @@ function LegacyApp() {
           />
         </TabsContent>
 
-        {user.role === "Administrador" && (
+        {user?.role === "Administrador" && (
           <TabsContent value="doctors" className="tab-content">
             <div className="tab-header">
               <div className="tab-header-info">
@@ -304,9 +306,9 @@ function LegacyApp() {
           </TabsContent>
         )}
 
-        {user.role === "Doctor" && (
+        {user?.role === "Doctor" && (
           <TabsContent value="pacientes" className="tab-content">
-            <PacientesTab />
+            <PacientesTab user={user} token={token} />
           </TabsContent>
         )}
 
@@ -328,33 +330,33 @@ function LegacyApp() {
           </div>
         </TabsContent>
 
-        {(user.role === "Administrador" || user.role === "Recepcion") && (
+        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
           <TabsContent value="invoices" className="tab-content">
-            <InvoicesTab invoices={invoices} doctors={doctors} monthlyTotals={monthlyTotals} fetchData={fetchData} />
+            <InvoicesTab invoices={invoices} doctors={doctors} monthlyTotals={monthlyTotals} fetchData={fetchData} token={token} />
           </TabsContent>
         )}
 
-        {user.role === "Administrador" && (
+        {user?.role === "Administrador" && (
           <>
             <TabsContent value="inventory" className="tab-content">
               <InventoryTab inventory={inventory} categories={categories} fetchData={fetchData} />
             </TabsContent>
             <TabsContent value="payments" className="tab-content">
-              <PaymentsTab doctors={doctors} doctorPayments={doctorPayments} fetchData={fetchData} />
+              <PaymentsTab doctors={doctors} doctorPayments={doctorPayments} fetchData={fetchData} token={token} />
             </TabsContent>
             <TabsContent value="users" className="tab-content">
-              <UsersTab users={users} doctors={doctors} specialties={specialties} fetchData={fetchData} />
+              <UsersTab users={users} doctors={doctors} specialties={specialties} fetchData={fetchData} user={user} token={token} />
             </TabsContent>
           </>
         )}
 
-        {(user.role === "Administrador" || user.role === "Recepcion") && (
+        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
           <>
             <TabsContent value="proformas" className="tab-content">
-              <ProformasTab />
+              <ProformasTab token={token} />
             </TabsContent>
             <TabsContent value="abonos" className="tab-content">
-              <AbonosTab />
+              <AbonosTab token={token} />
             </TabsContent>
             <TabsContent value="caja" className="tab-content">
               <CajaTab />
@@ -362,26 +364,26 @@ function LegacyApp() {
           </>
         )}
 
-        {user.role === "Doctor" && (
+        {user?.role === "Doctor" && (
           <>
             <TabsContent value="odontograma-standalone" className="tab-content">
-              <OdontogramaStandalone />
+              <OdontogramaStandalone token={token} user={user} />
             </TabsContent>
             <TabsContent value="ia-medica" className="tab-content">
               <div className="p-4 bg-white rounded-lg shadow">
-                <ConfiguracionIA />
+                <ConfiguracionIA token={token} />
               </div>
             </TabsContent>
           </>
         )}
 
-        {user.role === "Administrador" && (
+        {user?.role === "Administrador" && (
           <TabsContent value="config" className="tab-content">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FacturacionTab />
-              <ConfiguracionSRI />
-              <CatalogoServiciosTab />
-              <ConfiguracionIA />
+              <FacturacionTab token={token} user={user} />
+              <ConfiguracionSRI token={token} />
+              <CatalogoServiciosTab token={token} />
+              <ConfiguracionIA token={token} />
               <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-100">
                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-medical-600" />
@@ -412,7 +414,7 @@ function LegacyApp() {
 
 
 function App() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user, token, login } = useAuth();
 
   if (loading) return null;
 
@@ -421,7 +423,7 @@ function App() {
       <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
       <Route path="/financiero" element={isAuthenticated && ENABLE_DENTAL_V2 ? <FinancialWorkspace /> : <Navigate to="/" />} />
       <Route path="/odontologia-v2/:appointmentId" element={isAuthenticated ? <DentalWorkspace /> : <Navigate to="/login" />} />
-      <Route path="/*" element={isAuthenticated ? <LegacyApp /> : <Navigate to="/login" />} />
+      <Route path="/*" element={isAuthenticated ? <LegacyApp user={user} token={token} /> : <Navigate to="/login" />} />
     </Routes>
   );
 }

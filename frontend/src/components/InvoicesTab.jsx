@@ -1,7 +1,7 @@
 import { FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import axios from "axios";
+import apiClient from "@/lib/axios";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -11,7 +11,7 @@ export const InvoicesTab = ({ invoices, searchInvoice, setSearchInvoice, monthly
   const handleExport = async () => {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get(`${API}/invoices/export`, { responseType: 'blob', headers });
+      const response = await apiClient.get(`/invoices/export` , { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;

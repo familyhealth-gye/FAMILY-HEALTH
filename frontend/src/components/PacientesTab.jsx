@@ -8,7 +8,7 @@ import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
 import { HistoriaClinicaCompleta } from "./HistoriaClinicaCompleta";
-import axios from "axios";
+import apiClient from "@/lib/axios";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -55,9 +55,7 @@ export const PacientesTab = ({ user, token }) => {
   const fetchPacientes = async () => {
     setLoading(true);
     try {
-      const appointmentsRes = await axios.get(`${API}/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const appointmentsRes = await apiClient.get("/appointments");
       
       // Filtrar citas según el rol del usuario
       const misCitas = appointmentsRes.data.filter(apt => {
@@ -111,148 +109,93 @@ export const PacientesTab = ({ user, token }) => {
   // Buscar consultas incompletas - filtrar por especialidad solo si está definida
   const fetchConsultasIncompletas = async () => {
     try {
-      const appointmentsRes = await axios.get(`${API}/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      // Filtrar citas del doctor
+      const appointmentsRes = await apiClient.get('/appointments');
       const citasDoctor = appointmentsRes.data.filter(apt => {
         if (apt.doctor_id !== user.doctor_id) return false;
-        if (apt.estado !== "En Atención" && apt.estado !== "Pendiente de Pago") return false;
-        // Solo filtrar por especialidad si el usuario tiene una definida
+        if (apt.estado !== 'En Atención' && apt.estado !== 'Pendiente de Pago') return false;
         if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
         return true;
       });
-      
-      // Verificar cuáles no tienen historia clínica completa
       const incompletas = await Promise.all(
         citasDoctor.map(async (cita) => {
           let tieneHistoria = false;
-          
           try {
-            const res = await axios.get(
-              `${API}/medical-history/general/appointment/${cita.id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const res = await apiClient.get('/medical-history/general/appointment/' + cita.id);
             if (res.data && res.data.diagnostico) tieneHistoria = true;
           } catch (e) {}
-          
           if (!tieneHistoria) {
             try {
-              const res = await axios.get(
-                `${API}/medical-history/pediatric/appointment/${cita.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
+              const res = await apiClient.get('/medical-history/pediatric/appointment/' + cita.id);
               if (res.data && res.data.diagnostico) tieneHistoria = true;
             } catch (e) {}
           }
-          
           if (!tieneHistoria) {
             try {
-              const res = await axios.get(
-                `${API}/medical-history/odontology/appointment/${cita.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
+              const res = await apiClient.get('/medical-history/odontology/appointment/' + cita.id);
               if (res.data && res.data.diagnostico) tieneHistoria = true;
             } catch (e) {}
           }
-          
           return { ...cita, tieneHistoria, incompleta: !tieneHistoria };
         })
       );
-      
       setConsultasIncompletas(incompletas.filter(c => c.incompleta));
     } catch (error) {
-      console.error("Error fetching consultas incompletas:", error);
+      console.error('Error fetching consultas incompletas:', error);
     }
   };
-
   const fetchConsultasPaciente = async (cedula) => {
     setLoading(true);
     try {
-      const appointmentsRes = await axios.get(`${API}/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      // Filtrar citas del paciente con este doctor
+      const appointmentsRes = await apiClient.get('/appointments');
       const citasPaciente = appointmentsRes.data.filter(apt => {
         if (apt.cedula !== cedula) return false;
         if (apt.doctor_id !== user.doctor_id) return false;
-        if (apt.estado === "Cancelada") return false;
-        // Solo filtrar por especialidad si el usuario tiene una definida
+        if (apt.estado === 'Cancelada') return false;
         if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
         return true;
       });
-      
       const consultasConHistoria = await Promise.all(
         citasPaciente.map(async (cita) => {
           let historia = null;
           let tipoHistoria = null;
-          
           try {
-            const generalRes = await axios.get(
-              `${API}/medical-history/general/appointment/${cita.id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            if (generalRes.data) {
-              historia = generalRes.data;
-              tipoHistoria = "general";
-            }
+            const res = await apiClient.get('/medical-history/general/appointment/' + cita.id);
+            if (res.data) { historia = res.data; tipoHistoria = 'general'; }
           } catch (e) {}
-          
           if (!historia) {
             try {
-              const pedRes = await axios.get(
-                `${API}/medical-history/pediatric/appointment/${cita.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              if (pedRes.data) {
-                historia = pedRes.data;
-                tipoHistoria = "pediatric";
-              }
+              const res = await apiClient.get('/medical-history/pediatric/appointment/' + cita.id);
+              if (res.data) { historia = res.data; tipoHistoria = 'pediatric'; }
             } catch (e) {}
           }
-          
           if (!historia) {
             try {
-              const odontoRes = await axios.get(
-                `${API}/medical-history/odontology/appointment/${cita.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              if (odontoRes.data) {
-                historia = odontoRes.data;
-                tipoHistoria = "odontology";
-              }
+              const res = await apiClient.get('/medical-history/odontology/appointment/' + cita.id);
+              if (res.data) { historia = res.data; tipoHistoria = 'odontology'; }
             } catch (e) {}
           }
-          
           const tieneHistoriaCompleta = historia && historia.diagnostico;
-          
           return {
             ...cita,
             historia,
             tipoHistoria,
             tieneHistoria: !!historia,
             tieneHistoriaCompleta,
-            incompleta: !tieneHistoriaCompleta && (cita.estado === "En Atención" || cita.estado === "Pendiente de Pago")
+            incompleta: !tieneHistoriaCompleta && (cita.estado === 'En Atención' || cita.estado === 'Pendiente de Pago')
           };
         })
       );
-      
       consultasConHistoria.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       setConsultas(consultasConHistoria);
     } catch (error) {
-      console.error("Error fetching consultas:", error);
-      toast.error("Error al cargar consultas");
+      console.error('Error fetching consultas:', error);
+      toast.error('Error al cargar consultas');
     }
     setLoading(false);
   };
-
   const fetchRecetasPaciente = async (cedula) => {
     try {
-      const response = await axios.get(`${API}/prescriptions/patient/${cedula}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get(`/prescriptions/patient/${cedula}`);
       setRecetas(response.data);
     } catch (error) {
       console.error("Error fetching recetas:", error);
@@ -301,11 +244,9 @@ export const PacientesTab = ({ user, token }) => {
     try {
       // Cambiar estado a "En Atención" si estaba en otro estado
       if (consulta.estado !== "En Atención") {
-        await axios.put(
-          `${API}/appointments/${consulta.id}`,
-          { estado: "En Atención" },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await apiClient.put(
+          `/appointments/${consulta.id}`,
+          { estado: "En Atención" });
       }
       
       setAppointmentToResume(consulta);
@@ -332,18 +273,13 @@ export const PacientesTab = ({ user, token }) => {
 
   const handleDescargarReceta = async (receta) => {
     try {
-      const response = await axios.get(
-        `${API}/prescriptions/${receta.id}/pdf`,
-        { 
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: 'blob'
-        }
-      );
+      const response = await apiClient.get(
+        "/prescriptions/" + receta.id + "/pdf", { responseType: "blob" });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `receta_${receta.paciente_cedula}_${receta.fecha}.pdf`);
+      link.setAttribute('download', "receta_" + receta.paciente_cedula + "_" + receta.fecha + ".pdf");
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -358,13 +294,8 @@ export const PacientesTab = ({ user, token }) => {
 
   const handleImprimirReceta = async (receta) => {
     try {
-      const response = await axios.get(
-        `${API}/prescriptions/${receta.id}/pdf`,
-        { 
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: 'blob'
-        }
-      );
+      const response = await apiClient.get(
+        "/prescriptions/" + receta.id + "/pdf", { responseType: "blob" });
       
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const printWindow = window.open(url, '_blank');
