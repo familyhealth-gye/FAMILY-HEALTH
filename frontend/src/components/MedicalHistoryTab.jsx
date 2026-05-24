@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import axios from "axios";
+import apiClient from "@/lib/axios";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -43,8 +43,7 @@ export const MedicalHistoryTab = ({ medicalHistories, appointments, doctors, fet
         fecha: format(form.fecha, "yyyy-MM-dd")
       };
 
-      await axios.post(`${API}/medical-history`, data, {
-        headers: { Authorization: `Bearer ${token}` }
+      await apiClient.post(`/medical-history`, data)
       });
 
       toast.success("Historia clínica registrada");

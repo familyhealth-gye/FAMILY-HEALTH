@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Phone, Edit, Trash2, Play, Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import apiClient from "@/lib/axios";
 import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
@@ -13,7 +13,7 @@ import { GinecologiaForm } from "./GinecologiaForm";
 import { EcografiaForm } from "./EcografiaForm";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const API = '' + BACKEND_URL + '/api';
 
 export const AppointmentsWithAttention = ({ 
   filteredAppointments, 
@@ -39,7 +39,7 @@ export const AppointmentsWithAttention = ({
     referencia: '',
     notas: '',
     descuento: 0,        // valor en $ del descuento
-    motivo_descuento: '' // razón del descuento
+    motivo_descuento: '' // razn del descuento
   });
 
   // Obtener la especialidad del usuario
@@ -54,55 +54,49 @@ export const AppointmentsWithAttention = ({
   });
 
   const handleStartAttention = async (appointment) => {
-    console.log("🏥 ======== INICIANDO/REANUDANDO ATENCIÓN ========");
-    console.log("📋 Appointment original:", appointment);
-    console.log("🆔 Paciente ID:", appointment.paciente_id);
-    console.log("🆔 Paciente Cédula:", appointment.paciente_cedula || appointment.cedula);
-    console.log("👤 Usuario:", user?.role);
-    console.log("⚕️ Especialidad usuario:", userEspecialidad);
+    console.log(" ======== INICIANDO/REANUDANDO ATENCIN ========");
+    console.log(" Appointment original:", appointment);
+    console.log(" Paciente ID:", appointment.paciente_id);
+    console.log(" Paciente Cdula:", appointment.paciente_cedula || appointment.cedula);
+    console.log(" Usuario:", user?.role);
+    console.log(" Especialidad usuario:", userEspecialidad);
     
-    // VALIDACIÓN: Solo validar si el usuario tiene especialidad definida
+    // VALIDACIN: Solo validar si el usuario tiene especialidad definida
     // Si no tiene especialidad (usuario legacy), permitir acceso
     if (user?.role === "Doctor" && userEspecialidad && appointment.especialidad !== userEspecialidad) {
-      toast.error(`No puede atender consultas de ${appointment.especialidad}. Su especialidad es ${userEspecialidad}.`);
+      toast.error('No puede atender consultas de ' + appointment.especialidad + '. Su especialidad es ' + userEspecialidad + '.');
       return;
     }
     
-    // VALIDACIÓN: Verificar que el doctor_id coincida (si está definido)
+    // VALIDACIN: Verificar que el doctor_id coincida (si est definido)
     if (user?.role === "Doctor" && user.doctor_id && appointment.doctor_id !== user.doctor_id) {
       toast.error("No tiene permisos para atender esta consulta.");
       return;
     }
     
     try {
-      // Update appointment status to "En Atención"
-      console.log("📡 Actualizando estado de cita a 'En Atención'...");
-      await axios.put(
-        `${API}/appointments/${appointment.id}`,
-        { estado: "En Atención" },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      console.log("✅ Estado actualizado");
+      // Update appointment status to "En Atencin"
+      console.log(" Actualizando estado de cita a 'En Atencin'...");
+      await apiClient.put('/appointments/' + appointment.id,
+        { estado: "En Atencin" });
+      console.log("OK Estado actualizado");
 
       // IMPORTANTE: Obtener datos completos del paciente si existe paciente_cedula
       let appointmentConDatosPaciente = { ...appointment };
       
       const cedula = appointment.paciente_cedula || appointment.cedula;
-      console.log("🔍 Buscando datos completos del paciente con cédula:", cedula);
+      console.log(" Buscando datos completos del paciente con cdula:", cedula);
       
       if (cedula) {
         try {
           // Buscar paciente en el sistema unificado
-          console.log("📡 GET /api/financial/pacientes?search=", cedula);
-          const responsePacientes = await axios.get(
-            `${API}/financial/pacientes?search=${cedula}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+          console.log(" GET /api/financial/pacientes?search=", cedula);
+          const responsePacientes = await apiClient.get('/financial/pacientes?search=' + cedula);
           
-          console.log("📦 Respuesta pacientes:", responsePacientes.data);
+          console.log(" Respuesta pacientes:", responsePacientes.data);
           
           const paciente = responsePacientes.data.find(p => p.cedula === cedula);
-          console.log("👤 Paciente encontrado:", paciente);
+          console.log(" Paciente encontrado:", paciente);
           
           if (paciente) {
             // Enriquecer el appointment con los datos completos del paciente
@@ -114,50 +108,50 @@ export const AppointmentsWithAttention = ({
               paciente_id: paciente.id,
               telefono: paciente.telefono || appointment.telefono,
               fecha_nacimiento: paciente.fecha_nacimiento || appointment.fecha_nacimiento || "",
-              // La edad se calculará automáticamente desde fecha_nacimiento
+              // La edad se calcular automticamente desde fecha_nacimiento
               email: paciente.email || "",
               direccion: paciente.direccion || "",
               sexo: paciente.sexo || ""
             };
             
-            console.log("✅ Appointment enriquecido con datos del paciente:");
+            console.log("OK Appointment enriquecido con datos del paciente:");
             console.log("   - Nombre:", appointmentConDatosPaciente.nombre_completo);
-            console.log("   - Cédula:", appointmentConDatosPaciente.cedula);
+            console.log("   - Cdula:", appointmentConDatosPaciente.cedula);
             console.log("   - Fecha Nacimiento:", appointmentConDatosPaciente.fecha_nacimiento);
-            console.log("   - Teléfono:", appointmentConDatosPaciente.telefono);
+            console.log("   - Telfono:", appointmentConDatosPaciente.telefono);
             console.log("   - Paciente ID:", appointmentConDatosPaciente.paciente_id);
           } else {
-            console.warn("⚠️ No se encontró paciente en sistema unificado, usando datos del appointment");
+            console.warn("Saldo No se encontr paciente en sistema unificado, usando datos del appointment");
           }
         } catch (errorPaciente) {
-          console.error("❌ Error buscando datos del paciente:", errorPaciente);
-          console.warn("⚠️ Continuando con datos del appointment original");
+          console.error(" Error buscando datos del paciente:", errorPaciente);
+          console.warn("Saldo Continuando con datos del appointment original");
         }
       }
 
-      console.log("📝 Seteando appointment seleccionado con datos completos");
+      console.log(" Seteando appointment seleccionado con datos completos");
       setSelectedAppointment(appointmentConDatosPaciente);
       
-      // Para Odontología, abrir vista completa de historia clínica
-      if (appointment.especialidad === "Odontología") {
-        console.log("🦷 Modo: Historia Clínica Odontológica");
+      // Para Odontologa, abrir vista completa de historia clnica
+      if (appointment.especialidad === "Odontologa") {
+        console.log(" Modo: Historia Clnica Odontolgica");
         setModoAtencion("historia");
       } else {
-        console.log("📋 Modo: Formulario General");
+        console.log(" Modo: Formulario General");
         setModoAtencion("formulario");
       }
       
       setVistaAtencion(true);
-      console.log("🎉 Vista de atención abierta");
+      console.log(" Vista de atencin abierta");
       console.log("========================================");
       
       await fetchData();
     } catch (error) {
-      console.error("❌ ======== ERROR AL INICIAR ATENCIÓN ========");
-      console.error("❌ Error completo:", error);
-      console.error("❌ Response:", error.response?.data);
+      console.error(" ======== ERROR AL INICIAR ATENCIN ========");
+      console.error(" Error completo:", error);
+      console.error(" Response:", error.response?.data);
       console.error("========================================");
-      toast.error("Error al iniciar atención: " + (error.response?.data?.detail || error.message));
+      toast.error("Error al iniciar atencin: " + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -165,11 +159,8 @@ export const AppointmentsWithAttention = ({
     try {
       // Actualizar el estado de la cita a "Pendiente de Pago"
       if (selectedAppointment?.id) {
-        await axios.put(
-          `${API}/appointments/${selectedAppointment.id}`,
-          { estado: "Pendiente de Pago" },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await apiClient.put('/appointments/' + selectedAppointment.id,
+          { estado: "Pendiente de Pago" });
       }
       
       setVistaAtencion(false);
@@ -182,7 +173,7 @@ export const AppointmentsWithAttention = ({
     }
   };
 
-   // Función para abrir el modal de pago
+   // Funcin para abrir el modal de pago
   const handleOpenPaymentModal = async (appointment) => {
     try {
       const cedula = appointment.cedula || appointment.paciente_cedula || "";
@@ -190,27 +181,25 @@ export const AppointmentsWithAttention = ({
 
       // 1. Buscar directamente por appointment_id
       try {
-        const res = await axios.get(
-          `${API}/financial/consultas/por-cita/${appointment.id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+        const res = await apiClient.get(
+          '/financial/consultas/por-cita/' + appointment.id
         );
         if (res.data && res.data.id) consulta = res.data;
       } catch { /* no existe, continuar */ }
 
-      // 2. Si no existe, buscar precio en catálogo y crearla
+      // 2. Si no existe, buscar precio en catlogo y crearla
       if (!consulta) {
         toast.info("Generando consulta financiera...");
 
-        // Buscar precio real del catálogo
+        // Buscar precio real del catlogo
         let precioReal = 30.0;
-        let nombreServicio = `Consulta ${appointment.especialidad || "Médica"}`;
+        let nombreServicio = 'Consulta ' + (appointment.especialidad || 'Medica');
         try {
-          const catRes = await axios.get(
-            `${API}/financial/catalogo?especialidad=${encodeURIComponent(appointment.especialidad || "")}`,
-            { headers: { Authorization: `Bearer ${token}` } }
+          const catRes = await apiClient.get(
+            '/financial/catalogo?especialidad=' + encodeURIComponent(appointment.especialidad || '')
           );
           if (catRes.data && catRes.data.length > 0) {
-            // Buscar el servicio de consulta básica
+            // Buscar el servicio de consulta bsica
             const servicioConsulta = catRes.data.find(s =>
               s.nombre.toLowerCase().includes("consulta") && !s.nombre.toLowerCase().includes("paquete")
             ) || catRes.data[0];
@@ -222,34 +211,29 @@ export const AppointmentsWithAttention = ({
         } catch { /* usar precio default */ }
 
         try {
-          await axios.post(
-            `${API}/financial/consultas/desde-cita/${appointment.id}`,
+          await apiClient.post('/financial/consultas/desde-cita/' + appointment.id,
             [{
               servicio: nombreServicio,
-              descripcion: `${appointment.especialidad || "Consulta médica"} — ${appointment.nombre_completo}`,
+              descripcion: (appointment.especialidad || 'Consulta medica') + ' - ' + appointment.nombre_completo,
               precio_unitario: precioReal,
               cantidad: 1
-            }],
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+            }]);
         } catch (err) {
           if (err.response?.status !== 400) throw err;
         }
 
         try {
-          const res2 = await axios.get(
-            `${API}/financial/consultas/por-cita/${appointment.id}`,
-            { headers: { Authorization: `Bearer ${token}` } }
+          const res2 = await apiClient.get(
+            '/financial/consultas/por-cita/' + appointment.id
           );
           if (res2.data && res2.data.id) consulta = res2.data;
         } catch { /* continuar */ }
       }
 
-      // 3. Último recurso: buscar por cédula
+      // 3. ltimo recurso: buscar por cdula
       if (!consulta && cedula) {
         try {
-          const res3 = await axios.get(`${API}/financial/consultas`,
-            { headers: { Authorization: `Bearer ${token}` } });
+          const res3 = await apiClient.get('/financial/consultas');
           consulta = (res3.data || [])
             .filter(c => c.paciente_cedula === cedula && c.estado_pago !== "pagado")
             .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0] || null;
@@ -257,7 +241,7 @@ export const AppointmentsWithAttention = ({
       }
 
       if (!consulta) {
-        toast.error("No se pudo crear la consulta financiera. Cierre primero la consulta médica.");
+        toast.error("No se pudo crear la consulta financiera. Cierre primero la consulta mdica.");
         return;
       }
 
@@ -280,7 +264,7 @@ export const AppointmentsWithAttention = ({
     }
   };
 
-  // Función para registrar el pago
+  // Funcin para registrar el pago
   const handleRegisterPayment = async () => {
     try {
       const descuento = parseFloat(paymentForm.descuento) || 0;
@@ -288,27 +272,24 @@ export const AppointmentsWithAttention = ({
       const monto = parseFloat(paymentForm.monto);
       
       if (!consultaFinanciera || !paymentForm.monto || monto <= 0) {
-        toast.error("Ingrese un monto válido");
+        toast.error("Ingrese un monto vlido");
         return;
       }
       if (monto > saldoConDescuento + 0.01) {
-        toast.error(`El monto no puede superar el saldo con descuento ($${saldoConDescuento.toFixed(2)})`);
+        toast.error("El monto excede el saldo.");
         return;
       }
 
       // Si hay descuento, aplicarlo primero actualizando el total de la consulta
       if (descuento > 0) {
         try {
-          await axios.put(
-            `${API}/financial/consultas/${consultaFinanciera.id}`,
+          await apiClient.put('/financial/consultas/' + consultaFinanciera.id,
             {
               descuento: descuento,
               motivo_descuento: paymentForm.motivo_descuento || "Descuento aplicado",
               total: (consultaFinanciera.total || 0) - descuento,
               saldo: saldoConDescuento,
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+            });
         } catch { /* continuar igual si el endpoint no acepta descuento directo */ }
       }
 
@@ -317,49 +298,41 @@ export const AppointmentsWithAttention = ({
         monto: monto,
         tipo_pago: paymentForm.tipo_pago,
         referencia: paymentForm.referencia,
-        notas: descuento > 0
-          ? `Descuento $${descuento.toFixed(2)}${paymentForm.motivo_descuento ? ` — ${paymentForm.motivo_descuento}` : ''}. ${paymentForm.notas}`
-          : paymentForm.notas,
+        notas: (descuento > 0 ? ('Descuento $' + descuento.toFixed(2) + (paymentForm.motivo_descuento ? ' - ' + paymentForm.motivo_descuento : '') + '. ' + paymentForm.notas) : paymentForm.notas),
         descuento_aplicado: descuento,
       };
 
       // Registrar el pago en la consulta financiera
-      const response = await axios.post(
-        `${API}/financial/consultas/${consultaFinanciera.id}/pagos`,
-        payloadPago,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await apiClient.post('/financial/consultas/' + consultaFinanciera.id + '/pagos',
+        payloadPago);
 
-      console.log("✅ Pago registrado. Response:", response.data);
-      console.log("💰 Nuevo saldo:", response.data.saldo);
-      console.log("💵 Total pagado:", response.data.total_pagado);
-      console.log("📊 Estado pago:", response.data.estado_pago);
+      console.log("OK Pago registrado. Response:", response.data);
+      console.log("Saldo Nuevo saldo:", response.data.saldo);
+      console.log(" Total pagado:", response.data.total_pagado);
+      console.log(" Estado pago:", response.data.estado_pago);
 
-      // Si el saldo quedó en 0, actualizar el estado de la cita a "Pagada"
+      // Si el saldo qued en 0, actualizar el estado de la cita a "Pagada"
       if (response.data.saldo === 0) {
-        console.log("✅ Saldo = 0, actualizando cita a 'Pagada'...");
+        console.log("OK Saldo = 0, actualizando cita a 'Pagada'...");
         
-        await axios.put(
-          `${API}/appointments/${selectedAppointmentForPayment.id}`,
-          { estado: "Pagada" },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await apiClient.put('/appointments/' + selectedAppointmentForPayment.id,
+          { estado: "Pagada" });
         
-        console.log("✅ Cita actualizada a estado 'Pagada'");
+        console.log("OK Cita actualizada a estado 'Pagada'");
         toast.success("Pago registrado - Cita marcada como pagada");
       } else {
-        console.log(`⚠️ Saldo restante: $${response.data.saldo.toFixed(2)}`);
-        toast.success(`Pago registrado - Saldo restante: $${response.data.saldo.toFixed(2)}`);
+        console.log('Saldo Saldo restante: ' + response.data.saldo.toFixed(2) + '');
+        toast.success('Pago registrado - Saldo restante: ' + response.data.saldo.toFixed(2) + '');
       }
 
-      // ── AUTO-FACTURACIÓN SRI — solo cuando el saldo queda en 0 ──
+      //  AUTO-FACTURACIN SRI  solo cuando el saldo queda en 0
       const apt = selectedAppointmentForPayment;
       const montoFinal = parseFloat(paymentForm.monto);
       const descuentoFinal = parseFloat(paymentForm.descuento) || 0;
 
-      // Solo ofrecer factura si el pago quedó completo (saldo = 0)
+      // Solo ofrecer factura si el pago qued completo (saldo = 0)
       if (!pagoCompleto) {
-        toast.info(`Pago parcial registrado. Al completar el pago total podrás emitir la factura.`);
+        toast.info('Pago parcial registrado.');
         setShowPaymentModal(false);
         setConsultaFinanciera(null);
         setSelectedAppointmentForPayment(null);
@@ -367,9 +340,7 @@ export const AppointmentsWithAttention = ({
         return;
       }
 
-      const quiereFactura = window.confirm(
-        `¿Emitir factura electrónica al SRI?\n\nPaciente: ${apt.nombre_completo}\nCédula: ${apt.cedula}\nTotal: $${montoFinal.toFixed(2)}${descuentoFinal > 0 ? ` (descuento $${descuentoFinal.toFixed(2)})` : ''}\n\nSi dice NO, puede facturar después desde la pestaña Facturación.`
-      );
+      const quiereFactura = window.confirm("Emitir factura al SRI?");
 
       if (quiereFactura) {
         try {
@@ -378,14 +349,14 @@ export const AppointmentsWithAttention = ({
           const factEmail = apt.factura_email || (apt.es_menor && apt.representante_email ? apt.representante_email : apt.email || "");
           const serviciosConsulta = (consultaFinanciera?.servicios || []).length > 0
             ? consultaFinanciera.servicios.map(s => ({
-                descripcion: s.servicio || s.nombre || "Servicio médico",
+                descripcion: s.servicio || s.nombre || "Servicio mdico",
                 cantidad: s.cantidad || 1, precio_unitario: s.precio_unitario || 0,
                 descuento: 0, subtotal: (s.precio_unitario || 0) * (s.cantidad || 1),
               }))
-            : [{ descripcion: `Consulta ${apt.especialidad || "Médica"}`, cantidad: 1,
+            : [{ descripcion: 'Consulta ' + apt.especialidad || "Mdica" + '', cantidad: 1,
                 precio_unitario: montoFinal + descuentoFinal, descuento: descuentoFinal, subtotal: montoFinal }];
 
-          const facturaRes = await axios.post(`${API}/invoices`, {
+          const facturaRes = await apiClient.post('/invoices', {
             paciente_nombre: factNombre, paciente_cedula: factCedula,
             paciente_telefono: apt.representante_telefono || apt.telefono || "",
             paciente_email: factEmail, paciente_direccion: apt.factura_direccion || "",
@@ -394,31 +365,27 @@ export const AppointmentsWithAttention = ({
             referencia_pago: paymentForm.referencia || "",
             consulta_financiera_id: consultaFinanciera?.id || "", appointment_id: apt.id,
             iva_porcentaje: 0,
-            observaciones: [paymentForm.motivo_descuento ? `Descuento: ${paymentForm.motivo_descuento}` : "", apt.es_menor ? `Paciente: ${apt.nombre_completo} (menor de edad)` : ""].filter(Boolean).join(" | "),
             detalles: serviciosConsulta,
-          }, { headers: { Authorization: `Bearer ${token}` } });
+          });
 
           const facturaId = facturaRes.data.id;
           const numeroFactura = facturaRes.data.numero_factura;
-          toast.success(`📄 Factura ${numeroFactura} creada`);
+          toast.success('Factura creada.');
 
           try {
-            const sriRes = await axios.post(`${API}/sri/emitir/${facturaId}`, {},
-              { headers: { Authorization: `Bearer ${token}` } });
-            if (sriRes.data.ok) {
-              toast.success(`✅ Factura AUTORIZADA por el SRI`);
+            const sriRes = await apiClient.post('/sri/emitir/' + facturaId + '', {});
+              if (sriRes.data.ok) { toast.success('Factura AUTORIZADA.');
               if (factEmail) {
                 try {
-                  await axios.post(`${API}/sri/enviar-ride/${facturaId}`, { email: factEmail },
-                    { headers: { Authorization: `Bearer ${token}` } });
-                  toast.success(`📧 RIDE enviado a ${factEmail}`);
+                  await apiClient.post('/sri/enviar-ride/' + facturaId + '', { email: factEmail });
+                  toast.success('RIDE enviado.');
                 } catch {}
               }
             } else {
-              toast.warning(`Factura creada. SRI: ${sriRes.data.sri_estado || "Pendiente"} — ve a Facturación → 📤 para reintentar.`);
+              toast.warning('Factura creada. Pendiente SRI.');
             }
           } catch {
-            toast.warning(`Factura ${numeroFactura} creada. Emite al SRI desde Facturación → botón 📤`);
+            toast.warning('Factura creada. Emite al SRI manualmente.');
           }
         } catch (factErr) {
           toast.error("Error al crear la factura: " + (factErr.response?.data?.detail || factErr.message));
@@ -432,11 +399,11 @@ export const AppointmentsWithAttention = ({
       fetchData();
 
     } catch (error) {
-      console.error("❌ ======== ERROR AL REGISTRAR PAGO ========");
-      console.error("❌ Error completo:", error);
-      console.error("❌ Error message:", error.message);
-      console.error("❌ Response status:", error.response?.status);
-      console.error("❌ Response data:", error.response?.data);
+      console.error(" ======== ERROR AL REGISTRAR PAGO ========");
+      console.error(" Error completo:", error);
+      console.error(" Error message:", error.message);
+      console.error(" Response status:", error.response?.status);
+      console.error(" Response data:", error.response?.data);
       console.error("========================================");
       toast.error(error.response?.data?.detail || "Error al registrar el pago");
     }
@@ -461,9 +428,9 @@ export const AppointmentsWithAttention = ({
   // Filter by date (only show appointments for selected date)
   visibleAppointments = visibleAppointments.filter(apt => apt.fecha === dateFilter);
 
-  // Sort by estado priority: "En Atención" first to allow recovery
+  // Sort by estado priority: "En Atencin" first to allow recovery
   const sortedAppointments = [...visibleAppointments].sort((a, b) => {
-    const priority = { "En Atención": 0, "Programada": 1, "Pendiente de Pago": 2, "Pagada": 3, "Cancelada": 4 };
+    const priority = { "En Atencin": 0, "Programada": 1, "Pendiente de Pago": 2, "Pagada": 3, "Cancelada": 4 };
     return priority[a.estado || "Programada"] - priority[b.estado || "Programada"];
   });
 
@@ -491,15 +458,15 @@ export const AppointmentsWithAttention = ({
       </div>
 
       <div className="table-container">
-        {/* Vista tabla — escritorio y tablet */}
+        {/* Vista tabla  escritorio y tablet */}
         <table className="data-table" style={{ display:"var(--table-display, table)" }}>
           <thead>
             <tr>
               <th>Estado</th>
               <th>Paciente</th>
-              <th className="col-opcional">Cédula</th>
+              <th className="col-opcional">Cdula</th>
               <th className="col-opcional">Edad</th>
-              <th className="col-opcional">Teléfono</th>
+              <th className="col-opcional">Telfono</th>
               <th>Especialidad</th>
               <th className="col-opcional">Doctor</th>
               <th>Fecha</th>
@@ -509,9 +476,9 @@ export const AppointmentsWithAttention = ({
           </thead>
           <tbody>
             {sortedAppointments.map((appointment) => (
-              <tr key={appointment.id} data-testid={`appointment-row-${appointment.id}`}>
+              <tr key={appointment.id} data-testid={'appointment-row-' + appointment.id + ''}>
                 <td>
-                  <span className={`status-badge status-${(appointment.estado || 'Programada').toLowerCase().replace(/ /g, '-')}`}>
+                  <span className={'status-badge status-' + (appointment.estado || 'Programada').toLowerCase().replace(/ /g, '-') + ''}>
                     {appointment.estado || "Programada"}
                   </span>
                 </td>
@@ -521,7 +488,7 @@ export const AppointmentsWithAttention = ({
                 <td className="col-opcional">
                   <div className="phone-cell">
                     {appointment.telefono}
-                    <Button size="sm" variant="ghost" onClick={() => openWhatsApp(appointment.telefono)} className="whatsapp-button" data-testid={`whatsapp-${appointment.id}`}>
+                    <Button size="sm" variant="ghost" onClick={() => openWhatsApp(appointment.telefono)} className="whatsapp-button" data-testid={'whatsapp-' + appointment.id + ''}>
                       <Phone className="whatsapp-icon" />
                     </Button>
                   </div>
@@ -531,24 +498,24 @@ export const AppointmentsWithAttention = ({
                 <td>{appointment.fecha}</td>
                 <td className="col-opcional">{appointment.hora}</td>
                 <td className="actions-cell">
-                  {(appointment.estado === "Programada" || appointment.estado === "En Atención" || !appointment.estado) && user?.role === "Doctor" && (
-                    <Button size="sm" variant="default" onClick={() => handleStartAttention(appointment)} className="attention-button" data-testid={`start-attention-${appointment.id}`}>
+                  {(appointment.estado === "Programada" || appointment.estado === "En Atencin" || !appointment.estado) && user?.role === "Doctor" && (
+                    <Button size="sm" variant="default" onClick={() => handleStartAttention(appointment)} className="attention-button" data-testid={'start-attention-' + appointment.id + ''}>
                       <Play className="button-icon" size={14} />
-                      {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
+                      {appointment.estado === "En Atencin" ? "Continuar" : "Atender"}
                     </Button>
                   )}
-                  {ENABLE_DENTAL_V2 && appointment.especialidad === "Odontología" && (
+                  {ENABLE_DENTAL_V2 && appointment.especialidad === "Odontologa" && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => window.location.href = `/odontologia-v2/${appointment.id}`}
+                      onClick={() => window.location.href = '/odontologia-v2/' + appointment.id + ''}
                       className="ml-2 border-purple-200 text-purple-700 hover:bg-purple-50"
                     >
                       Workspace V2
                     </Button>
                   )}
                   {appointment.estado === "Pendiente de Pago" && user?.role === "Doctor" && (
-                    <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={`resume-attention-${appointment.id}`} title="Reanudar para completar historia clínica">
+                    <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={'resume-attention-' + appointment.id + ''} title="Reanudar para completar historia clnica">
                       <Play className="button-icon" size={14} />
                       Reanudar
                     </Button>
@@ -559,12 +526,12 @@ export const AppointmentsWithAttention = ({
                       Cobrar
                     </Button>
                   )}
-                  {appointment.estado !== "En Atención" && (
+                  {appointment.estado !== "En Atencin" && (
                     <>
-                      <Button variant="ghost" size="sm" onClick={() => handleEditAppointment(appointment)} data-testid={`edit-appointment-${appointment.id}`}>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditAppointment(appointment)} data-testid={'edit-appointment-' + appointment.id + ''}>
                         <Edit className="action-icon" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAppointment(appointment.id)} data-testid={`delete-appointment-${appointment.id}`}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAppointment(appointment.id)} data-testid={'delete-appointment-' + appointment.id + ''}>
                         <Trash2 className="action-icon delete-icon" />
                     </Button>
                   </>
@@ -584,7 +551,7 @@ export const AppointmentsWithAttention = ({
     </>
   );
 
-  // Si está en modo atención, mostrar la vista correspondiente
+  // Si est en modo atencin, mostrar la vista correspondiente
   if (vistaAtencion && selectedAppointment) {
     // Para otras especialidades: Formulario en vista amplia
     return (
@@ -605,11 +572,11 @@ export const AppointmentsWithAttention = ({
             </Button>
             <div className="atencion-titulo" style={{ flex:1, minWidth:0 }}>
               <h2 style={{ fontSize:"clamp(0.9rem, 3vw, 1.4rem)", margin:0 }}>
-                🏥 {selectedAppointment.especialidad} — {selectedAppointment.nombre_completo}
+                 {selectedAppointment.especialidad}  {selectedAppointment.nombre_completo}
               </h2>
               <div className="patient-info-inline" style={{ flexWrap:"wrap", gap:"0.5rem", marginTop:"2px" }}>
                 <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
-                  <strong>Cédula:</strong> {selectedAppointment.cedula}
+                  <strong>Cdula:</strong> {selectedAppointment.cedula}
                 </span>
                 {selectedAppointment.fecha_nacimiento ? (
                   <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
@@ -618,12 +585,12 @@ export const AppointmentsWithAttention = ({
                       const nac = new Date(selectedAppointment.fecha_nacimiento + "T12:00:00");
                       let edad = hoy.getFullYear() - nac.getFullYear();
                       if (hoy.getMonth() < nac.getMonth() || (hoy.getMonth() === nac.getMonth() && hoy.getDate() < nac.getDate())) edad--;
-                      return `${edad} años`;
+                      return '' + edad + ' aos';
                     })()}
                   </span>
                 ) : selectedAppointment.edad > 0 ? (
                   <span style={{ fontSize:"clamp(0.72rem, 2.5vw, 0.9rem)" }}>
-                    <strong>Edad:</strong> {selectedAppointment.edad} años
+                    <strong>Edad:</strong> {selectedAppointment.edad} aos
                   </span>
                 ) : null}
                 {selectedAppointment.telefono && (
@@ -649,7 +616,7 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {selectedAppointment.especialidad === "Odontología" && (
+          {selectedAppointment.especialidad === "Odontologa" && (
             <OdontologiaFormSimple
               appointment={selectedAppointment}
               token={token}
@@ -661,7 +628,7 @@ export const AppointmentsWithAttention = ({
             />
           )}
           
-          {selectedAppointment.especialidad === "Pediatría" && (
+          {selectedAppointment.especialidad === "Pediatra" && (
             <PediatriaForm
               appointment={selectedAppointment}
               token={token}
@@ -673,7 +640,7 @@ export const AppointmentsWithAttention = ({
             />
           )}
           
-          {selectedAppointment.especialidad === "Nutrición" && (
+          {selectedAppointment.especialidad === "Nutricin" && (
             <NutricionForm
               appointment={selectedAppointment}
               token={token}
@@ -682,7 +649,7 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {["Ginecología","Obstetricia","Ginecología/Obstetricia"].includes(selectedAppointment.especialidad) && (
+          {["Ginecologa","Obstetricia","Ginecologa/Obstetricia"].includes(selectedAppointment.especialidad) && (
             <GinecologiaForm
               appointment={selectedAppointment}
               token={token}
@@ -691,7 +658,7 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {selectedAppointment.especialidad === "Ecografía" && (
+          {selectedAppointment.especialidad === "Ecografa" && (
             <EcografiaForm
               appointment={selectedAppointment}
               token={token}
@@ -700,13 +667,13 @@ export const AppointmentsWithAttention = ({
             />
           )}
 
-          {!["Medicina General","Pediatría","Odontología","Nutrición",
-             "Ginecología","Obstetricia","Ginecología/Obstetricia","Ecografía"
+          {!["Medicina General","Pediatra","Odontologa","Nutricin",
+             "Ginecologa","Obstetricia","Ginecologa/Obstetricia","Ecografa"
             ].includes(selectedAppointment.especialidad) && (
             <div style={{padding: '2rem', textAlign: 'center'}}>
-              <p>Historia clínica de <strong>{selectedAppointment.especialidad}</strong> próximamente.</p>
+              <p>Historia clnica de <strong>{selectedAppointment.especialidad}</strong> prximamente.</p>
               <p style={{marginTop: '1rem', color: '#64748B'}}>
-                Disponibles: Medicina General, Pediatría, Odontología, Nutrición, Ginecología y Ecografía.
+                Disponibles: Medicina General, Pediatra, Odontologa, Nutricin, Ginecologa y Ecografa.
               </p>
               <Button 
                 onClick={() => {
@@ -737,14 +704,14 @@ export const AppointmentsWithAttention = ({
             {/* Header */}
             <div style={{ background:"linear-gradient(135deg,#00a8cc,#005f73)", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div>
-                <h3 style={{ color:"white", margin:0, fontSize:"16px", fontWeight:"700" }}>💰 Cobro de Consulta</h3>
+                <h3 style={{ color:"white", margin:0, fontSize:"16px", fontWeight:"700" }}>Saldo Cobro de Consulta</h3>
                 <p style={{ color:"rgba(255,255,255,0.8)", margin:"2px 0 0", fontSize:"12px" }}>
-                  {consultaFinanciera.paciente_nombre} · {consultaFinanciera.paciente_cedula}
+                  {consultaFinanciera.paciente_nombre}  {consultaFinanciera.paciente_cedula}
                 </p>
               </div>
               <button onClick={() => { setShowPaymentModal(false); setConsultaFinanciera(null); setSelectedAppointmentForPayment(null); }}
                 style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:"50%", width:"28px", height:"28px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                ×
+
               </button>
             </div>
 
@@ -753,7 +720,7 @@ export const AppointmentsWithAttention = ({
               {/* Desglose de servicios */}
               <div style={{ marginBottom:"16px" }}>
                 <p style={{ fontSize:"12px", fontWeight:"700", color:"#005f73", marginBottom:"8px", textTransform:"uppercase" }}>
-                  📋 Detalle de Servicios
+                   Detalle de Servicios
                 </p>
                 <div style={{ border:"1px solid #e0f7fa", borderRadius:"8px", overflow:"hidden" }}>
                   {/* Encabezado tabla */}
@@ -779,13 +746,13 @@ export const AppointmentsWithAttention = ({
                   ))}
                   {(!consultaFinanciera.servicios || consultaFinanciera.servicios.length === 0) && (
                     <div style={{ padding:"12px", textAlign:"center", color:"#999", fontSize:"12px" }}>
-                      Consulta — {consultaFinanciera.especialidad}
+                      Consulta  {consultaFinanciera.especialidad}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Resumen de totales — dinámico con descuento */}
+              {/* Resumen de totales  dinmico con descuento */}
               {(() => {
                 const descuento = parseFloat(paymentForm.descuento) || 0;
                 const totalOriginal = consultaFinanciera.total || 0;
@@ -800,13 +767,13 @@ export const AppointmentsWithAttention = ({
                     {yaPagado > 0 && (
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#059669" }}>
                         <span>Ya pagado:</span>
-                        <span style={{ fontWeight:"700" }}>−${yaPagado.toFixed(2)}</span>
+                        <span style={{ fontWeight:"700" }}>${yaPagado.toFixed(2)}</span>
                       </div>
                     )}
                     {descuento > 0 && (
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px", fontSize:"13px", color:"#d97706" }}>
-                        <span>🏷️ Descuento:</span>
-                        <span style={{ fontWeight:"700" }}>−${descuento.toFixed(2)}</span>
+                        <span> Descuento:</span>
+                        <span style={{ fontWeight:"700" }}>${descuento.toFixed(2)}</span>
                       </div>
                     )}
                     <div style={{ display:"flex", justifyContent:"space-between", fontSize:"17px", fontWeight:"800", color: descuento > 0 ? "#059669" : "#00a8cc", borderTop:"1px solid #b2ebf2", paddingTop:"8px", marginTop:"4px" }}>
@@ -824,7 +791,7 @@ export const AppointmentsWithAttention = ({
 
               {/* Descuento opcional */}
               <div style={{ background:"#fffbeb", border:"1.5px solid #fde68a", borderRadius:"8px", padding:"10px 12px", marginBottom:"12px" }}>
-                <p style={{ margin:"0 0 8px", fontSize:"12px", fontWeight:"700", color:"#92400e" }}>🏷️ Descuento (opcional)</p>
+                <p style={{ margin:"0 0 8px", fontSize:"12px", fontWeight:"700", color:"#92400e" }}> Descuento (opcional)</p>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
                   <div>
                     <label style={{ fontSize:"11px", color:"#92400e", fontWeight:"600", display:"block", marginBottom:"3px" }}>Monto descuento $</label>
@@ -859,7 +826,7 @@ export const AppointmentsWithAttention = ({
                           setPaymentForm(f => ({ ...f, descuento: montoDesc, monto: saldoConDesc.toFixed(2) }));
                         }}
                         style={{ padding:"3px 8px", background:"white", border:"1px solid #fbbf24", borderRadius:"12px", fontSize:"11px", cursor:"pointer", color:"#92400e", fontWeight:"600" }}>
-                        {pct}% (−${montoDesc.toFixed(0)})
+                        {pct}% (${montoDesc.toFixed(0)})
                       </button>
                     );
                   })}
@@ -867,7 +834,7 @@ export const AppointmentsWithAttention = ({
                     <button type="button"
                       onClick={() => setPaymentForm(f => ({ ...f, descuento: 0, motivo_descuento: "", monto: (consultaFinanciera.saldo || 0).toFixed(2) }))}
                       style={{ padding:"3px 8px", background:"#fee2e2", border:"1px solid #fca5a5", borderRadius:"12px", fontSize:"11px", cursor:"pointer", color:"#dc2626" }}>
-                      ✕ Quitar
+                       Quitar
                     </button>
                   )}
                 </div>
@@ -891,21 +858,21 @@ export const AppointmentsWithAttention = ({
                   <select value={paymentForm.tipo_pago}
                     onChange={e => setPaymentForm({...paymentForm, tipo_pago: e.target.value})}
                     style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e5e7eb", borderRadius:"8px", fontSize:"13px", boxSizing:"border-box" }}>
-                    <option value="efectivo">💵 Efectivo</option>
-                    <option value="transferencia">🏦 Transferencia</option>
-                    <option value="tarjeta">💳 Tarjeta</option>
-                    <option value="seguro">🏥 Seguro</option>
-                    <option value="otros">📋 Otros</option>
+                    <option value="efectivo"> Efectivo</option>
+                    <option value="transferencia"> Transferencia</option>
+                    <option value="tarjeta"> Tarjeta</option>
+                    <option value="seguro"> Seguro</option>
+                    <option value="otros"> Otros</option>
                   </select>
                 </div>
               </div>
 
               <div style={{ marginBottom:"12px" }}>
-                <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>Referencia / N° Transacción</label>
+                <label style={{ fontSize:"12px", fontWeight:"700", color:"#374151", display:"block", marginBottom:"4px" }}>Referencia / N Transaccin</label>
                 <input type="text"
                   value={paymentForm.referencia}
                   onChange={e => setPaymentForm({...paymentForm, referencia: e.target.value})}
-                  placeholder="Opcional — Nº de transferencia, voucher..."
+                  placeholder="Opcional  N de transferencia, voucher..."
                   style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e5e7eb", borderRadius:"8px", fontSize:"13px", boxSizing:"border-box" }}
                 />
               </div>
@@ -914,8 +881,8 @@ export const AppointmentsWithAttention = ({
               <div style={{ display:"flex", gap:"10px", marginTop:"4px" }}>
                 <button onClick={handleRegisterPayment}
                   style={{ flex:1, padding:"12px", background:"linear-gradient(135deg,#00a8cc,#005f73)", color:"white", border:"none", borderRadius:"8px", fontSize:"14px", fontWeight:"700", cursor:"pointer" }}>
-                  ✓ Cobrar ${parseFloat(paymentForm.monto || 0).toFixed(2)}
-                  {(parseFloat(paymentForm.descuento)||0) > 0 && ` (−$${parseFloat(paymentForm.descuento).toFixed(2)} desc.)`}
+                   Cobrar ${parseFloat(paymentForm.monto || 0).toFixed(2)}
+                  {(parseFloat(paymentForm.descuento)||0) > 0 && ' ($${parseFloat(paymentForm.descuento).toFixed(2)} desc.)'}
                 </button>
                 <button onClick={() => { setShowPaymentModal(false); setConsultaFinanciera(null); setSelectedAppointmentForPayment(null); }}
                   style={{ padding:"12px 16px", background:"#f3f4f6", color:"#374151", border:"none", borderRadius:"8px", fontSize:"13px", cursor:"pointer" }}>
@@ -924,7 +891,7 @@ export const AppointmentsWithAttention = ({
               </div>
 
               <p style={{ fontSize:"10px", color:"#9ca3af", textAlign:"center", marginTop:"8px" }}>
-                El pago quedará registrado en Caja para el cierre del día
+                El pago quedar registrado en Caja para el cierre del da
               </p>
             </div>
           </div>

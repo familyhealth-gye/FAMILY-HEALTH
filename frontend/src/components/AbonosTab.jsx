@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import axios from "axios";
+import apiClient from "@/lib/axios";
 import { Plus, Trash2, DollarSign, Eye, CreditCard, CheckCircle } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -55,15 +55,11 @@ export const AbonosTab = ({ token }) => {
     try {
       if (filtroEstado === "pendientes") {
         // Obtener solo consultas con saldo pendiente
-        const response = await axios.get(`${API}/financial/reportes/pendientes`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await apiClient.get( `/financial/reportes/pendientes`);
         setConsultasPendientes(response.data.cuentas || []);
       } else {
         // Obtener todas las consultas
-        const response = await axios.get(`${API}/financial/consultas`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await apiClient.get( `/financial/consultas`);
         setTodasConsultas(response.data || []);
       }
     } catch (error) {
@@ -99,17 +95,14 @@ export const AbonosTab = ({ token }) => {
     
     setLoading(true);
     try {
-      await axios.post(
-        `${API}/financial/consultas/${consultaSeleccionada.id}/pagos`,
+      await apiClient.post(`/financial/consultas/${consultaSeleccionada.id}/pagos`,
         {
           consulta_id: consultaSeleccionada.id,
           monto: formPago.monto,
           tipo_pago: formPago.tipo_pago,
           referencia: formPago.referencia,
           notas: formPago.notas
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+        });
       
       toast.success("Pago registrado exitosamente");
       setPagoDialog(false);
@@ -124,10 +117,7 @@ export const AbonosTab = ({ token }) => {
 
   const handleVerDetalle = async (consulta) => {
     try {
-      const response = await axios.get(
-        `${API}/financial/consultas/${consulta.id}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await apiClient.get( `/financial/consultas/${consulta.id}`);
       setConsultaDetalle(response.data);
       setDetalleDialog(true);
     } catch (error) {
@@ -140,17 +130,12 @@ export const AbonosTab = ({ token }) => {
     if (!window.confirm("¿Está seguro de eliminar este pago?")) return;
     
     try {
-      await axios.delete(
-        `${API}/financial/consultas/${consultaId}/pagos/${pagoId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await apiClient.delete('/financial/consultas/' + consultaId + '/pagos/' + pagoId);
       toast.success("Pago eliminado");
       
       // Recargar detalle
-      const response = await axios.get(
-        `${API}/financial/consultas/${consultaId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await apiClient.get(
+        '/financial/consultas/' + consultaId);
       setConsultaDetalle(response.data);
       fetchConsultas();
     } catch (error) {

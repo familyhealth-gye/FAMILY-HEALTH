@@ -1,3 +1,4 @@
+import apiClient from "@/lib/axios";
 import React, { useState, useEffect } from 'react';
 
 // URL correcta — igual que todos los demás componentes
@@ -44,9 +45,8 @@ export default function CajaTab() {
   useEffect(() => { cargar(); }, [vista, fechaDia, fechaIni, fechaFin]);
 
   const get = async (url) => {
-    const res = await fetch(`${API}${url}`, { headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
+    const response = await apiClient.get(url);
+    return response.data;
   };
 
   const cargar = async () => {

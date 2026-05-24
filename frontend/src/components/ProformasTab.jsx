@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import axios from "axios";
+import apiClient from "@/lib/axios";
 import { Plus, Trash2, FileText, X, PlayCircle } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -51,9 +51,7 @@ export const ProformasTab = ({ token }) => {
 
   const fetchProformas = async () => {
     try {
-      const response = await axios.get(`${API}/proformas`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get(`/proformas`);
       setProformas(response.data);
     } catch (error) {
       console.error(error);
@@ -63,7 +61,7 @@ export const ProformasTab = ({ token }) => {
 
   const fetchDoctors = async () => {
     try {
-      const response = await axios.get(`${API}/doctors`);
+      const response = await apiClient.get(`/doctors`);
       setDoctors(response.data);
     } catch (error) {
       console.error(error);
@@ -104,9 +102,7 @@ export const ProformasTab = ({ token }) => {
     setLoading(true);
 
     try {
-      await axios.post(`${API}/proformas`, formData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await apiClient.post(`/proformas`, formData);
       toast.success("Proforma creada exitosamente");
       setIsDialogOpen(false);
       resetForm();
@@ -120,11 +116,8 @@ export const ProformasTab = ({ token }) => {
 
   const handleUpdateStatus = async (id, newStatus) => {
     try {
-      await axios.put(
-        `${API}/proformas/${id}`,
-        { estado: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await apiClient.put(`/proformas/${id}`,
+        { estado: newStatus });
       toast.success("Estado actualizado");
       fetchProformas();
     } catch (error) {
@@ -137,9 +130,7 @@ export const ProformasTab = ({ token }) => {
     if (!window.confirm("¿Está seguro de eliminar esta proforma?")) return;
 
     try {
-      await axios.delete(`${API}/proformas/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await apiClient.delete(`/proformas/${id}`);
       toast.success("Proforma eliminada");
       fetchProformas();
     } catch (error) {
@@ -171,16 +162,13 @@ export const ProformasTab = ({ token }) => {
       return;
     }
     
-    if (!window.confirm(`¿Iniciar tratamiento para ${proforma.paciente_nombre}?\n\nEsto creará una cuenta por cobrar de $${proforma.total.toFixed(2)} que podrá recibir pagos/abonos.`)) {
+    if (!window.confirm("Iniciar tratamiento para " + proforma.paciente_nombre + "?")) {
       return;
     }
     
     try {
-      await axios.post(
-        `${API}/financial/consultas/desde-proforma/${proforma.id}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await apiClient.post('/financial/consultas/desde-proforma/' + proforma.id,
+        {});
       
       toast.success("Tratamiento iniciado - Cuenta creada en Pagos/Abonos");
       fetchProformas();
@@ -501,12 +489,8 @@ export const ProformasTab = ({ token }) => {
                         size="sm"
                         onClick={async () => {
                           try {
-                            const response = await axios.get(
-                              `${API}/proformas/${proforma.id}/pdf`,
-                              { 
-                                headers: { Authorization: `Bearer ${token}` },
-                                responseType: 'blob'
-                              }
+                            const response = await apiClient.get(`/proformas/${proforma.id}/pdf`,
+                                { responseType: "blob" }
                             );
                             const url = window.URL.createObjectURL(new Blob([response.data]));
                             const link = document.createElement('a');

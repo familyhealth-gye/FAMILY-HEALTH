@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
+import { AuthContext } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,28 +10,19 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-export const Login = ({ onLogin }) => {
+export const Login = () => {
+  const { login } = useContext(AuthContext);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+    const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
-    try {
-      const response = await axios.post(`${API}/auth/login`, { username, password });
-      const { access_token, user } = response.data;
-      
-      localStorage.setItem("token", access_token);
-      localStorage.setItem("user", JSON.stringify(user));
-      
-      toast.success(`Bienvenido, ${user.nombre_completo}`);
-      onLogin(user);
-    } catch (error) {
-      toast.error(error.response?.data?.detail || "Error al iniciar sesión");
+    const result = await login(username, password);
+    if (!result.success) {
+      toast.error(result.message);
     }
-    
     setLoading(false);
   };
 
