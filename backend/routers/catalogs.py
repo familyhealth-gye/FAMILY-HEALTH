@@ -52,6 +52,7 @@ async def seed_especialidades(
         {"nombre": "Ecografía", "descripcion": "Diagnóstico por imagen ecográfica"},
         {"nombre": "Ginecología", "descripcion": "Salud femenina y reproductiva"},
         {"nombre": "Obstetricia", "descripcion": "Embarazo y parto"},
+        {"nombre": "Ginecología/Obstetricia", "descripcion": "Ginecología y obstetricia combinada"},
         {"nombre": "Laboratorio", "descripcion": "Análisis clínicos y pruebas de laboratorio"}
     ]
 

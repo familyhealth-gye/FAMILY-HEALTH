@@ -27,6 +27,15 @@ const DentalWorkspace = () => {
   const [appointmentLoading, setAppointmentLoading] = useState(true);
   const [selectedTooth, setSelectedTooth] = useState(null);
   const [activeTab, setActiveTab] = useState('center');
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+
+  // ─── Timeout anti-cuelgue: 10 segundos máximo de loading ─────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadingTimedOut(true);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ─── Cargar appointment ────────────────────────────────────────────────────
   useEffect(() => {
@@ -41,13 +50,18 @@ const DentalWorkspace = () => {
         setAppointmentLoading(false);
       }
     };
-    if (appointmentId) fetchAppointment();
+    if (appointmentId) {
+      fetchAppointment();
+    } else {
+      // Sin appointmentId — no hay cita que cargar, liberar loading
+      setAppointmentLoading(false);
+    }
   }, [appointmentId]);
 
   // ─── Pipeline hook (fuente de verdad clínica) ─────────────────────────────
   const pipeline = useTreatmentPipeline({
     appointmentId,
-    pacienteCedula: appointment?.paciente_cedula,
+    pacienteCedula: appointment?.cedula || appointment?.paciente_cedula || "",
     appointment,
   });
 
@@ -86,11 +100,55 @@ const DentalWorkspace = () => {
   if (isLoading) return (
     <div className="flex h-screen items-center justify-center bg-white font-sans">
       <div className="flex flex-col items-center gap-6">
-        <div className="w-12 h-12 border-4 border-medical-100 border-t-medical-600 rounded-full animate-spin" />
-        <div className="flex flex-col items-center">
-          <p className="text-slate-800 font-black text-xs uppercase tracking-[0.3em]">Cargando Sesión</p>
-          <p className="text-slate-400 text-[10px] mt-2 font-medium">Sincronizando pipeline clínico...</p>
-        </div>
+        {!loadingTimedOut ? (
+          <>
+            <div className="w-12 h-12 border-4 border-medical-100 border-t-medical-600 rounded-full animate-spin" />
+            <div className="flex flex-col items-center">
+              <p className="text-slate-800 font-black text-xs uppercase tracking-[0.3em]">Cargando Sesión</p>
+              <p className="text-slate-400 text-[10px] mt-2 font-medium">Sincronizando pipeline clínico...</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-12 h-12 flex items-center justify-center text-2xl">⚠️</div>
+            <div className="flex flex-col items-center gap-3 text-center px-6">
+              <p className="text-slate-700 font-bold text-sm">Tardando más de lo esperado</p>
+              <p className="text-slate-400 text-xs max-w-xs">
+                El servidor no responde. Verifica tu conexión o intenta recargar.
+              </p>
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="text-xs font-bold text-white bg-medical-600 px-4 py-2 rounded-lg"
+                >
+                  Recargar
+                </button>
+                <button
+                  onClick={() => window.history.back()}
+                  className="text-xs font-bold text-slate-600 border border-slate-200 px-4 py-2 rounded-lg"
+                >
+                  Volver
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // Fallback: si no hay cita válida después de cargar, mostrar mensaje
+  if (!appointment && !appointmentLoading) return (
+    <div className="flex h-screen items-center justify-center bg-white font-sans">
+      <div className="flex flex-col items-center gap-4 text-center px-6">
+        <p className="text-slate-700 font-bold text-sm">No se encontró la cita</p>
+        <p className="text-slate-400 text-xs">Verifica que el ID de la cita sea correcto.</p>
+        <button
+          onClick={() => window.history.back()}
+          className="text-xs font-bold text-medical-600 underline"
+        >
+          Volver a la agenda
+        </button>
       </div>
     </div>
   );

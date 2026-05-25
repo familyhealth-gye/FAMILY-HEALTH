@@ -21,6 +21,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { normalizeSpecialty } from "@/lib/specialties";
 import { CalendarPlus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -29,8 +30,14 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const ESPECIALIDADES = [
-  "Odontología", "Medicina General", "Pediatría",
-  "Ginecología", "Nutrición", "Ecografía",
+  "Medicina General",
+  "Odontología",
+  "Pediatría",
+  "Nutrición",
+  "Ginecología",
+  "Ginecología/Obstetricia",
+  "Obstetricia",
+  "Ecografía",
 ];
 
 // Cache de doctores por especialidad
@@ -46,11 +53,11 @@ const useDoctores = (especialidad, token) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const todos = Array.isArray(res.data) ? res.data : [];
-      // Filtrar por especialidad — comparación normalizada
-      const norm = (s) => (s || "").trim().toLowerCase();
+      // Filtrar usando catálogo central de especialidades
+      const espNorm = normalizeSpecialty(especialidad);
       const filtrados = todos.filter(d =>
-        norm(d.especialidad) === norm(especialidad) ||
-        norm(d.especialidades?.join(",") || "") .includes(norm(especialidad))
+        normalizeSpecialty(d.especialidad) === espNorm ||
+        (d.especialidades || []).some(e => normalizeSpecialty(e) === espNorm)
       );
       setDoctores(filtrados.length > 0 ? filtrados : todos);
     } catch {
