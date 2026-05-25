@@ -16,6 +16,38 @@ import { EcografiaForm } from "./EcografiaForm";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = '' + BACKEND_URL + '/api';
 
+// ── Normalización de especialidades ─────────────────────────────────────────
+// Unifica variantes legacy (sin tilde, abreviadas) al valor canónico.
+// Agregar aquí si aparecen nuevas variantes en producción.
+const ESPECIALIDAD_MAP = {
+  // Odontología
+  "odontologia": "Odontología", "odontologa": "Odontología",
+  "odontología": "Odontología",
+  // Medicina
+  "medicina general": "Medicina General", "medicina": "Medicina General",
+  // Pediatría
+  "pediatria": "Pediatría", "pediatra": "Pediatría",
+  "pediatría": "Pediatría",
+  // Nutrición
+  "nutricion": "Nutrición", "nutricin": "Nutrición",
+  "nutrición": "Nutrición",
+  // Ginecología
+  "ginecologia": "Ginecología", "ginecologa": "Ginecología",
+  "ginecología": "Ginecología",
+  "ginecologia/obstetricia": "Ginecología/Obstetricia",
+  "ginecología/obstetricia": "Ginecología/Obstetricia",
+  // Ecografía
+  "ecografia": "Ecografía", "ecografa": "Ecografía",
+  "ecografía": "Ecografía",
+  // Obstetricia
+  "obstetricia": "Obstetricia",
+};
+
+const normalizeEspecialidad = (esp) => {
+  if (!esp) return "";
+  return ESPECIALIDAD_MAP[esp.trim().toLowerCase()] || esp.trim();
+};
+
 export const AppointmentsWithAttention = ({ 
   filteredAppointments, 
   user,
@@ -68,7 +100,8 @@ export const AppointmentsWithAttention = ({
     
     // VALIDACIÓN: Solo validar si el usuario tiene especialidad definida
     // Si no tiene especialidad (usuario legacy), permitir acceso
-    if (user?.role === "Doctor" && userEspecialidad && appointment.especialidad !== userEspecialidad) {
+    if (user?.role === "Doctor" && userEspecialidad && 
+        normalizeEspecialidad(appointment.especialidad) !== normalizeEspecialidad(userEspecialidad)) {
       toast.error('No puede atender consultas de ' + appointment.especialidad + '. Su especialidad es ' + userEspecialidad + '.');
       return;
     }
@@ -741,96 +774,38 @@ export const AppointmentsWithAttention = ({
         </div>
         
         <div className="atencion-contenido">
-          {(selectedAppointment.especialidad === "Medicina General" ||
-            selectedAppointment.especialidad === "Medicina") && (
-            <MedicinaGeneralForm
-              appointment={selectedAppointment}
-              token={token}
-              onClose={() => {
-                setVistaAtencion(false);
-                setSelectedAppointment(null);
-              }}
-              onSuccess={handleAttentionSuccess}
-            />
-          )}
-
-          {(selectedAppointment.especialidad === "Odontología" ||
-            selectedAppointment.especialidad === "Odontologia") && (
-            <OdontologiaFormSimple
-              appointment={selectedAppointment}
-              token={token}
-              onClose={() => {
-                setVistaAtencion(false);
-                setSelectedAppointment(null);
-              }}
-              onSuccess={handleAttentionSuccess}
-            />
-          )}
-          
-          {(selectedAppointment.especialidad === "Pediatría" ||
-            selectedAppointment.especialidad === "Pediatria") && (
-            <PediatriaForm
-              appointment={selectedAppointment}
-              token={token}
-              onClose={() => {
-                setVistaAtencion(false);
-                setSelectedAppointment(null);
-              }}
-              onSuccess={handleAttentionSuccess}
-            />
-          )}
-          
-          {(selectedAppointment.especialidad === "Nutrición" ||
-            selectedAppointment.especialidad === "Nutricion") && (
-            <NutricionForm
-              appointment={selectedAppointment}
-              token={token}
-              onClose={() => { setVistaAtencion(false); setSelectedAppointment(null); }}
-              onSuccess={handleAttentionSuccess}
-            />
-          )}
-
-          {["Ginecología","Obstetricia","Ginecología/Obstetricia",
-             "Ginecologia","Ginecologia/Obstetricia"].includes(selectedAppointment.especialidad) && (
-            <GinecologiaForm
-              appointment={selectedAppointment}
-              token={token}
-              onClose={() => { setVistaAtencion(false); setSelectedAppointment(null); }}
-              onSuccess={handleAttentionSuccess}
-            />
-          )}
-
-          {(selectedAppointment.especialidad === "Ecografía" ||
-            selectedAppointment.especialidad === "Ecografia") && (
-            <EcografiaForm
-              appointment={selectedAppointment}
-              token={token}
-              onClose={() => { setVistaAtencion(false); setSelectedAppointment(null); }}
-              onSuccess={handleAttentionSuccess}
-            />
-          )}
-
-          {!["Medicina General","Pediatría","Odontología","Nutrición",
-             "Ginecología","Obstetricia","Ginecología/Obstetricia","Ecografía",
-             "Medicina","Odontologia","Nutricion","Pediatria",
-             "Ginecologia","Ginecologia/Obstetricia","Ecografia"
-            ].includes(selectedAppointment.especialidad) && (
-            <div style={{padding: '2rem', textAlign: 'center'}}>
-              <p>Historia clínica de <strong>{selectedAppointment.especialidad}</strong> próximamente.</p>
-              <p style={{marginTop: '1rem', color: '#64748B'}}>
-                Disponibles: Medicina General, Pediatría, Odontología, Nutrición, Ginecología y Ecografía.
-              </p>
-              <Button 
-                onClick={() => {
-                  setVistaAtencion(false);
-                  setSelectedAppointment(null);
-                }}
-                style={{marginTop: '1.5rem'}}
-              >
-                Volver
-              </Button>
-            </div>
-          )}
+          {/* ── Router de especialidades — usa normalizeEspecialidad para compatibilidad legacy ── */}
+          {(() => {
+            const esp = normalizeEspecialidad(selectedAppointment.especialidad);
+            const closeProps = {
+              appointment: selectedAppointment,
+              token,
+              onClose: () => { setVistaAtencion(false); setSelectedAppointment(null); },
+              onSuccess: handleAttentionSuccess,
+            };
+            if (esp === "Medicina General") return <MedicinaGeneralForm {...closeProps} />;
+            if (esp === "Odontología")      return <OdontologiaFormSimple {...closeProps} />;
+            if (esp === "Pediatría")        return <PediatriaForm {...closeProps} />;
+            if (esp === "Nutrición")        return <NutricionForm {...closeProps} />;
+            if (esp === "Ecografía")        return <EcografiaForm {...closeProps} />;
+            if (["Ginecología","Ginecología/Obstetricia","Obstetricia"].includes(esp))
+              return <GinecologiaForm {...closeProps} />;
+            // Fallback — especialidad no mapeada
+            return (
+              <div style={{padding: '2rem', textAlign: 'center'}}>
+                <p>Historia clínica de <strong>{selectedAppointment.especialidad}</strong> próximamente.</p>
+                <p style={{marginTop: '1rem', color: '#64748B'}}>
+                  Disponibles: Medicina General, Pediatría, Odontología, Nutrición, Ginecología y Ecografía.
+                </p>
+                <Button 
+                  onClick={() => { setVistaAtencion(false); setSelectedAppointment(null); }}
+                  style={{marginTop: '1.5rem'}}
+                >
+                  Volver
+                </Button>
+              </div>
+            );
+          })()}
         </div>
       </div>
     );

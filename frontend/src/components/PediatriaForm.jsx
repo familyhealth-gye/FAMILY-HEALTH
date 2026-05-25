@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
+import { NuevaCitaModal } from "./NuevaCitaModal";
 import { AntecedentesPanel } from "./AntecedentesPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -14,6 +15,7 @@ const API = `${BACKEND_URL}/api`;
 
 export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [showAgendarCita, setShowAgendarCita] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [existingHistory, setExistingHistory] = useState(null);
   const [form, setForm] = useState({
@@ -141,6 +143,46 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
     
     loadExistingHistory();
   }, [appointment?.id, token]);
+
+  // Cargar datos longitudinales del paciente (consultas previas)
+  // Solo se activa si no se encontró historia para el appointment actual
+  useEffect(() => {
+    const loadLongitudinalData = async () => {
+      if (!appointment?.cedula || existingHistory) return;
+      try {
+        const res = await axios.get(
+          `${API}/medical-history/pediatric`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const historias = (res.data || [])
+          .filter(h => h.cedula === appointment.cedula || h.paciente_cedula === appointment.cedula)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        if (historias.length === 0) return;
+        const ultima = historias[0]; // más reciente del paciente
+        
+        // Precargar SOLO campos que no cambian consulta a consulta
+        setForm(prev => ({
+          ...prev,
+          nombre_responsable:      prev.nombre_responsable      || ultima.nombre_responsable      || "",
+          parentesco_responsable:  prev.parentesco_responsable  || ultima.parentesco_responsable  || "",
+          telefono_responsable:    prev.telefono_responsable    || ultima.telefono_responsable    || "",
+          datos_nacimiento:        prev.datos_nacimiento?.peso_nacimiento ? prev.datos_nacimiento : (ultima.datos_nacimiento || prev.datos_nacimiento),
+          lactancia_materna:       prev.lactancia_materna       || ultima.lactancia_materna       || "",
+          lactancia_meses:         prev.lactancia_meses         || ultima.lactancia_meses         || null,
+          desarrollo_psicomotor:   prev.desarrollo_psicomotor?.sostuvo_cabeza_meses ? prev.desarrollo_psicomotor : (ultima.desarrollo_psicomotor || prev.desarrollo_psicomotor),
+          antecedentes_familiares: prev.antecedentes_familiares || ultima.antecedentes_familiares || "",
+          alergias:                prev.alergias                || ultima.alergias                || "",
+          vacunas:                 prev.vacunas?.length > 0 ? prev.vacunas : (ultima.vacunas || prev.vacunas),
+          esquema_completo:        prev.esquema_completo        || ultima.esquema_completo        || false,
+        }));
+        toast.info("Datos del paciente precargados desde consulta anterior.");
+      } catch {
+        // Silencioso — no bloquear el formulario
+      }
+    };
+    loadLongitudinalData();
+  }, [appointment?.cedula, token, existingHistory]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -345,6 +387,13 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
               required
             />
           </div>
+          {/* Agendar próxima cita rápido */}
+          <button
+            onClick={() => setShowAgendarCita(true)}
+            style={{ marginTop:"6px", fontSize:"11px", color:"#0C4A6E", background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:"6px", padding:"4px 10px", cursor:"pointer", fontWeight:"600" }}
+          >
+            📅 Agendar próxima consulta
+          </button>
           <div className="form-field">
             <Label>Parentesco *</Label>
             <Input
@@ -714,6 +763,22 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
           {loading ? "Guardando..." : "Terminar Consulta"}
         </Button>
       </div>
-    </form>
+    
+
+      {/* Modal agendar próxima cita */}
+      <NuevaCitaModal
+        isOpen={showAgendarCita}
+        onClose={() => setShowAgendarCita(false)}
+        onSuccess={() => setShowAgendarCita(false)}
+        token={token}
+        user={null}
+        paciente={{
+          nombre_completo: appointment?.nombre_completo || "",
+          cedula: appointment?.cedula || "",
+          telefono: appointment?.telefono || "",
+        }}
+        fromPatient={true}
+      />
+      </form>
   );
 };

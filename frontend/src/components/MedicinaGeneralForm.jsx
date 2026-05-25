@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {} from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import axios from "axios";
+import { NuevaCitaModal } from "./NuevaCitaModal";
 import { AntecedentesPanel } from "./AntecedentesPanel";
 import { CIE10Selector } from "./CIE10Selector";
 import { MedicacionRapida } from "./MedicacionRapida";
@@ -16,6 +17,7 @@ const API = `${BACKEND_URL}/api`;
 
 export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [showAgendarCita, setShowAgendarCita] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [existingHistory, setExistingHistory] = useState(null);
   const [form, setForm] = useState({
@@ -222,6 +224,13 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
           <h2 style={{ color:"white", margin:0, fontSize:"16px", fontWeight:"700" }}>🩺 Historia Clínica — Medicina General</h2>
           <p style={{ color:"rgba(255,255,255,0.8)", margin:"2px 0 0", fontSize:"13px" }}>{appointment.nombre_completo} · {appointment.cedula}</p>
         </div>
+          {/* Agendar próxima cita rápido */}
+          <button
+            onClick={() => setShowAgendarCita(true)}
+            style={{ marginTop:"6px", fontSize:"11px", color:"#0C4A6E", background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:"6px", padding:"4px 10px", cursor:"pointer", fontWeight:"600" }}
+          >
+            📅 Agendar próxima consulta
+          </button>
         {existingHistory && <span style={{ background:"rgba(255,255,255,0.2)", color:"white", borderRadius:"6px", padding:"4px 10px", fontSize:"12px" }}>✏️ Editando</span>}
       </div>
 
@@ -379,6 +388,22 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
           {loading ? "Guardando..." : existingHistory ? "Actualizar Consulta" : "Terminar Consulta"}
         </Button>
       </div>
+
+      {/* Modal agendar próxima cita */}
+      <NuevaCitaModal
+        isOpen={showAgendarCita}
+        onClose={() => setShowAgendarCita(false)}
+        onSuccess={() => setShowAgendarCita(false)}
+        token={token}
+        user={null}
+        paciente={{
+          nombre_completo: appointment?.nombre_completo || "",
+          cedula: appointment?.cedula || "",
+          telefono: appointment?.telefono || "",
+        }}
+        fromPatient={true}
+      />
     </form>
+
   );
 };

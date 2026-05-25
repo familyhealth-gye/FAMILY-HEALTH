@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import axios from "axios";
+import { NuevaCitaModal } from "./NuevaCitaModal";
 import { CIE10Selector } from "./CIE10Selector";
 import { MedicacionRapida } from "./MedicacionRapida";
 import { HistorialLateral } from "./HistorialLateral";
@@ -57,6 +58,7 @@ const FORM_INICIAL = {
 
 export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [showAgendarCita, setShowAgendarCita] = useState(false);
   const [autoSaved, setAutoSaved] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
 
@@ -146,6 +148,9 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
   // ── Detectar si es primera o segunda cita ──
   const [esPrimeraCita, setEsPrimeraCita] = useState(true);
   const [medidasAnteriores, setMedidasAnteriores] = useState(null);
+  const [planFile, setPlanFile] = useState(null);
+  const [uploadingPlan, setUploadingPlan] = useState(false);
+  const [planUrl, setPlanUrl] = useState(null);
   const [modoEvolucion, setModoEvolucion] = useState(false);
 
   useEffect(() => {
@@ -180,6 +185,30 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
     setForm(f => ({ ...f, examen_fisico: { ...f.examen_fisico, [campo]: valor } }));
   const setLab = (campo, valor) =>
     setForm(f => ({ ...f, laboratorio: { ...f.laboratorio, [campo]: valor } }));
+
+  const handleUploadPlan = async () => {
+    if (!planFile) return;
+    setUploadingPlan(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", planFile);
+      formData.append("cedula", appointment.cedula || "");
+      formData.append("appointment_id", appointment.id || "");
+      formData.append("tipo", "plan_nutricional");
+      const res = await axios.post(
+        `${API}/imagenes-clinicas`,
+        formData,
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" } }
+      );
+      setPlanUrl(res.data?.url || res.data?.id || "guardado");
+      setPlanFile(null);
+      toast.success("Plan nutricional subido correctamente");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Error al subir el archivo");
+    } finally {
+      setUploadingPlan(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -312,6 +341,13 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
                   Última consulta: {medidasAnteriores?.fecha} · Peso anterior: {medidasAnteriores?.peso} kg · IMC: {medidasAnteriores?.imc}
                 </p>
               </div>
+          {/* Agendar próxima cita rápido */}
+          <button
+            onClick={() => setShowAgendarCita(true)}
+            style={{ marginTop:"6px", fontSize:"11px", color:"#0C4A6E", background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:"6px", padding:"4px 10px", cursor:"pointer", fontWeight:"600" }}
+          >
+            📅 Agendar próxima consulta
+          </button>
               <div style={{ display:"flex", gap:"6px" }}>
                 <button type="button" onClick={() => setModoEvolucion(true)}
                   style={{ padding:"6px 12px", background:modoEvolucion?"#d97706":"white", color:modoEvolucion?"white":"#d97706", border:"1.5px solid #d97706", borderRadius:"6px", fontSize:"12px", fontWeight:"700", cursor:"pointer" }}>
@@ -662,11 +698,45 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
               {appointment.email ? `📧 Enviar plan a ${appointment.email}` : "📧 Enviar plan nutricional"}
             </Button>
           )}
-          <Button type="submit" disabled={loading} style={{ background: "#00a8cc", color: "white" }}>
+          
+
+          {/* ── Subir Plan Nutricional (PDF/DOCX) ───────────────────────── */}
+          <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:"10px", padding:"14px", marginBottom:"12px" }}>
+            <p style={{ margin:"0 0 10px", fontSize:"13px", fontWeight:"700", color:"#166534" }}>📎 Plan Nutricional (PDF / DOCX)</p>
+            <div style={{ display:"flex", gap:"10px", alignItems:"center", flexWrap:"wrap" }}>
+              <input type="file" accept=".pdf,.doc,.docx"
+                onChange={e => setPlanFile(e.target.files[0] || null)}
+                style={{ fontSize:"12px", flex:1, minWidth:"180px" }} />
+              {planFile && (
+                <button onClick={handleUploadPlan} disabled={uploadingPlan}
+                  style={{ padding:"6px 14px", background: uploadingPlan ? "#86EFAC":"#16A34A", color:"white", border:"none", borderRadius:"6px", fontSize:"12px", fontWeight:"700", cursor: uploadingPlan?"not-allowed":"pointer" }}>
+                  {uploadingPlan ? "Subiendo..." : "Subir"}
+                </button>
+              )}
+              {planUrl && <span style={{ fontSize:"11px", color:"#166534", fontWeight:"600" }}>✓ Subido</span>}
+            </div>
+            <p style={{ margin:"6px 0 0", fontSize:"10px", color:"#4B7A5A" }}>Asociado a esta consulta en Imágenes/Docs.</p>
+          </div>
+<Button type="submit" disabled={loading} style={{ background: "#00a8cc", color: "white" }}>
             {loading ? "Guardando..." : existingHistory ? "Actualizar Consulta" : "Terminar Consulta"}
           </Button>
         </div>
-      </form>
+  
+      {/* Modal agendar próxima cita */}
+      <NuevaCitaModal
+        isOpen={showAgendarCita}
+        onClose={() => setShowAgendarCita(false)}
+        onSuccess={() => setShowAgendarCita(false)}
+        token={token}
+        user={null}
+        paciente={{
+          nombre_completo: appointment?.nombre_completo || "",
+          cedula: appointment?.cedula || "",
+          telefono: appointment?.telefono || "",
+        }}
+        fromPatient={true}
+      />
+    </form>
 
       {/* Historial lateral */}
       <HistorialLateral
@@ -675,5 +745,6 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
         especialidadActual="Nutrición"
       />
     </div>
+
   );
 };

@@ -310,21 +310,49 @@ function LegacyApp({ user: propUser, token: propToken }) {
         )}
 
         <TabsContent value="prescriptions" className="tab-content">
-          {/* Implementación simplificada para mantener compatibilidad */}
           <div className="tab-header">
             <h2 className="tab-title">Recetas Médicas</h2>
           </div>
-          <div className="grid-container">
-            {prescriptions.map(p => (
-              <div key={p.id} className="card-item">
-                <p><b>Paciente:</b> {p.paciente_nombre}</p>
-                <p><b>Fecha:</b> {p.fecha}</p>
-                <Button variant="outline" size="sm" onClick={() => window.open(`${process.env.REACT_APP_BACKEND_URL}/api/prescriptions/${p.id}/pdf`, '_blank')}>
-                  Ver PDF
-                </Button>
+          {(() => {
+            // Admin y Recepción ven todas; Doctor ve solo las de su especialidad
+            const canSeeAll = user?.role === "Administrador" || user?.role === "Recepcion";
+            const filtered = canSeeAll
+              ? prescriptions
+              : prescriptions.filter(p => {
+                  const pEsp = (p.doctor_especialidad || p.especialidad || "").toLowerCase().trim();
+                  const uEsp = (user?.especialidad || "").toLowerCase().trim();
+                  return !uEsp || pEsp === uEsp || pEsp === "";
+                });
+            return (
+              <div className="grid-container">
+                {filtered.length === 0 && (
+                  <p style={{ color:"#94A3B8", fontSize:"14px", padding:"1rem" }}>
+                    No hay recetas registradas para tu especialidad.
+                  </p>
+                )}
+                {filtered.map(p => (
+                  <div key={p.id} className="card-item">
+                    <div className="card-content">
+                      <div className="card-info">
+                        <p className="card-name">{p.paciente_nombre}</p>
+                        <p className="card-subtitle">{p.fecha}</p>
+                        {p.doctor_especialidad && (
+                          <p className="card-detail">{p.doctor_especialidad}</p>
+                        )}
+                      </div>
+                      <Button variant="outline" size="sm"
+                        onClick={() => window.open(
+                          `${process.env.REACT_APP_BACKEND_URL}/api/prescriptions/${p.id}/pdf`,
+                          '_blank'
+                        )}>
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </TabsContent>
 
         {(user?.role === "Administrador" || user?.role === "Recepcion") && (
