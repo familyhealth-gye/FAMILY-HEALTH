@@ -272,6 +272,66 @@ async def get_pediatric_history_by_appointment(
 
     return MedicalHistoryPediatric(**history)
 
+@router.get("/medical-history/pediatric/paciente/{cedula}")
+async def get_pediatric_longitudinal(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    """
+    Datos longitudinales del paciente pediátrico por cédula.
+    Devuelve SOLO campos que persisten entre consultas:
+      representante, antecedentes perinatales, desarrollo psicomotor,
+      vacunas, alergias, antecedentes familiares.
+    NO incluye: motivo_consulta, signos_vitales, diagnóstico (son por sesión).
+    """
+    # Buscar por paciente_cedula O cedula (compatibilidad legacy)
+    histories = await db.medical_history_pediatric.find(
+        {"$or": [
+            {"paciente_cedula": cedula},
+            {"cedula": cedula},
+        ]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(length=50)
+
+    if not histories:
+        return {}
+
+    # Tomar la más reciente como fuente de datos longitudinales
+    latest = histories[0]
+
+    # Retornar SOLO los campos longitudinales — no los del episodio actual
+    return {
+        # Responsable
+        "nombre_responsable":      latest.get("nombre_responsable", ""),
+        "parentesco_responsable":  latest.get("parentesco_responsable", ""),
+        "telefono_responsable":    latest.get("telefono_responsable", ""),
+        # Antecedentes perinatales
+        "datos_nacimiento":        latest.get("datos_nacimiento", {}),
+        "lactancia_materna":       latest.get("lactancia_materna", ""),
+        "lactancia_meses":         latest.get("lactancia_meses", None),
+        # Desarrollo psicomotor
+        "desarrollo_psicomotor":   latest.get("desarrollo_psicomotor", {}),
+        "desarrollo_acorde_edad":  latest.get("desarrollo_acorde_edad", True),
+        "observaciones_desarrollo":latest.get("observaciones_desarrollo", ""),
+        # Inmunizaciones
+        "vacunas":                 latest.get("vacunas", {}),
+        "esquema_completo":        latest.get("esquema_completo", False),
+        # Antecedentes
+        "antecedentes_familiares": latest.get("antecedentes_familiares", ""),
+        "enfermedades_hereditarias":latest.get("enfermedades_hereditarias", ""),
+        "hospitalizaciones_previas":latest.get("hospitalizaciones_previas", ""),
+        "cirugias_previas":        latest.get("cirugias_previas", ""),
+        "alergias":                latest.get("alergias", ""),
+        "medicamentos_actuales":   latest.get("medicamentos_actuales", ""),
+        # Alimentación
+        "alimentacion_actual":     latest.get("alimentacion_actual", ""),
+        "numero_comidas_dia":      latest.get("numero_comidas_dia", None),
+        # Meta
+        "_ultima_consulta":        latest.get("fecha", ""),
+        "_total_consultas":        len(histories),
+    }
+
+
 @router.put("/medical-history/pediatric/{history_id}", response_model=MedicalHistoryPediatric)
 async def update_pediatric_history(
     history_id: str,

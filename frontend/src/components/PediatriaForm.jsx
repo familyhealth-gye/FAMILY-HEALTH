@@ -144,41 +144,40 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
     loadExistingHistory();
   }, [appointment?.id, token]);
 
-  // Cargar datos longitudinales del paciente (consultas previas)
+  // Cargar datos longitudinales del paciente — endpoint específico por cédula
   // Solo se activa si no se encontró historia para el appointment actual
   useEffect(() => {
     const loadLongitudinalData = async () => {
       if (!appointment?.cedula || existingHistory) return;
       try {
         const res = await axios.get(
-          `${API}/medical-history/pediatric`,
+          `${API}/medical-history/pediatric/paciente/${appointment.cedula}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        const historias = (res.data || [])
-          .filter(h => h.cedula === appointment.cedula || h.paciente_cedula === appointment.cedula)
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        
-        if (historias.length === 0) return;
-        const ultima = historias[0]; // más reciente del paciente
-        
-        // Precargar SOLO campos que no cambian consulta a consulta
+        const d = res.data;
+        if (!d || Object.keys(d).length === 0) return;
+
         setForm(prev => ({
           ...prev,
-          nombre_responsable:      prev.nombre_responsable      || ultima.nombre_responsable      || "",
-          parentesco_responsable:  prev.parentesco_responsable  || ultima.parentesco_responsable  || "",
-          telefono_responsable:    prev.telefono_responsable    || ultima.telefono_responsable    || "",
-          datos_nacimiento:        prev.datos_nacimiento?.peso_nacimiento ? prev.datos_nacimiento : (ultima.datos_nacimiento || prev.datos_nacimiento),
-          lactancia_materna:       prev.lactancia_materna       || ultima.lactancia_materna       || "",
-          lactancia_meses:         prev.lactancia_meses         || ultima.lactancia_meses         || null,
-          desarrollo_psicomotor:   prev.desarrollo_psicomotor?.sostuvo_cabeza_meses ? prev.desarrollo_psicomotor : (ultima.desarrollo_psicomotor || prev.desarrollo_psicomotor),
-          antecedentes_familiares: prev.antecedentes_familiares || ultima.antecedentes_familiares || "",
-          alergias:                prev.alergias                || ultima.alergias                || "",
-          vacunas:                 prev.vacunas?.length > 0 ? prev.vacunas : (ultima.vacunas || prev.vacunas),
-          esquema_completo:        prev.esquema_completo        || ultima.esquema_completo        || false,
+          nombre_responsable:      prev.nombre_responsable      || d.nombre_responsable      || "",
+          parentesco_responsable:  prev.parentesco_responsable  || d.parentesco_responsable  || "",
+          telefono_responsable:    prev.telefono_responsable    || d.telefono_responsable    || "",
+          datos_nacimiento:        prev.datos_nacimiento?.peso_nacimiento ? prev.datos_nacimiento : (d.datos_nacimiento || prev.datos_nacimiento),
+          lactancia_materna:       prev.lactancia_materna       || d.lactancia_materna       || "",
+          lactancia_meses:         prev.lactancia_meses         || d.lactancia_meses         || null,
+          desarrollo_psicomotor:   prev.desarrollo_psicomotor?.sostuvo_cabeza_meses ? prev.desarrollo_psicomotor : (d.desarrollo_psicomotor || prev.desarrollo_psicomotor),
+          antecedentes_familiares: prev.antecedentes_familiares || d.antecedentes_familiares || "",
+          alergias:                prev.alergias                || d.alergias                || "",
+          vacunas:                 prev.vacunas?.length > 0     ? prev.vacunas               : (d.vacunas || prev.vacunas),
+          esquema_completo:        prev.esquema_completo        || d.esquema_completo        || false,
+          alimentacion_actual:     prev.alimentacion_actual     || d.alimentacion_actual     || "",
+          medicamentos_actuales:   prev.medicamentos_actuales   || d.medicamentos_actuales   || "",
         }));
-        toast.info("Datos del paciente precargados desde consulta anterior.");
+        if (d._total_consultas > 0) {
+          toast.info(`Datos precargados desde consulta anterior (${d._ultima_consulta}).`);
+        }
       } catch {
-        // Silencioso — no bloquear el formulario
+        // 404 = primer paciente — silencioso, no bloquear el formulario
       }
     };
     loadLongitudinalData();

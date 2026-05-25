@@ -53,11 +53,11 @@ const useDoctores = (especialidad, token) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const todos = Array.isArray(res.data) ? res.data : [];
-      // Filtrar usando catálogo central de especialidades
-      const espNorm = normalizeSpecialty(especialidad);
+      // Filtrar por especialidad — comparación normalizada
+      const norm = (s) => (s || "").trim().toLowerCase();
       const filtrados = todos.filter(d =>
-        normalizeSpecialty(d.especialidad) === espNorm ||
-        (d.especialidades || []).some(e => normalizeSpecialty(e) === espNorm)
+        norm(d.especialidad) === norm(especialidad) ||
+        norm(d.especialidades?.join(",") || "") .includes(norm(especialidad))
       );
       setDoctores(filtrados.length > 0 ? filtrados : todos);
     } catch {

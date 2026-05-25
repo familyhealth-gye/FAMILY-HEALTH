@@ -35,12 +35,15 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
 
   // ── FETCH ─────────────────────────────────────────────────────────────────
   const fetchPlan = useCallback(async (silent = false) => {
-    if (!pacienteCedula) return;
+    // CRITICAL: siempre hacer setLoading(false), nunca dejar loading infinito
+    if (!pacienteCedula) {
+      if (!silent) setLoading(false);
+      return;
+    }
     if (!silent) setLoading(true);
     try {
       const res = await apiClient.get(`/plan-tratamiento/paciente/${pacienteCedula}`);
       const data = res.data || null;
-      // Normalizar campos legacy
       if (data) {
         data.proformas_generadas  = data.proformas_generadas  ?? [];
         data.sesiones_programadas = data.sesiones_programadas ?? [];
@@ -48,8 +51,14 @@ export const useTreatmentPipeline = ({ appointmentId, pacienteCedula, appointmen
       }
       setPlan(data);
     } catch (err) {
-      if (!silent) console.error('[Pipeline] fetchPlan:', err);
+      // 404 = no existe plan aún — es estado válido, no error
+      if (err.response?.status === 404) {
+        setPlan(null);
+      } else if (!silent) {
+        console.error('[Pipeline] fetchPlan:', err);
+      }
     } finally {
+      // SIEMPRE liberar loading — nunca quedar colgado
       if (!silent) setLoading(false);
     }
   }, [pacienteCedula]);

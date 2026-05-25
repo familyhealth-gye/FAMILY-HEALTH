@@ -48,6 +48,8 @@ const normalizeEspecialidad = (esp) => {
   return ESPECIALIDAD_MAP[esp.trim().toLowerCase()] || esp.trim();
 };
 
+import { normalizeSpecialty } from "@/lib/specialties";
+
 export const AppointmentsWithAttention = ({ 
   filteredAppointments, 
   user,
@@ -101,7 +103,7 @@ export const AppointmentsWithAttention = ({
     // VALIDACIÓN: Solo validar si el usuario tiene especialidad definida
     // Si no tiene especialidad (usuario legacy), permitir acceso
     if (user?.role === "Doctor" && userEspecialidad && 
-        normalizeEspecialidad(appointment.especialidad) !== normalizeEspecialidad(userEspecialidad)) {
+        normalizeSpecialty(appointment.especialidad) !== normalizeSpecialty(userEspecialidad)) {
       toast.error('No puede atender consultas de ' + appointment.especialidad + '. Su especialidad es ' + userEspecialidad + '.');
       return;
     }
@@ -776,7 +778,7 @@ export const AppointmentsWithAttention = ({
         <div className="atencion-contenido">
           {/* ── Router de especialidades — usa normalizeEspecialidad para compatibilidad legacy ── */}
           {(() => {
-            const esp = normalizeEspecialidad(selectedAppointment.especialidad);
+            const esp = normalizeSpecialty(selectedAppointment.especialidad);
             const closeProps = {
               appointment: selectedAppointment,
               token,
