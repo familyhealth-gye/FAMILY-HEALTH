@@ -203,7 +203,8 @@ function LegacyApp({ user: propUser, token: propToken }) {
               Caja
             </TabsTrigger>
           )}
-          {user?.role === "Doctor" && (
+          {user?.role === "Doctor" && 
+            (user?.especialidad === "Odontología" || user?.especialidad === "Odontologia") && (
             <>
               <TabsTrigger value="odontograma-standalone">
                 <Smile className="tab-icon" />
@@ -360,7 +361,8 @@ function LegacyApp({ user: propUser, token: propToken }) {
           </>
         )}
 
-        {user?.role === "Doctor" && (
+        {user?.role === "Doctor" && 
+          (user?.especialidad === "Odontología" || user?.especialidad === "Odontologia") && (
           <>
             <TabsContent value="odontograma-standalone" className="tab-content">
               <OdontogramaStandalone token={token} user={user} />

@@ -32,7 +32,7 @@ export const OdontogramaStandalone = ({ token, user }) => {
   const fetchPacientes = async () => {
     try {
       // Buscar en pacientes registrados
-      const resPacientes = await axios.get(`${API}/pacientes`, {
+      const resPacientes = await axios.get(`${API}/financial/pacientes`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

@@ -48,7 +48,7 @@ export const HistoriaClinicaCompleta = ({
   const fetchOdontogramaId = async () => {
     try {
       const response = await axios.get(
-        `${API}/odontograma-clinico/cedula/${paciente.cedula}`,
+        `${API}/odontogramas-clinicos/cedula/${paciente.cedula}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (response.data && response.data.length > 0) {

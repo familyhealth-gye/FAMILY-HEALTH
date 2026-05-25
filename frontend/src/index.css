@@ -221,3 +221,67 @@
     display: none !important; /* En móvil muy pequeño, ocultar historial */
   }
 }
+/* ── Doctors grid layout ─────────────────────────────────────────────────── */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.card-item {
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  transition: box-shadow 0.2s;
+}
+
+.card-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+}
+
+.card-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.card-info { flex: 1; min-width: 0; }
+
+.card-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1E293B;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-subtitle {
+  font-size: 0.8125rem;
+  color: #64748B;
+  margin: 0 0 2px;
+}
+
+.card-detail {
+  font-size: 0.75rem;
+  color: #94A3B8;
+  margin: 0;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Recetas tab — overflow fix ──────────────────────────────────────────── */
+.tab-content {
+  min-height: 0;
+  overflow-y: auto;
+}

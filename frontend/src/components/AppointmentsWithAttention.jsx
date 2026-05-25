@@ -660,12 +660,17 @@ export const AppointmentsWithAttention = ({
                   )}
                   {appointment.estado !== "En Atención" && (
                     <>
-                      <Button variant="ghost" size="sm" onClick={() => handleEditAppt(appointment)} data-testid={'edit-appointment-' + appointment.id + ''}>
-                        <Edit className="action-icon" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAppt(appointment.id)} data-testid={'delete-appointment-' + appointment.id + ''}>
-                        <Trash2 className="action-icon delete-icon" />
-                    </Button>
+                      {(user?.role === "Administrador" || user?.role === "Recepcion" ||
+                        (user?.role === "Doctor" && appointment.doctor_id === user?.doctor_id)) && (
+                        <Button variant="ghost" size="sm" onClick={() => handleEditAppt(appointment)} data-testid={'edit-appointment-' + appointment.id + ''}>
+                          <Edit className="action-icon" />
+                        </Button>
+                      )}
+                      {(user?.role === "Administrador" || user?.role === "Recepcion") && (
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteAppt(appointment.id)} data-testid={'delete-appointment-' + appointment.id + ''}>
+                          <Trash2 className="action-icon delete-icon" />
+                        </Button>
+                      )}
                   </>
                 )}
               </td>

@@ -211,7 +211,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
       if (pacienteCedula) {
         try {
           response = await axios.get(
-            `${API}/odontograma-clinico/cedula/${pacienteCedula}`,
+            `${API}/odontogramas-clinicos/cedula/${pacienteCedula}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
         } catch (e) {
@@ -222,7 +222,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
       // Si no encontró por cédula, buscar por pacienteId
       if ((!response || !response.data || response.data.length === 0) && pacienteId) {
         response = await axios.get(
-          `${API}/odontograma-clinico/paciente/${pacienteId}`,
+          `${API}/odontogramas-clinicos/paciente/${pacienteId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
       }
@@ -281,7 +281,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
   const crearNuevoOdontograma = async () => {
     try {
       const response = await axios.post(
-        `${API}/odontograma-clinico`,
+        `${API}/odontogramas-clinicos`,
         {
           paciente_id: pacienteId,
           paciente_nombre: pacienteNombre,
@@ -294,7 +294,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
       
       // Obtener el odontograma creado
       const nuevoOdontograma = await axios.get(
-        `${API}/odontograma-clinico/${response.data.id}`,
+        `${API}/odontogramas-clinicos/${response.data.id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
@@ -320,7 +320,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
     setLoading(true);
     try {
       await axios.post(
-        `${API}/odontograma-clinico/${odontograma.id}/cambiar-denticion`,
+        `${API}/odontogramas-clinicos/${odontograma.id}/cambiar-denticion`,
         { tipo_denticion: nuevoTipo },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -360,7 +360,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
     
     try {
       await axios.put(
-        `${API}/odontograma-clinico/${odontograma.id}/diente/${diente.numero_fdi}/superficie/${nombreSuperficie}`,
+        `${API}/odontogramas-clinicos/${odontograma.id}/diente/${diente.numero_fdi}/superficie/${nombreSuperficie}`,
         { diagnostico },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -387,7 +387,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
     
     try {
       await axios.put(
-        `${API}/odontograma-clinico/${odontograma.id}/diente/${dienteSeleccionado.numero_fdi}`,
+        `${API}/odontogramas-clinicos/${odontograma.id}/diente/${dienteSeleccionado.numero_fdi}`,
         { estado: nuevoEstado },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -414,7 +414,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
     setLoading(true);
     try {
       await axios.put(
-        `${API}/odontograma-clinico/${odontograma.id}`,
+        `${API}/odontogramas-clinicos/${odontograma.id}`,
         {
           diagnostico_general: diagnosticoGeneral,
           higiene_oral: higieneOral,
