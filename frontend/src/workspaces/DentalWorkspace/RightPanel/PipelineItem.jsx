@@ -22,7 +22,9 @@ import { toast } from 'sonner';
 import apiClient from '@/lib/axios';
 import { PIPELINE_STATE_CONFIG } from '../engine/clinical_rules';
 
-const PipelineItem = ({ procedure, planId, appointmentId, onUpdateState, onDelete }) => {
+const PipelineItem = ({ procedure, planId, appointmentId, onUpdateState, onDelete, user }) => {
+  const userRole = user?.role || '';
+  const canApprove = userRole === 'Recepcion' || userRole === 'Administrador';
   const [showSchedule, setShowSchedule]       = useState(false);
   const [appointments, setAppointments]       = useState([]);
   const [loadingAppts, setLoadingAppts]       = useState(false);
@@ -135,14 +137,22 @@ const PipelineItem = ({ procedure, planId, appointmentId, onUpdateState, onDelet
             </button>
           )}
           {procedure.estado_pipeline === 'propuesto' && (
-            <button
-              onClick={() => onUpdateState(procedure.id, 'aprobado')}
-              className="text-[9px] bg-amber-600 text-white px-2 py-1 rounded font-bold hover:bg-amber-700 shadow-sm"
-              title="Aprobación realizada por Recepción o Admin"
-            >
-              APROBAR
-            </button>
-          )}
+           canApprove ? (
+              <button
+               onClick={() => onUpdateState(procedure.id, 'aprobado')}
+                className="text-[9px] bg-amber-600 text-white px-2 py-1 rounded font-bold hover:bg-amber-700 shadow-sm"
+              >
+               APROBAR
+             </button>
+           ) : (
+             <span
+               className="text-[9px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded font-bold cursor-default"
+               title="La aprobación la realiza Recepción o Administrador"
+             >
+               ⏳ Pend. aprobación
+             </span>
+          )
+         )}
           {procedure.estado_pipeline === 'aprobado' && (
             <>
               <button

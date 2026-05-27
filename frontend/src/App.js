@@ -27,6 +27,7 @@ import { LaboratorioTab } from "@/components/LaboratorioTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
 import { RecetasTab } from "@/components/RecetasTab";
 import { MedicalHistoryTab } from "@/components/MedicalHistoryTab";
+import { HistoriaClinicaCompleta } from "@/components/HistoriaClinicaCompleta";
 import { Login } from "@/pages/Login";
 import { Routes, Route, Navigate } from "react-router-dom";
 import DentalWorkspace from "@/workspaces/DentalWorkspace";
@@ -56,6 +57,7 @@ function LegacyApp({ user: propUser, token: propToken }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [monthlyTotals, setMonthlyTotals] = useState({});
+  const [hcPaciente, setHcPaciente] = useState(null);
 
   const fetchData = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -314,14 +316,24 @@ function LegacyApp({ user: propUser, token: propToken }) {
 
         {(user?.role === "Administrador" || user?.role === "Recepcion") && (
           <TabsContent value="history" className="tab-content">
-            <MedicalHistoryTab
-              medicalHistories={medicalHistories}
-              appointments={appointments}
-              doctors={doctors}
-              fetchData={fetchData}
-              token={token}
-              user={user}
-            />
+            {hcPaciente ? (
+              <HistoriaClinicaCompleta
+                paciente={hcPaciente}
+                token={token}
+                user={user}
+                onBack={() => setHcPaciente(null)}
+              />
+            ) : (
+              <MedicalHistoryTab
+                medicalHistories={medicalHistories}
+                appointments={appointments}
+                doctors={doctors}
+                fetchData={fetchData}
+                token={token}
+                user={user}
+                onOpenPaciente={setHcPaciente}
+              />
+            )}
           </TabsContent>
         )}
 

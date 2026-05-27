@@ -7,14 +7,14 @@
  * al atender una cita. Este tab es solo lectura/consulta.
  */
 import { useState, useMemo } from "react";
-import { FileText, Search, Filter, X } from "lucide-react";
+import { FileText, Search, Filter, X, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { normalizeSpecialty } from "@/lib/specialties";
 
 const PAGE_SIZE = 20;
 
-export const MedicalHistoryTab = ({ medicalHistories = [], appointments = [], doctors = [], fetchData, token, user }) => {
+export const MedicalHistoryTab = ({ medicalHistories = [], appointments = [], doctors = [], fetchData, token, user, onOpenPaciente }) => {
   const [search, setSearch]           = useState("");
   const [filterEsp, setFilterEsp]     = useState("todas");
   const [filterFecha, setFilterFecha] = useState("");
