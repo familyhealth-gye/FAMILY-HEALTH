@@ -1,203 +1,216 @@
-import { useState } from "react";
-import { FileText, Plus } from "lucide-react";
+/**
+ * MedicalHistoryTab.jsx
+ * Lista unificada de historias clínicas con buscador, filtros por especialidad/fecha,
+ * tabla responsiva y paginación — diseño consistente con Agenda/Recetas.
+ *
+ * La creación de historias clínicas se hace desde los formularios de cada especialidad
+ * al atender una cita. Este tab es solo lectura/consulta.
+ */
+import { useState, useMemo } from "react";
+import { FileText, Search, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
-import apiClient from "@/lib/axios";
-import { toast } from "sonner";
+import { normalizeSpecialty } from "@/lib/specialties";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const PAGE_SIZE = 20;
 
-export const MedicalHistoryTab = ({ medicalHistories, appointments, doctors, fetchData, token }) => {
-  const [dialog, setDialog] = useState(false);
-  const [form, setForm] = useState({
-    paciente_id: "",
-    doctor_id: "",
-    fecha: new Date(),
-    motivo_consulta: "",
-    antecedentes: "",
-    examen_fisico: "",
-    diagnostico: "",
-    tratamiento: "",
-    observaciones: "",
-    proxima_cita: ""
-  });
-  const [loading, setLoading] = useState(false);
+export const MedicalHistoryTab = ({ medicalHistories = [], appointments = [], doctors = [], fetchData, token, user }) => {
+  const [search, setSearch]           = useState("");
+  const [filterEsp, setFilterEsp]     = useState("todas");
+  const [filterFecha, setFilterFecha] = useState("");
+  const [page, setPage]               = useState(1);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  // ── Especialidades únicas para dropdown ────────────────────────────────────
+  const especialidades = useMemo(() => {
+    const set = new Set(
+      medicalHistories
+        .map(h => normalizeSpecialty(h.especialidad || ""))
+        .filter(Boolean)
+    );
+    return Array.from(set).sort();
+  }, [medicalHistories]);
 
-    try {
-      const data = {
-        ...form,
-        fecha: format(form.fecha, "yyyy-MM-dd")
-      };
+  // ── Permisos ───────────────────────────────────────────────────────────────
+  const canSeeAll = !user || user.role === "Administrador" || user.role === "Recepcion";
 
-      await apiClient.post(`/medical-history`, data)
-      });
+  // ── Pipeline de filtros ────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    let list = [...medicalHistories];
 
-      toast.success("Historia clínica registrada");
-      setDialog(false);
-      resetForm();
-      fetchData();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || "Error al guardar");
+    // Restricción por rol
+    if (!canSeeAll && user?.especialidad) {
+      list = list.filter(h =>
+        !h.especialidad ||
+        normalizeSpecialty(h.especialidad) === normalizeSpecialty(user.especialidad)
+      );
     }
-    setLoading(false);
+
+    // Filtro especialidad
+    if (filterEsp !== "todas") {
+      list = list.filter(h => normalizeSpecialty(h.especialidad || "") === filterEsp);
+    }
+
+    // Filtro fecha
+    if (filterFecha) {
+      list = list.filter(h => (h.fecha || "").startsWith(filterFecha));
+    }
+
+    // Búsqueda libre
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(h =>
+        (h.paciente_nombre   || "").toLowerCase().includes(q) ||
+        (h.paciente_cedula   || "").includes(q) ||
+        (h.doctor_nombre     || "").toLowerCase().includes(q) ||
+        (h.diagnostico       || "").toLowerCase().includes(q) ||
+        (h.motivo_consulta   || "").toLowerCase().includes(q)
+      );
+    }
+
+    // Más recientes primero
+    return list.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  }, [medicalHistories, canSeeAll, user, filterEsp, filterFecha, search]);
+
+  // ── Paginación ─────────────────────────────────────────────────────────────
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const hasActiveFilters = search || filterEsp !== "todas" || filterFecha;
+
+  const handleSearch = v => { setSearch(v);    setPage(1); };
+  const handleEsp    = v => { setFilterEsp(v); setPage(1); };
+  const handleFecha  = v => { setFilterFecha(v); setPage(1); };
+
+  const resetFilters = () => {
+    setSearch(""); setFilterEsp("todas"); setFilterFecha(""); setPage(1);
   };
 
-  const resetForm = () => {
-    setForm({
-      paciente_id: "",
-      doctor_id: "",
-      fecha: new Date(),
-      motivo_consulta: "",
-      antecedentes: "",
-      examen_fisico: "",
-      diagnostico: "",
-      tratamiento: "",
-      observaciones: "",
-      proxima_cita: ""
-    });
+  // ── Utilidad: color de badge por especialidad ──────────────────────────────
+  const espColor = (esp) => {
+    const map = {
+      "Odontología":    { bg: "#FEF3C7", color: "#92400E" },
+      "Pediatría":      { bg: "#D1FAE5", color: "#065F46" },
+      "Ginecología":    { bg: "#FCE7F3", color: "#831843" },
+      "Nutrición":      { bg: "#E0E7FF", color: "#3730A3" },
+      "Ecografía":      { bg: "#CFFAFE", color: "#164E63" },
+      "Obstetricia":    { bg: "#FDE8D8", color: "#7C2D12" },
+    };
+    return map[normalizeSpecialty(esp)] || { bg: "#DBEAFE", color: "#1E40AF" };
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="tab-content">
+      {/* Encabezado */}
       <div className="section-header">
         <div>
           <h2 className="section-title">Historias Clínicas</h2>
-          <p className="section-subtitle">Registro médico de pacientes</p>
+          <p className="section-subtitle">
+            {filtered.length} historia{filtered.length !== 1 ? "s" : ""}
+            {hasActiveFilters ? " (filtradas)" : " en total"}
+          </p>
         </div>
-        <Dialog open={dialog} onOpenChange={(open) => { setDialog(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button className="add-button">
-              <Plus className="button-icon" />
-              Nueva Historia
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="dialog-content dialog-wide">
-            <DialogHeader>
-              <DialogTitle>Registrar Historia Clínica</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="form-grid">
-                <div className="form-field">
-                  <Label>Paciente</Label>
-                  <Select value={form.paciente_id} onValueChange={(val) => setForm({...form, paciente_id: val})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione paciente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {appointments.map((apt) => (
-                        <SelectItem key={apt.id} value={apt.id}>
-                          {apt.nombre_completo} - {apt.cedula}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="form-field">
-                  <Label>Doctor</Label>
-                  <Select value={form.doctor_id} onValueChange={(val) => setForm({...form, doctor_id: val})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione doctor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {doctors.map((doc) => (
-                        <SelectItem key={doc.id} value={doc.id}>
-                          {doc.nombre} - {doc.especialidad}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="form-field full-width">
-                  <Label>Motivo de Consulta</Label>
-                  <Textarea
-                    value={form.motivo_consulta}
-                    onChange={(e) => setForm({...form, motivo_consulta: e.target.value})}
-                    required
-                    rows={2}
-                  />
-                </div>
-
-                <div className="form-field full-width">
-                  <Label>Antecedentes</Label>
-                  <Textarea
-                    value={form.antecedentes}
-                    onChange={(e) => setForm({...form, antecedentes: e.target.value})}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="form-field full-width">
-                  <Label>Examen Físico</Label>
-                  <Textarea
-                    value={form.examen_fisico}
-                    onChange={(e) => setForm({...form, examen_fisico: e.target.value})}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="form-field full-width">
-                  <Label>Diagnóstico</Label>
-                  <Textarea
-                    value={form.diagnostico}
-                    onChange={(e) => setForm({...form, diagnostico: e.target.value})}
-                    required
-                    rows={2}
-                  />
-                </div>
-
-                <div className="form-field full-width">
-                  <Label>Tratamiento</Label>
-                  <Textarea
-                    value={form.tratamiento}
-                    onChange={(e) => setForm({...form, tratamiento: e.target.value})}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="form-field full-width">
-                  <Label>Observaciones</Label>
-                  <Textarea
-                    value={form.observaciones}
-                    onChange={(e) => setForm({...form, observaciones: e.target.value})}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="form-field">
-                  <Label>Próxima Cita</Label>
-                  <Input
-                    value={form.proxima_cita}
-                    onChange={(e) => setForm({...form, proxima_cita: e.target.value})}
-                    placeholder="Ej: 1 semana, 15 días..."
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Guardando..." : "Guardar Historia"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
+      {/* Barra de filtros */}
+      <div style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "0.75rem",
+        alignItems: "center",
+        background: "#F0F9FF",
+        padding: "1rem",
+        borderRadius: "8px",
+        marginBottom: "1.25rem",
+      }}>
+        {/* Buscador */}
+        <div style={{ position: "relative", flex: "1 1 200px", minWidth: "180px" }}>
+          <Search
+            size={15}
+            style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }}
+          />
+          <input
+            type="text"
+            placeholder="Buscar paciente, cédula, doctor, diagnóstico…"
+            value={search}
+            onChange={e => handleSearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem 0.5rem 2rem",
+              border: "2px solid #BFDBFE",
+              borderRadius: "8px",
+              fontSize: "0.875rem",
+              background: "white",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {/* Filtro especialidad */}
+        {especialidades.length > 1 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Filter size={14} style={{ color: "#64748B" }} />
+            <select
+              value={filterEsp}
+              onChange={e => handleEsp(e.target.value)}
+              style={{
+                padding: "0.5rem 0.75rem",
+                border: "2px solid #BFDBFE",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                background: "white",
+                cursor: "pointer",
+              }}
+            >
+              <option value="todas">Todas las especialidades</option>
+              {especialidades.map(e => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Filtro fecha */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <Label style={{ fontWeight: 600, color: "#0C4A6E", whiteSpace: "nowrap", fontSize: "0.875rem" }}>
+            Fecha:
+          </Label>
+          <input
+            type="date"
+            value={filterFecha}
+            onChange={e => handleFecha(e.target.value)}
+            style={{
+              padding: "0.5rem",
+              border: "2px solid #BFDBFE",
+              borderRadius: "8px",
+              fontSize: "0.875rem",
+              background: "white",
+            }}
+          />
+        </div>
+
+        {/* Limpiar */}
+        {hasActiveFilters && (
+          <button
+            onClick={resetFilters}
+            style={{
+              display: "flex", alignItems: "center", gap: "4px",
+              padding: "0.5rem 0.75rem",
+              background: "none",
+              border: "2px solid #FCA5A5",
+              borderRadius: "8px",
+              color: "#DC2626",
+              fontSize: "0.8125rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <X size={13} /> Limpiar
+          </button>
+        )}
+      </div>
+
+      {/* Tabla */}
       <div className="table-container">
         <table className="data-table">
           <thead>
@@ -205,29 +218,116 @@ export const MedicalHistoryTab = ({ medicalHistories, appointments, doctors, fet
               <th>Fecha</th>
               <th>Paciente</th>
               <th>Doctor</th>
-              <th>Motivo</th>
-              <th>Diagnóstico</th>
+              <th className="col-opcional">Especialidad</th>
+              <th>Motivo / Diagnóstico</th>
             </tr>
           </thead>
           <tbody>
-            {medicalHistories.map((history) => (
-              <tr key={history.id}>
-                <td>{history.fecha}</td>
-                <td>{history.paciente_nombre}</td>
-                <td>{history.doctor_nombre}</td>
-                <td>{history.motivo_consulta}</td>
-                <td>{history.diagnostico}</td>
-              </tr>
-            ))}
+            {paginated.map(h => {
+              const colors = espColor(h.especialidad);
+              return (
+                <tr key={h.id}>
+                  <td style={{ whiteSpace: "nowrap", color: "#64748B", fontSize: "0.875rem" }}>
+                    {h.fecha || "—"}
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 600, color: "#0C4A6E" }}>
+                      {h.paciente_nombre || "Sin nombre"}
+                    </span>
+                    {h.paciente_cedula && (
+                      <div style={{ fontSize: "0.8125rem", color: "#94A3B8" }}>{h.paciente_cedula}</div>
+                    )}
+                  </td>
+                  <td style={{ fontSize: "0.9rem" }}>
+                    {h.doctor_nombre || "—"}
+                  </td>
+                  <td className="col-opcional">
+                    {h.especialidad ? (
+                      <span style={{
+                        display: "inline-block",
+                        padding: "0.25rem 0.625rem",
+                        background: colors.bg,
+                        color: colors.color,
+                        borderRadius: "20px",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                      }}>
+                        {normalizeSpecialty(h.especialidad)}
+                      </span>
+                    ) : <span style={{ color: "#94A3B8" }}>—</span>}
+                  </td>
+                  <td style={{ fontSize: "0.875rem" }}>
+                    {h.motivo_consulta && (
+                      <div style={{ color: "#334155", marginBottom: "2px" }}>
+                        <span style={{ color: "#64748B", fontSize: "0.8125rem" }}>Motivo: </span>
+                        {h.motivo_consulta}
+                      </div>
+                    )}
+                    {h.diagnostico && (
+                      <div style={{ color: "#0C4A6E", fontWeight: 500, fontSize: "0.875rem" }}>
+                        <span style={{ color: "#64748B", fontWeight: 400, fontSize: "0.8125rem" }}>Dx: </span>
+                        {h.diagnostico}
+                      </div>
+                    )}
+                    {!h.motivo_consulta && !h.diagnostico && (
+                      <span style={{ color: "#94A3B8" }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-        {medicalHistories.length === 0 && (
+
+        {/* Estado vacío */}
+        {filtered.length === 0 && (
           <div className="empty-state">
             <FileText className="empty-icon" />
-            <p>No hay historias clínicas registradas</p>
+            <p>
+              {hasActiveFilters
+                ? "No hay historias que coincidan con los filtros aplicados."
+                : "No hay historias clínicas registradas."}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                style={{ marginTop: "0.75rem", color: "#0284C7", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: "0.5rem",
+          marginTop: "1.25rem",
+        }}>
+          <Button
+            variant="outline" size="sm"
+            disabled={page === 1}
+            onClick={() => setPage(p => p - 1)}
+          >
+            ← Anterior
+          </Button>
+          <span style={{ fontSize: "0.875rem", color: "#64748B", fontWeight: 500 }}>
+            Página {page} de {totalPages}
+          </span>
+          <Button
+            variant="outline" size="sm"
+            disabled={page === totalPages}
+            onClick={() => setPage(p => p + 1)}
+          >
+            Siguiente →
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

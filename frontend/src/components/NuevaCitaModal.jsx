@@ -71,16 +71,19 @@ const useDoctores = (especialidad, token) => {
   return { doctores, loadingDocs };
 };
 
+// Fecha local (Ecuador UTC-5) en formato YYYY-MM-DD
+const getLocalDate = () => new Date().toLocaleDateString('en-CA');
+
 const defaultForm = (user, paciente, fromPatient) => ({
   nombre_completo: paciente?.nombre_completo || paciente?.nombre || "",
   cedula:          paciente?.cedula || "",
   telefono:        paciente?.telefono || "",
-  fecha:           new Date().toISOString().split("T")[0],
+  fecha:           getLocalDate(),
   hora:            "08:00",
   especialidad:    fromPatient ? (user?.especialidad || "") : "",
   doctor_nombre:   fromPatient ? (user?.nombre_completo || user?.nombre || "") : "",
   doctor_id:       fromPatient ? (user?.doctor_id || "") : "",
-  motivo:          "",
+  observaciones:   "",  // motivo de consulta — campo canónico del backend
 });
 
 export const NuevaCitaModal = ({
@@ -335,8 +338,8 @@ export const NuevaCitaModal = ({
           <div style={full}>
             <label style={lbl}>Motivo de consulta</label>
             <input
-              value={form.motivo}
-              onChange={e => set("motivo", e.target.value)}
+              value={form.observaciones}
+              onChange={e => set("observaciones", e.target.value)}
               placeholder="Ej: Control, dolor, revisión..."
               style={inp}
             />

@@ -8,6 +8,7 @@ import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
 import { HistoriaClinicaCompleta } from "./HistoriaClinicaCompleta";
+import { normalizeSpecialty } from "@/lib/specialties";
 import apiClient from "@/lib/axios";
 import { toast } from "sonner";
 
@@ -72,7 +73,7 @@ export const PacientesTab = ({ user, token }) => {
         if (apt.estado === "Cancelada") return false;
         
         // Solo filtrar por especialidad si el usuario tiene una definida
-        if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
+        if (userEspecialidad && normalizeSpecialty(apt.especialidad) !== normalizeSpecialty(userEspecialidad)) return false;
         return true;
       });
       
@@ -113,7 +114,7 @@ export const PacientesTab = ({ user, token }) => {
       const citasDoctor = appointmentsRes.data.filter(apt => {
         if (apt.doctor_id !== user.doctor_id) return false;
         if (apt.estado !== 'En Atención' && apt.estado !== 'Pendiente de Pago') return false;
-        if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
+        if (userEspecialidad && normalizeSpecialty(apt.especialidad) !== normalizeSpecialty(userEspecialidad)) return false;
         return true;
       });
       const incompletas = await Promise.all(
@@ -151,7 +152,7 @@ export const PacientesTab = ({ user, token }) => {
         if (apt.cedula !== cedula) return false;
         if (apt.doctor_id !== user.doctor_id) return false;
         if (apt.estado === 'Cancelada') return false;
-        if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
+        if (userEspecialidad && normalizeSpecialty(apt.especialidad) !== normalizeSpecialty(userEspecialidad)) return false;
         return true;
       });
       const consultasConHistoria = await Promise.all(
@@ -230,7 +231,7 @@ export const PacientesTab = ({ user, token }) => {
     });
     
     // VALIDACIÓN: Solo validar especialidad si el usuario tiene una definida
-    if (userEspecialidad && consulta.especialidad !== userEspecialidad) {
+    if (userEspecialidad && normalizeSpecialty(consulta.especialidad) !== normalizeSpecialty(userEspecialidad)) {
       toast.error(`No puede atender consultas de ${consulta.especialidad}. Su especialidad es ${userEspecialidad}.`);
       return;
     }
@@ -331,10 +332,10 @@ export const PacientesTab = ({ user, token }) => {
   // Renderizar formulario de atención según especialidad
   const renderAttentionForm = () => {
     if (!appointmentToResume) return null;
-    
-    const especialidad = appointmentToResume.especialidad;
-    
-    if (especialidad === "Medicina General") {
+
+    const esp = normalizeSpecialty(appointmentToResume.especialidad);
+
+    if (esp === "Medicina General") {
       return (
         <MedicinaGeneralForm
           appointment={appointmentToResume}
@@ -344,8 +345,8 @@ export const PacientesTab = ({ user, token }) => {
         />
       );
     }
-    
-    if (especialidad === "Pediatría") {
+
+    if (esp === "Pediatría") {
       return (
         <PediatriaForm
           appointment={appointmentToResume}
@@ -355,8 +356,8 @@ export const PacientesTab = ({ user, token }) => {
         />
       );
     }
-    
-    if (especialidad === "Odontología") {
+
+    if (esp === "Odontología") {
       return (
         <OdontologiaFormSimple
           appointment={appointmentToResume}
@@ -366,7 +367,7 @@ export const PacientesTab = ({ user, token }) => {
         />
       );
     }
-    
+
     return (
       <div style={{padding: '2rem', textAlign: 'center'}}>
         <p>Historia clínica de {especialidad} aún no implementada.</p>

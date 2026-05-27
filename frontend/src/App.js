@@ -25,6 +25,8 @@ import { ConfiguracionSRI } from "@/components/ConfiguracionSRI";
 import { ProcedimientoRapidoTab } from "@/components/ProcedimientoRapidoTab";
 import { LaboratorioTab } from "@/components/LaboratorioTab";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
+import { RecetasTab } from "@/components/RecetasTab";
+import { MedicalHistoryTab } from "@/components/MedicalHistoryTab";
 import { Login } from "@/pages/Login";
 import { Routes, Route, Navigate } from "react-router-dom";
 import DentalWorkspace from "@/workspaces/DentalWorkspace";
@@ -35,6 +37,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import apiClient from "@/lib/axios";
 import { getAllAppData } from "@/services/dataService";
+import { normalizeSpecialty } from "@/lib/specialties";
 
 function LegacyApp({ user: propUser, token: propToken }) {
   const { user: authUser, token: authToken, isAuthenticated, login, loading: authLoading } = useAuth();
@@ -203,8 +206,8 @@ function LegacyApp({ user: propUser, token: propToken }) {
               Caja
             </TabsTrigger>
           )}
-          {user?.role === "Doctor" && 
-            (user?.especialidad === "Odontología" || user?.especialidad === "Odontologia") && (
+          {user?.role === "Doctor" &&
+            normalizeSpecialty(user?.especialidad) === "Odontología" && (
             <>
               <TabsTrigger value="odontograma-standalone">
                 <Smile className="tab-icon" />
@@ -309,50 +312,21 @@ function LegacyApp({ user: propUser, token: propToken }) {
           </TabsContent>
         )}
 
+        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
+          <TabsContent value="history" className="tab-content">
+            <MedicalHistoryTab
+              medicalHistories={medicalHistories}
+              appointments={appointments}
+              doctors={doctors}
+              fetchData={fetchData}
+              token={token}
+              user={user}
+            />
+          </TabsContent>
+        )}
+
         <TabsContent value="prescriptions" className="tab-content">
-          <div className="tab-header">
-            <h2 className="tab-title">Recetas Médicas</h2>
-          </div>
-          {(() => {
-            // Admin y Recepción ven todas; Doctor ve solo las de su especialidad
-            const canSeeAll = user?.role === "Administrador" || user?.role === "Recepcion";
-            const filtered = canSeeAll
-              ? prescriptions
-              : prescriptions.filter(p => {
-                  const pEsp = (p.doctor_especialidad || p.especialidad || "").toLowerCase().trim();
-                  const uEsp = (user?.especialidad || "").toLowerCase().trim();
-                  return !uEsp || pEsp === uEsp || pEsp === "";
-                });
-            return (
-              <div className="grid-container">
-                {filtered.length === 0 && (
-                  <p style={{ color:"#94A3B8", fontSize:"14px", padding:"1rem" }}>
-                    No hay recetas registradas para tu especialidad.
-                  </p>
-                )}
-                {filtered.map(p => (
-                  <div key={p.id} className="card-item">
-                    <div className="card-content">
-                      <div className="card-info">
-                        <p className="card-name">{p.paciente_nombre}</p>
-                        <p className="card-subtitle">{p.fecha}</p>
-                        {p.doctor_especialidad && (
-                          <p className="card-detail">{p.doctor_especialidad}</p>
-                        )}
-                      </div>
-                      <Button variant="outline" size="sm"
-                        onClick={() => window.open(
-                          `${process.env.REACT_APP_BACKEND_URL}/api/prescriptions/${p.id}/pdf`,
-                          '_blank'
-                        )}>
-                        PDF
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+          <RecetasTab prescriptions={prescriptions} user={user} token={token} />
         </TabsContent>
 
         {(user?.role === "Administrador" || user?.role === "Recepcion") && (
@@ -389,8 +363,8 @@ function LegacyApp({ user: propUser, token: propToken }) {
           </>
         )}
 
-        {user?.role === "Doctor" && 
-          (user?.especialidad === "Odontología" || user?.especialidad === "Odontologia") && (
+        {user?.role === "Doctor" &&
+          normalizeSpecialty(user?.especialidad) === "Odontología" && (
           <>
             <TabsContent value="odontograma-standalone" className="tab-content">
               <OdontogramaStandalone token={token} user={user} />

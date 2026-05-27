@@ -12,7 +12,13 @@ class UserLogin(BaseModel):
     password: str
 
 # Security
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "family-health-secret-key-2025")
+_jwt_secret = os.environ.get("JWT_SECRET_KEY")
+if not _jwt_secret:
+    raise RuntimeError(
+        "JWT_SECRET_KEY no está definida en las variables de entorno. "
+        "El servidor no puede arrancar sin una clave segura."
+    )
+SECRET_KEY = _jwt_secret
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 

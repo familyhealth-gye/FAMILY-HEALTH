@@ -22,6 +22,7 @@ def calcular_edad_desde_fecha(fecha_nacimiento: str) -> int:
         return 0
 
 
+
 async def crear_consulta_financiera_automatica(
     appointment_id: str,
     paciente_cedula: str,
@@ -33,8 +34,10 @@ async def crear_consulta_financiera_automatica(
     """
     Crea consulta financiera automáticamente al cerrar cualquier consulta clínica.
     Si ya existe, la retorna sin duplicar.
-    Usada por: appointments, medical-history (general, pediatric, odontology,
-               nutricion, ginecologia, ecografia), evoluciones-sesion.
+    Usada por: medical-history (general, pediatric, odontology, nutricion, ginecologia, ecografia).
+
+    IMPORTANTE: paciente_id se resuelve desde db.pacientes por cédula.
+                NO usar appointment_id como paciente_id.
     """
     try:
         existing = await db.consultas_financieras.find_one(
@@ -53,14 +56,27 @@ async def crear_consulta_financiera_automatica(
             or appointment.get("paciente_cedula")
             or ""
         )
+
+        # ── Resolver paciente_id real desde db.pacientes ──────────────────────
+        paciente_id_real = appointment.get("paciente_id") or ""
+        if cedula:
+            paciente_doc = await db.pacientes.find_one({"cedula": cedula}, {"_id": 0})
+            if paciente_doc:
+                paciente_id_real = paciente_doc.get("id", paciente_id_real)
+                # Completar nombre si no viene del caller
+                if not paciente_nombre:
+                    paciente_nombre = paciente_doc.get("nombre") or paciente_doc.get("nombre_completo") or ""
+
         doctor = await db.doctors.find_one({"id": doctor_id}, {"_id": 0})
         doctor_nombre = doctor.get("nombre", "") if doctor else ""
 
-        # Buscar precio en catálogo
+        # ── Buscar precio en catálogo ─────────────────────────────────────────
         precio = 30.0
         try:
+            from specialty_utils import normalize_specialty
+            esp_canon = normalize_specialty(especialidad)
             servicio_cat = await db.catalogo_servicios.find_one(
-                {"especialidad": {"$regex": especialidad, "$options": "i"}}, {"_id": 0}
+                {"especialidad": {"$regex": esp_canon, "$options": "i"}}, {"_id": 0}
             )
             if servicio_cat:
                 precio = servicio_cat.get("precio_base", 30.0)
@@ -79,7 +95,7 @@ async def crear_consulta_financiera_automatica(
         )
 
         consulta = ConsultaFinanciera(
-            paciente_id=appointment_id,
+            paciente_id=paciente_id_real,          # ← ID real del paciente
             paciente_cedula=cedula,
             paciente_nombre=paciente_nombre,
             doctor_id=doctor_id,

@@ -588,6 +588,7 @@ class MedicalHistoryNutricion(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     appointment_id: str
+    paciente_id: Optional[str] = ""   # ID real del paciente en db.pacientes
     paciente_cedula: str
     paciente_nombre: str
     paciente_edad: Optional[int] = None
@@ -727,6 +728,7 @@ class MedicalHistoryGinecologia(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     appointment_id: str
+    paciente_id: Optional[str] = ""   # ID real del paciente en db.pacientes
     paciente_cedula: str
     paciente_nombre: str
     paciente_edad: Optional[int] = None
@@ -836,6 +838,7 @@ class MedicalHistoryEcografia(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     appointment_id: str
+    paciente_id: Optional[str] = ""   # ID real del paciente en db.pacientes
     paciente_cedula: str
     paciente_nombre: str
     paciente_edad: Optional[int] = None

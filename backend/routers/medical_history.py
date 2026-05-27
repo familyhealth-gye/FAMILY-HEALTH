@@ -85,48 +85,61 @@ async def create_general_history(
     input: MedicalHistoryGeneralCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    # Get appointment data
+    from specialty_utils import normalize_specialty
+
     appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
     if not appointment:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
-    # Get current user data
     user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
 
-    # VALIDACIÓN: Solo para Medicina General
+    # VALIDACIÓN: Solo para Medicina General (con normalización de variantes)
     appointment_especialidad = appointment.get('especialidad', '')
-    if appointment_especialidad and appointment_especialidad != 'Medicina General':
+    if appointment_especialidad and normalize_specialty(appointment_especialidad) != "Medicina General":
         raise HTTPException(
             status_code=403,
             detail=f"Este formulario es para Medicina General, no para {appointment_especialidad}."
         )
 
-    # Validar doctor si tiene doctor_id
-    if user.get('role') == 'Doctor' and user.get('doctor_id'):
-        if user.get('doctor_id') != appointment.get('doctor_id'):
-            raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+    # Validar doctor — permitir si la cita no tiene doctor asignado aún
+    doctor_id_appt = appointment.get('doctor_id') or ""
+    user_doctor_id = user.get('doctor_id') or ""
+    if user.get('role') == 'Doctor' and user_doctor_id and doctor_id_appt and user_doctor_id != doctor_id_appt:
+        raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+
+    # Resolver paciente_id real desde db.pacientes
+    cedula = appointment.get('cedula') or appointment.get('paciente_cedula') or ""
+    paciente_id_real = appointment.get('paciente_id') or ""
+    if cedula:
+        pac = await db.pacientes.find_one({"cedula": cedula}, {"_id": 0})
+        if pac:
+            paciente_id_real = pac.get("id", paciente_id_real)
+
+    doctor_id_final  = user_doctor_id or doctor_id_appt or "N/A"
+    doctor_nombre    = user.get('nombre_completo') or user.get('nombre') or "Sin nombre"
 
     history_dict = input.model_dump()
-    history_dict['paciente_id'] = appointment['id']
+    history_dict['paciente_id']    = paciente_id_real          # ← ID real del paciente
     history_dict['paciente_nombre'] = appointment['nombre_completo']
-    history_dict['paciente_cedula'] = appointment['cedula']
-    history_dict['paciente_edad'] = calcular_edad_desde_fecha(appointment.get('fecha_nacimiento','')) or appointment.get('edad',0)
-    history_dict['paciente_sexo'] = appointment.get('sexo', 'No especificado')
-    history_dict['doctor_id'] = user.get('doctor_id') or appointment.get('doctor_id', 'N/A')
-    history_dict['doctor_nombre'] = user.get('nombre_completo', 'Sin nombre')
-    history_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    history_dict['paciente_cedula'] = cedula
+    history_dict['paciente_edad']   = calcular_edad_desde_fecha(appointment.get('fecha_nacimiento', '')) or appointment.get('edad', 0)
+    history_dict['paciente_sexo']   = appointment.get('sexo', 'No especificado')
+    history_dict['doctor_id']       = doctor_id_final
+    history_dict['doctor_nombre']   = doctor_nombre
+    history_dict['fecha']           = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
     history_obj = MedicalHistoryGeneral(**history_dict)
     doc = history_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
-
     await db.medical_history_general.insert_one(doc)
 
-    # Update appointment status to Pendiente de Pago
-    await db.appointments.update_one(
-        {"id": input.appointment_id},
-        {"$set": {"estado": "Pendiente de Pago"}}
+    # Crear consulta financiera automática
+    fin_id = await crear_consulta_financiera_automatica(
+        input.appointment_id, cedula, appointment['nombre_completo'],
+        doctor_id_final, "Medicina General", current_user.username
     )
+    if fin_id:
+        await db.medical_history_general.update_one({"id": history_obj.id}, {"$set": {"consulta_financiera_id": fin_id}})
 
     return history_obj
 
@@ -201,48 +214,57 @@ async def create_pediatric_history(
     input: MedicalHistoryPediatricCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    # Get appointment data
+    from specialty_utils import normalize_specialty
+
     appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
     if not appointment:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
-    # Get current user data
     user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
 
-    # VALIDACIÓN: Solo para Pediatría
     appointment_especialidad = appointment.get('especialidad', '')
-    if appointment_especialidad and appointment_especialidad != 'Pediatría':
+    if appointment_especialidad and normalize_specialty(appointment_especialidad) != "Pediatría":
         raise HTTPException(
             status_code=403,
             detail=f"Este formulario es para Pediatría, no para {appointment_especialidad}."
         )
 
-    # Validar doctor si tiene doctor_id
-    if user.get('role') == 'Doctor' and user.get('doctor_id'):
-        if user.get('doctor_id') != appointment.get('doctor_id'):
-            raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+    doctor_id_appt = appointment.get('doctor_id') or ""
+    user_doctor_id = user.get('doctor_id') or ""
+    if user.get('role') == 'Doctor' and user_doctor_id and doctor_id_appt and user_doctor_id != doctor_id_appt:
+        raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+
+    cedula = appointment.get('cedula') or appointment.get('paciente_cedula') or ""
+    paciente_id_real = appointment.get('paciente_id') or ""
+    if cedula:
+        pac = await db.pacientes.find_one({"cedula": cedula}, {"_id": 0})
+        if pac:
+            paciente_id_real = pac.get("id", paciente_id_real)
+
+    doctor_id_final = user_doctor_id or doctor_id_appt or "N/A"
+    doctor_nombre   = user.get('nombre_completo') or user.get('nombre') or "Sin nombre"
 
     history_dict = input.model_dump()
-    history_dict['paciente_id'] = appointment['id']
+    history_dict['paciente_id']    = paciente_id_real
     history_dict['paciente_nombre'] = appointment['nombre_completo']
-    history_dict['paciente_cedula'] = appointment['cedula']
-    history_dict['paciente_edad'] = calcular_edad_desde_fecha(appointment.get('fecha_nacimiento','')) or appointment.get('edad',0)
-    history_dict['paciente_sexo'] = appointment.get('sexo', 'No especificado')
-    history_dict['doctor_id'] = user.get('doctor_id') or appointment.get('doctor_id', 'N/A')
-    history_dict['doctor_nombre'] = user.get('nombre_completo', 'Sin nombre')
-    history_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    history_dict['paciente_cedula'] = cedula
+    history_dict['paciente_edad']   = calcular_edad_desde_fecha(appointment.get('fecha_nacimiento', '')) or appointment.get('edad', 0)
+    history_dict['paciente_sexo']   = appointment.get('sexo', 'No especificado')
+    history_dict['doctor_id']       = doctor_id_final
+    history_dict['doctor_nombre']   = doctor_nombre
+    history_dict['fecha']           = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
     history_obj = MedicalHistoryPediatric(**history_dict)
     doc = history_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
-
     await db.medical_history_pediatric.insert_one(doc)
 
-    # Update appointment status to Pendiente de Pago
-    await db.appointments.update_one(
-        {"id": input.appointment_id},
-        {"$set": {"estado": "Pendiente de Pago"}}
+    fin_id = await crear_consulta_financiera_automatica(
+        input.appointment_id, cedula, appointment['nombre_completo'],
+        doctor_id_final, "Pediatría", current_user.username
     )
+    if fin_id:
+        await db.medical_history_pediatric.update_one({"id": history_obj.id}, {"$set": {"consulta_financiera_id": fin_id}})
 
     return history_obj
 
@@ -385,40 +407,61 @@ async def create_odontology_history(
     # Get current user data
     user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
 
-    # VALIDACIÓN: Solo para Odontología
+async def create_odontology_history(
+    input: MedicalHistoryOdontologyCreate,
+    current_user: TokenData = Depends(get_current_user)
+):
+    from specialty_utils import normalize_specialty
+
+    appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
+
     appointment_especialidad = appointment.get('especialidad', '')
-    if appointment_especialidad and appointment_especialidad != 'Odontología':
+    if appointment_especialidad and normalize_specialty(appointment_especialidad) != "Odontología":
         raise HTTPException(
             status_code=403,
             detail=f"Este formulario es para Odontología, no para {appointment_especialidad}."
         )
 
-    # Validar doctor si tiene doctor_id
-    if user.get('role') == 'Doctor' and user.get('doctor_id'):
-        if user.get('doctor_id') != appointment.get('doctor_id'):
-            raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+    doctor_id_appt = appointment.get('doctor_id') or ""
+    user_doctor_id = user.get('doctor_id') or ""
+    if user.get('role') == 'Doctor' and user_doctor_id and doctor_id_appt and user_doctor_id != doctor_id_appt:
+        raise HTTPException(status_code=403, detail="No tiene permisos para esta consulta")
+
+    cedula = appointment.get('cedula') or appointment.get('paciente_cedula') or ""
+    paciente_id_real = appointment.get('paciente_id') or ""
+    if cedula:
+        pac = await db.pacientes.find_one({"cedula": cedula}, {"_id": 0})
+        if pac:
+            paciente_id_real = pac.get("id", paciente_id_real)
+
+    doctor_id_final = user_doctor_id or doctor_id_appt or "N/A"
+    doctor_nombre   = user.get('nombre_completo') or user.get('nombre') or "Sin nombre"
 
     history_dict = input.model_dump()
-    history_dict['paciente_id'] = appointment['id']
+    history_dict['paciente_id']    = paciente_id_real
     history_dict['paciente_nombre'] = appointment['nombre_completo']
-    history_dict['paciente_cedula'] = appointment['cedula']
-    history_dict['paciente_edad'] = calcular_edad_desde_fecha(appointment.get('fecha_nacimiento','')) or appointment.get('edad',0)
-    history_dict['paciente_sexo'] = appointment.get('sexo', 'No especificado')
-    history_dict['doctor_id'] = user.get('doctor_id') or appointment.get('doctor_id', 'N/A')
-    history_dict['doctor_nombre'] = user.get('nombre_completo', 'Sin nombre')
-    history_dict['fecha'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    history_dict['paciente_cedula'] = cedula
+    history_dict['paciente_edad']   = calcular_edad_desde_fecha(appointment.get('fecha_nacimiento', '')) or appointment.get('edad', 0)
+    history_dict['paciente_sexo']   = appointment.get('sexo', 'No especificado')
+    history_dict['doctor_id']       = doctor_id_final
+    history_dict['doctor_nombre']   = doctor_nombre
+    history_dict['fecha']           = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
     history_obj = MedicalHistoryOdontology(**history_dict)
     doc = history_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
-
     await db.medical_history_odontology.insert_one(doc)
 
-    # Update appointment status to Pendiente de Pago
-    await db.appointments.update_one(
-        {"id": input.appointment_id},
-        {"$set": {"estado": "Pendiente de Pago"}}
+    fin_id = await crear_consulta_financiera_automatica(
+        input.appointment_id, cedula, appointment['nombre_completo'],
+        doctor_id_final, "Odontología", current_user.username
     )
+    if fin_id:
+        await db.medical_history_odontology.update_one({"id": history_obj.id}, {"$set": {"consulta_financiera_id": fin_id}})
 
     return history_obj
 
@@ -630,12 +673,21 @@ async def create_nutricion_history(
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe historia clínica para esta cita")
 
-    history = MedicalHistoryNutricion(**input.model_dump())
+    # Resolver paciente_id real desde db.pacientes por cédula
+    paciente_id_real = ""
+    if input.paciente_cedula:
+        pac = await db.pacientes.find_one({"cedula": input.paciente_cedula}, {"_id": 0})
+        if pac:
+            paciente_id_real = pac.get("id", "")
+
+    history_dict = input.model_dump()
+    history_dict["paciente_id"] = paciente_id_real
+
+    history = MedicalHistoryNutricion(**history_dict)
     doc = history.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.medical_history_nutricion.insert_one(doc)
 
-    # Crear consulta financiera automáticamente
     fin_id = await crear_consulta_financiera_automatica(
         input.appointment_id, input.paciente_cedula, input.paciente_nombre,
         input.doctor_id, "Nutrición", current_user.username
@@ -702,7 +754,17 @@ async def create_ginecologia_history(
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe historia clínica para esta cita")
 
-    history = MedicalHistoryGinecologia(**input.model_dump())
+    # Resolver paciente_id real desde db.pacientes por cédula
+    paciente_id_real = ""
+    if input.paciente_cedula:
+        pac = await db.pacientes.find_one({"cedula": input.paciente_cedula}, {"_id": 0})
+        if pac:
+            paciente_id_real = pac.get("id", "")
+
+    history_dict = input.model_dump()
+    history_dict["paciente_id"] = paciente_id_real
+
+    history = MedicalHistoryGinecologia(**history_dict)
     doc = history.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.medical_history_ginecologia.insert_one(doc)
@@ -773,7 +835,17 @@ async def create_ecografia_history(
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe historia clínica para esta cita")
 
-    history = MedicalHistoryEcografia(**input.model_dump())
+    # Resolver paciente_id real desde db.pacientes por cédula
+    paciente_id_real = ""
+    if input.paciente_cedula:
+        pac = await db.pacientes.find_one({"cedula": input.paciente_cedula}, {"_id": 0})
+        if pac:
+            paciente_id_real = pac.get("id", "")
+
+    history_dict = input.model_dump()
+    history_dict["paciente_id"] = paciente_id_real
+
+    history = MedicalHistoryEcografia(**history_dict)
     doc = history.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.medical_history_ecografia.insert_one(doc)

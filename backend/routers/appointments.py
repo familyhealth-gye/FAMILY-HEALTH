@@ -99,6 +99,26 @@ async def get_appointments(current_user: TokenData = Depends(get_current_user)):
     return appointments
 
 
+@router.get("/{appointment_id}", response_model=Appointment)
+async def get_appointment_by_id(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Retorna una cita por ID.
+    Usado por DentalWorkspace (/odontologia-v2/:appointmentId) y cualquier
+    componente que necesite datos de una cita específica sin cargar todas.
+    """
+    appointment = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if isinstance(appointment.get("created_at"), str):
+        appointment["created_at"] = datetime.fromisoformat(appointment["created_at"])
+    if "estado" not in appointment:
+        appointment["estado"] = "Programada"
+    return appointment
+
+
 @router.put("/{appointment_id}", response_model=Appointment)
 async def update_appointment(
     appointment_id: str,

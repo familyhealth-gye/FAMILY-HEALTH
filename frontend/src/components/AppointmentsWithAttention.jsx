@@ -17,38 +17,10 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = '' + BACKEND_URL + '/api';
 
 // ── Normalización de especialidades ─────────────────────────────────────────
-// Unifica variantes legacy (sin tilde, abreviadas) al valor canónico.
-// Agregar aquí si aparecen nuevas variantes en producción.
-const ESPECIALIDAD_MAP = {
-  // Odontología
-  "odontologia": "Odontología", "odontologa": "Odontología",
-  "odontología": "Odontología",
-  // Medicina
-  "medicina general": "Medicina General", "medicina": "Medicina General",
-  // Pediatría
-  "pediatria": "Pediatría", "pediatra": "Pediatría",
-  "pediatría": "Pediatría",
-  // Nutrición
-  "nutricion": "Nutrición", "nutricin": "Nutrición",
-  "nutrición": "Nutrición",
-  // Ginecología
-  "ginecologia": "Ginecología", "ginecologa": "Ginecología",
-  "ginecología": "Ginecología",
-  "ginecologia/obstetricia": "Ginecología/Obstetricia",
-  "ginecología/obstetricia": "Ginecología/Obstetricia",
-  // Ecografía
-  "ecografia": "Ecografía", "ecografa": "Ecografía",
-  "ecografía": "Ecografía",
-  // Obstetricia
-  "obstetricia": "Obstetricia",
-};
-
-const normalizeEspecialidad = (esp) => {
-  if (!esp) return "";
-  return ESPECIALIDAD_MAP[esp.trim().toLowerCase()] || esp.trim();
-};
-
+// Fuente única de verdad: lib/specialties.js
+// normalizeEspecialidad es alias local para compatibilidad con llamadas legacy en este archivo.
 import { normalizeSpecialty } from "@/lib/specialties";
+const normalizeEspecialidad = normalizeSpecialty;
 
 export const AppointmentsWithAttention = ({ 
   filteredAppointments, 
@@ -66,7 +38,9 @@ export const AppointmentsWithAttention = ({
   const [savingEdit, setSavingEdit] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [modoAtencion, setModoAtencion] = useState("historia"); // "historia" o "formulario"
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  // ── Fecha local Ecuador (UTC-5) — evita que entre 00:00 y 04:59 se muestre el día siguiente
+  const getLocalDate = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en timezone del browser
+  const [dateFilter, setDateFilter] = useState(getLocalDate);
   
   // Estados para el modal de pago
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -83,115 +57,66 @@ export const AppointmentsWithAttention = ({
 
   // Obtener la especialidad del usuario
   const userEspecialidad = user?.especialidad || null;
-  
-  // DEBUG: Mostrar info del usuario para verificar especialidad
-  console.log("=== DEBUG USER ===", { 
-    role: user?.role, 
-    especialidad: userEspecialidad, 
-    doctor_id: user?.doctor_id,
-    username: user?.username
-  });
 
   const handleStartAttention = async (appointment) => {
-    console.log(" ======== INICIANDO/REANUDANDO ATENCIÓN ========");
-    console.log(" Appointment original:", appointment);
-    console.log(" Paciente ID:", appointment.paciente_id);
-    console.log(" Paciente Cédula:", appointment.paciente_cedula || appointment.cedula);
-    console.log(" Usuario:", user?.role);
-    console.log(" Especialidad usuario:", userEspecialidad);
-    
-    // VALIDACIÓN: Solo validar si el usuario tiene especialidad definida
-    // Si no tiene especialidad (usuario legacy), permitir acceso
-    if (user?.role === "Doctor" && userEspecialidad && 
+    // VALIDACIÓN DE ESPECIALIDAD: Solo validar si el usuario tiene especialidad definida
+    if (user?.role === "Doctor" && userEspecialidad &&
         normalizeSpecialty(appointment.especialidad) !== normalizeSpecialty(userEspecialidad)) {
-      toast.error('No puede atender consultas de ' + appointment.especialidad + '. Su especialidad es ' + userEspecialidad + '.');
+      toast.error(`No puede atender consultas de ${appointment.especialidad}. Su especialidad es ${userEspecialidad}.`);
       return;
     }
-    
-    // VALIDACIÓN: Verificar que el doctor_id coincida (si est definido)
-    if (user?.role === "Doctor" && user.doctor_id && appointment.doctor_id !== user.doctor_id) {
-      toast.error("No tiene permisos para atender esta consulta.");
-      return;
-    }
-    
-    try {
-      // Update appointment status to "En Atención"
-      console.log(" Actualizando estado de cita a 'En Atención'...");
-      await apiClient.put('/appointments/' + appointment.id,
-        { estado: "En Atención" });
-      console.log("OK Estado actualizado");
 
-      // IMPORTANTE: Obtener datos completos del paciente si existe paciente_cedula
-      let appointmentConDatosPaciente = { ...appointment };
-      
+    // VALIDACIÓN DE DOCTOR: Solo bloquear si la cita tiene doctor asignado Y es distinto.
+    // Citas sin doctor asignado (doctor_id="") son tomables por cualquier doctor de la especialidad.
+    if (user?.role === "Doctor" && user.doctor_id &&
+        appointment.doctor_id && appointment.doctor_id !== user.doctor_id) {
+      toast.error("Esta cita está asignada a otro doctor.");
+      return;
+    }
+
+    try {
+      // Si la cita no tiene doctor asignado, asignar al doctor actual automáticamente
+      const updatePayload = { estado: "En Atención" };
+      if (user?.role === "Doctor" && user.doctor_id && !appointment.doctor_id) {
+        updatePayload.doctor_id    = user.doctor_id;
+        updatePayload.doctor_nombre = user.nombre_completo || user.nombre || user.username || "";
+      }
+      await apiClient.put(`/appointments/${appointment.id}`, updatePayload);
+
+      // Enriquecer con datos completos del paciente desde sistema unificado
+      let appointmentConDatosPaciente = { ...appointment, ...updatePayload };
+
       const cedula = appointment.paciente_cedula || appointment.cedula;
-      console.log(" Buscando datos completos del paciente con cédula:", cedula);
-      
       if (cedula) {
         try {
-          // Buscar paciente en el sistema unificado
-          console.log(" GET /api/financial/pacientes?search=", cedula);
-          const responsePacientes = await apiClient.get('/financial/pacientes?search=' + cedula);
-          
-          console.log(" Respuesta pacientes:", responsePacientes.data);
-          
-          const paciente = responsePacientes.data.find(p => p.cedula === cedula);
-          console.log(" Paciente encontrado:", paciente);
-          
+          const responsePacientes = await apiClient.get(`/financial/pacientes?search=${cedula}`);
+          const paciente = (responsePacientes.data || []).find(p => p.cedula === cedula);
           if (paciente) {
-            // Enriquecer el appointment con los datos completos del paciente
             appointmentConDatosPaciente = {
-              ...appointment,
-              nombre_completo: paciente.nombre || appointment.nombre_completo,
-              cedula: paciente.cedula,
-              paciente_cedula: paciente.cedula,
-              paciente_id: paciente.id,
-              telefono: paciente.telefono || appointment.telefono,
+              ...appointmentConDatosPaciente,
+              nombre_completo:  paciente.nombre  || appointment.nombre_completo,
+              cedula:           paciente.cedula,
+              paciente_cedula:  paciente.cedula,
+              paciente_id:      paciente.id,
+              telefono:         paciente.telefono        || appointment.telefono,
               fecha_nacimiento: paciente.fecha_nacimiento || appointment.fecha_nacimiento || "",
-              // La edad se calcular automticamente desde fecha_nacimiento
-              email: paciente.email || "",
-              direccion: paciente.direccion || "",
-              sexo: paciente.sexo || ""
+              email:            paciente.email   || "",
+              direccion:        paciente.direccion || "",
+              sexo:             paciente.sexo     || "",
             };
-            
-            console.log("OK Appointment enriquecido con datos del paciente:");
-            console.log("   - Nombre:", appointmentConDatosPaciente.nombre_completo);
-            console.log("   - Cédula:", appointmentConDatosPaciente.cedula);
-            console.log("   - Fecha Nacimiento:", appointmentConDatosPaciente.fecha_nacimiento);
-            console.log("   - Teléfono:", appointmentConDatosPaciente.telefono);
-            console.log("   - Paciente ID:", appointmentConDatosPaciente.paciente_id);
-          } else {
-            console.warn("Saldo No se encontr paciente en sistema unificado, usando datos del appointment");
           }
-        } catch (errorPaciente) {
-          console.error(" Error buscando datos del paciente:", errorPaciente);
-          console.warn("Saldo Continuando con datos del appointment original");
+        } catch {
+          // No bloquear la atención si falla la búsqueda del paciente
         }
       }
 
-      console.log(" Seteando appointment seleccionado con datos completos");
       setSelectedAppointment(appointmentConDatosPaciente);
-      
-      // Para Odontología, abrir vista completa de historia clínica
-      if (appointment.especialidad === "Odontología") {
-        console.log(" Modo: Historia Clínica Odontolgica");
-        setModoAtencion("historia");
-      } else {
-        console.log(" Modo: Formulario General");
-        setModoAtencion("formulario");
-      }
-      
+      // Odontología usa vista completa de historia clínica; otras usan formulario
+      setModoAtencion(normalizeSpecialty(appointment.especialidad) === "Odontología" ? "historia" : "formulario");
       setVistaAtencion(true);
-      console.log(" Vista de atención abierta");
-      console.log("========================================");
-      
       await fetchData();
     } catch (error) {
-      console.error(" ======== ERROR AL INICIAR ATENCIÓN ========");
-      console.error(" Error completo:", error);
-      console.error(" Response:", error.response?.data);
-      console.error("========================================");
-      toast.error("Error al iniciar atención: " + (error.response?.data?.detail || error.message));
+      toast.error(`Error al iniciar atención: ${error.response?.data?.detail || error.message}`);
     }
   };
 
@@ -395,27 +320,13 @@ export const AppointmentsWithAttention = ({
         descuento_aplicado: descuento,
       };
 
-      // Registrar el pago en la consulta financiera
-      const response = await apiClient.post('/financial/consultas/' + consultaFinanciera.id + '/pagos',
-        payloadPago);
+      const response = await apiClient.post(`/financial/consultas/${consultaFinanciera.id}/pagos`, payloadPago);
 
-      console.log("OK Pago registrado. Response:", response.data);
-      console.log("Saldo Nuevo saldo:", response.data.saldo);
-      console.log(" Total pagado:", response.data.total_pagado);
-      console.log(" Estado pago:", response.data.estado_pago);
-
-      // Si el saldo qued en 0, actualizar el estado de la cita a "Pagada"
       if (response.data.saldo === 0) {
-        console.log("OK Saldo = 0, actualizando cita a 'Pagada'...");
-        
-        await apiClient.put('/appointments/' + selectedAppointmentForPayment.id,
-          { estado: "Pagada" });
-        
-        console.log("OK Cita actualizada a estado 'Pagada'");
-        toast.success("Pago registrado - Cita marcada como pagada");
+        await apiClient.put(`/appointments/${selectedAppointmentForPayment.id}`, { estado: "Pagada" });
+        toast.success("Pago registrado — cita marcada como pagada");
       } else {
-        console.log('Saldo Saldo restante: ' + response.data.saldo.toFixed(2) + '');
-        toast.success('Pago registrado - Saldo restante: ' + response.data.saldo.toFixed(2) + '');
+        toast.success(`Pago registrado — saldo restante: $${response.data.saldo.toFixed(2)}`);
       }
 
       //  AUTO-FACTURACIN SRI  solo cuando el saldo queda en 0
@@ -492,29 +403,26 @@ export const AppointmentsWithAttention = ({
       fetchData();
 
     } catch (error) {
-      console.error(" ======== ERROR AL REGISTRAR PAGO ========");
-      console.error(" Error completo:", error);
-      console.error(" Error message:", error.message);
-      console.error(" Response status:", error.response?.status);
-      console.error(" Response data:", error.response?.data);
-      console.error("========================================");
       toast.error(error.response?.data?.detail || "Error al registrar el pago");
     }
   };
 
-  // Filter appointments by doctor if user is a doctor
-  // Solo filtrar por especialidad si el usuario tiene especialidad definida
+  // ── Filtro de citas visibles ─────────────────────────────────────────────
+  // Doctores ven:
+  //   - Citas asignadas a ellos (doctor_id === user.doctor_id)
+  //   - Citas SIN doctor asignado de su misma especialidad (para poder "tomarlas")
+  // Admin y Recepción ven todas.
   let visibleAppointments = filteredAppointments ?? [];
-  
+
   if (user?.role === "Doctor" && user?.doctor_id) {
     visibleAppointments = visibleAppointments.filter(apt => {
-      // Siempre filtrar por doctor_id
-      if (apt.doctor_id !== user.doctor_id) return false;
-      
-      // Solo filtrar por especialidad si el usuario tiene una definida
-      if (userEspecialidad && apt.especialidad !== userEspecialidad) return false;
-      
-      return true;
+      const esDeEsteDoctor   = apt.doctor_id === user.doctor_id;
+      const sinDoctorAsignado = !apt.doctor_id || apt.doctor_id === "";
+      const mismaEspecialidad = !userEspecialidad ||
+        normalizeSpecialty(apt.especialidad) === normalizeSpecialty(userEspecialidad);
+
+      // Mostrar si es del doctor O si está sin asignar y es de su especialidad
+      return esDeEsteDoctor || (sinDoctorAsignado && mismaEspecialidad);
     });
   }
 
@@ -661,14 +569,16 @@ export const AppointmentsWithAttention = ({
                   </div>
                 </td>
                 <td><span className="badge">{appointment.especialidad}</span></td>
-                <td className="col-opcional">{appointment.doctor_nombre}</td>
+                <td className="col-opcional">{appointment.doctor_nombre || <span style={{ color: '#9CA3AF', fontStyle: 'italic', fontSize: '12px' }}>Sin asignar</span>}</td>
                 <td>{appointment.fecha}</td>
                 <td className="col-opcional">{appointment.hora}</td>
                 <td className="actions-cell">
                   {(appointment.estado === "Programada" || appointment.estado === "En Atención" || !appointment.estado) && user?.role === "Doctor" && (
-                    <Button size="sm" variant="default" onClick={() => handleStartAttention(appointment)} className="attention-button" data-testid={'start-attention-' + appointment.id + ''}>
+                    <Button size="sm" variant="default" onClick={() => handleStartAttention(appointment)} className="attention-button" data-testid={`start-attention-${appointment.id}`}>
                       <Play className="button-icon" size={14} />
-                      {appointment.estado === "En Atención" ? "Continuar" : "Atender"}
+                      {appointment.estado === "En Atención"
+                        ? "Continuar"
+                        : (!appointment.doctor_id || appointment.doctor_id === "") ? "Tomar cita" : "Atender"}
                     </Button>
                   )}
                   {ENABLE_DENTAL_V2 && appointment.especialidad === "Odontología" && (

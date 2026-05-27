@@ -11,6 +11,7 @@ import { OdontogramaClinicoTab } from "./OdontogramaClinicoTab";
 import { NuevaCitaModal } from "./NuevaCitaModal";
 import { CalendarPlus } from "lucide-react";
 import { PlanTratamientoTab } from "./PlanTratamientoTab";
+import { normalizeSpecialty } from "@/lib/specialties";
 import "./HistoriaClinicaCompleta.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -31,10 +32,10 @@ export const HistoriaClinicaCompleta = ({
   const [activeTab, setActiveTab] = useState("consultas");
   const [odontogramaId, setOdontogramaId] = useState(null);
 
-  // Determinar si mostrar odontograma
-  const esOdontologia = especialidad === "Odontología" || 
-                        user?.especialidad === "Odontología" ||
-                        consultas.some(c => c.especialidad === "Odontología");
+  // Determinar si mostrar odontograma — normalizado para aceptar variantes con/sin tilde
+  const esOdontologia = normalizeSpecialty(especialidad) === "Odontología" ||
+                        normalizeSpecialty(user?.especialidad) === "Odontología" ||
+                        consultas.some(c => normalizeSpecialty(c.especialidad) === "Odontología");
 
   useEffect(() => {
     if (paciente?.cedula) {
@@ -71,19 +72,20 @@ export const HistoriaClinicaCompleta = ({
         apt.cedula === paciente.cedula && apt.estado !== "Cancelada"
       );
 
-      // Mapeo especialidad -> endpoint slug
-      const especialidadEndpointMap = {
-        "Medicina General": "general",
-        "Pediatría": "pediatric",
-        "Pediatria": "pediatric",
-        "Odontología": "odontology",
-        "Odontologia": "odontology",
-        "Nutrición": "nutricion",
-        "Nutricion": "nutricion",
-        "Ginecología": "ginecologia",
-        "Ginecologia": "ginecologia",
-        "Ecografía": "ecografia",
-        "Ecografia": "ecografia",
+      // Mapeo canónico especialidad → slug de endpoint (usa normalizeSpecialty para aceptar variantes)
+      const getEndpointSlug = (esp) => {
+        const canonical = normalizeSpecialty(esp);
+        const map = {
+          "Medicina General":        "general",
+          "Pediatría":               "pediatric",
+          "Odontología":             "odontology",
+          "Nutrición":               "nutricion",
+          "Ginecología":             "ginecologia",
+          "Ginecología/Obstetricia": "ginecologia",
+          "Obstetricia":             "ginecologia",
+          "Ecografía":               "ecografia",
+        };
+        return map[canonical] || null;
       };
 
       // Orden de fallback (todas las especialidades) si la cita no tiene
@@ -109,7 +111,7 @@ export const HistoriaClinicaCompleta = ({
           let tipoHistoria = null;
 
           // 1) Intentar con la especialidad de la cita
-          const tipoPreferido = especialidadEndpointMap[cita.especialidad];
+          const tipoPreferido = getEndpointSlug(cita.especialidad);
           if (tipoPreferido) {
             const data = await fetchHistoriaPorTipo(cita.id, tipoPreferido);
             if (data) {
