@@ -118,7 +118,13 @@ const PipelineItem = ({ procedure, planId, appointmentId, onUpdateState, onDelet
           )}
         </div>
 
-        {/* Acciones por estado */}
+        {/* Acciones por estado — alineadas con pipeline_transitions.py del backend
+            Grafo:
+              creado     → propuesto   (Doctor/Admin)
+              propuesto  → aprobado    (Recepcion/Admin)   ← Doctor NO puede aprobar
+              aprobado   → en_ejecucion (Doctor/Admin)     ← "Iniciar" reemplaza salto inválido
+              en_ejecucion → realizado (Doctor/Admin)      ← "LISTO"
+        */}
         <div className="flex gap-1">
           {procedure.estado_pipeline === 'creado' && (
             <button
@@ -132,23 +138,40 @@ const PipelineItem = ({ procedure, planId, appointmentId, onUpdateState, onDelet
             <button
               onClick={() => onUpdateState(procedure.id, 'aprobado')}
               className="text-[9px] bg-amber-600 text-white px-2 py-1 rounded font-bold hover:bg-amber-700 shadow-sm"
+              title="Aprobación realizada por Recepción o Admin"
             >
               APROBAR
             </button>
           )}
           {procedure.estado_pipeline === 'aprobado' && (
-            <Button
-              variant="outline" size="sm"
-              className="h-6 px-2 text-[9px] font-bold border-blue-200 text-blue-700 hover:bg-blue-50"
-              onClick={handleOpenSchedule}
-              disabled={loadingAppts}
-            >
-              <Calendar className="w-3 h-3 mr-1" />
-              PROGRAMAR
-            </Button>
+            <>
+              <button
+                onClick={() => onUpdateState(procedure.id, 'en_ejecucion', { sesion_appointment_id: appointmentId })}
+                className="text-[9px] bg-blue-600 text-white px-2 py-1 rounded font-bold hover:bg-blue-700 shadow-sm flex items-center gap-1"
+                title="Iniciar ejecución en esta sesión"
+              >
+                <PlayCircle className="w-3 h-3" /> INICIAR
+              </button>
+              <Button
+                variant="outline" size="sm"
+                className="h-6 px-2 text-[9px] font-bold border-blue-200 text-blue-700 hover:bg-blue-50"
+                onClick={handleOpenSchedule}
+                disabled={loadingAppts}
+              >
+                <Calendar className="w-3 h-3 mr-1" />
+                PROG.
+              </Button>
+            </>
           )}
-          {(['programado', 'aprobado'].includes(procedure.estado_pipeline) || isThisSession) &&
-            !['realizado', 'cobrado'].includes(procedure.estado_pipeline) && (
+          {procedure.estado_pipeline === 'programado' && (
+            <button
+              onClick={() => onUpdateState(procedure.id, 'en_ejecucion', { sesion_appointment_id: appointmentId })}
+              className="text-[9px] bg-blue-600 text-white px-2 py-1 rounded font-bold hover:bg-blue-700 shadow-sm flex items-center gap-1"
+            >
+              <PlayCircle className="w-3 h-3" /> INICIAR
+            </button>
+          )}
+          {procedure.estado_pipeline === 'en_ejecucion' && (
             <button
               onClick={() => onUpdateState(procedure.id, 'realizado', { ejecutado_en_sesion: appointmentId })}
               className="text-[9px] bg-green-600 text-white px-2 py-1 rounded font-bold hover:bg-green-700 flex items-center gap-1 shadow-sm"

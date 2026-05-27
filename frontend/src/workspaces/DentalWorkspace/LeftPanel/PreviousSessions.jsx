@@ -51,7 +51,7 @@ const PreviousSessions = ({ patientId, pacienteCedula }) => {
     // 2. Historial legacy (medical_history_odontology)
     try {
       const cedula_q = cedula || '';
-      const res = await apiClient.get(`/medical-history/odontology/${cedula_q}`);
+      const res = await apiClient.get(`/medical-history/odontology/paciente/${cedula_q}`);
       const historias = Array.isArray(res.data) ? res.data : [res.data].filter(Boolean);
       historias.forEach(h => {
         if (!h) return;

@@ -54,13 +54,43 @@ async def create_medical_history(
 
 @router.get("/medical-history", response_model=List[MedicalHistory])
 async def get_medical_histories(current_user: TokenData = Depends(get_current_user)):
-    histories = await db.medical_histories.find({}, {"_id": 0}).to_list(1000)
-
-    for history in histories:
-        if isinstance(history['created_at'], str):
-            history['created_at'] = datetime.fromisoformat(history['created_at'])
-
-    return histories
+    all_histories = []
+    colecciones = [
+        ("medical_history_general",    "Medicina General"),
+        ("medical_history_pediatric",  "Pediatría"),
+        ("medical_history_odontology", "Odontología"),
+        ("medical_history_nutricion",  "Nutrición"),
+        ("medical_history_ginecologia","Ginecología"),
+        ("medical_history_ecografia",  "Ecografía"),
+    ]
+    for col_name, especialidad_default in colecciones:
+        col = getattr(db, col_name)
+        docs = await col.find({}, {"_id": 0}).to_list(2000)
+        for doc in docs:
+            if isinstance(doc.get("created_at"), str):
+                try:
+                    doc["created_at"] = datetime.fromisoformat(doc["created_at"])
+                except Exception:
+                    doc["created_at"] = datetime.now(timezone.utc)
+            elif not doc.get("created_at"):
+                doc["created_at"] = datetime.now(timezone.utc)
+            doc.setdefault("especialidad",    especialidad_default)
+            doc.setdefault("tipo_historia",   especialidad_default)
+            doc.setdefault("diagnostico",     doc.get("diagnostico_principal", ""))
+            doc.setdefault("tratamiento",     "")
+            doc.setdefault("notas",           "")
+            doc.setdefault("paciente_id",     doc.get("paciente_cedula", ""))
+            doc.setdefault("paciente_nombre", "")
+            doc.setdefault("paciente_cedula", "")
+            doc.setdefault("doctor_id",       "")
+            doc.setdefault("doctor_nombre",   "")
+            doc.setdefault("fecha",           "")
+            try:
+                all_histories.append(MedicalHistory(**doc))
+            except Exception:
+                pass
+    all_histories.sort(key=lambda h: h.fecha or "", reverse=True)
+    return all_histories
 
 @router.get("/medical-history/patient/{paciente_id}", response_model=List[MedicalHistory])
 async def get_patient_medical_history(
@@ -491,6 +521,21 @@ async def get_odontology_history_by_appointment(
 
     return MedicalHistoryOdontology(**history)
 
+@router.get("/medical-history/odontology/paciente/{cedula}")
+async def get_odontology_history_by_cedula(
+    cedula: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    histories = await db.medical_history_odontology.find(
+        {"paciente_cedula": cedula}, {"_id": 0}
+    ).to_list(100)
+    for h in histories:
+        if isinstance(h.get("created_at"), str):
+            try:
+                h["created_at"] = datetime.fromisoformat(h["created_at"])
+            except Exception:
+                h["created_at"] = datetime.now(timezone.utc)
+    return histories
 @router.put("/medical-history/odontology/{history_id}", response_model=MedicalHistoryOdontology)
 async def update_odontology_history(
     history_id: str,
