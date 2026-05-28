@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Phone, Edit, Trash2, Play, Check, ArrowLeft, CalendarPlus } from "lucide-react";
 import { NuevaCitaModal } from "./NuevaCitaModal";
+import { FichaPostCitaModal } from "./FichaPostCitaModal";
 import { toast } from "sonner";
 import apiClient from "@/lib/axios";
 import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
@@ -37,7 +38,9 @@ export const AppointmentsWithAttention = ({
   const [editApptForm, setEditApptForm] = useState({});
   const [savingEdit, setSavingEdit] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [modoAtencion, setModoAtencion] = useState("historia"); // "historia" o "formulario"
+  const [modoAtencion, setModoAtencion] = useState("historia");
+  // Ficha clínica post-cita (modal para completar desde recepción)
+  const [fichaAppt, setFichaAppt] = useState(null);
   // ── Fecha local Ecuador (UTC-5) — evita que entre 00:00 y 04:59 se muestre el día siguiente
   const getLocalDate = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en timezone del browser
   const [dateFilter, setDateFilter] = useState(getLocalDate);
@@ -532,6 +535,16 @@ export const AppointmentsWithAttention = ({
         fromPatient={false}
       />
 
+      {/* Modal ficha clínica post-cita — recepción completa datos después de agendar */}
+      {fichaAppt && (
+        <FichaPostCitaModal
+          appointment={fichaAppt}
+          token={token}
+          onClose={() => setFichaAppt(null)}
+          onSuccess={() => { setFichaAppt(null); fetchData(); }}
+        />
+      )}
+
       <div className="table-container">
         {/* Vista tabla  escritorio y tablet */}
         <table className="data-table" style={{ display:"var(--table-display, table)" }}>
@@ -595,6 +608,18 @@ export const AppointmentsWithAttention = ({
                     <Button size="sm" variant="outline" onClick={() => handleStartAttention(appointment)} className="resume-button" data-testid={'resume-attention-' + appointment.id + ''} title="Reanudar para completar historia clínica">
                       <Play className="button-icon" size={14} />
                       Reanudar
+                    </Button>
+                  )}
+                  {(appointment.estado === "Programada" || !appointment.estado) &&
+                    (user?.role === "Recepcion" || user?.role === "Administrador") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setFichaAppt(appointment)}
+                      style={{ fontSize: "12px", borderColor: "#BFDBFE", color: "#1E40AF" }}
+                      title="Completar ficha clínica previa"
+                    >
+                      📋 Ficha
                     </Button>
                   )}
                   {appointment.estado === "Pendiente de Pago" && user?.role === "Recepcion" && (

@@ -220,13 +220,20 @@ export const MedicalHistoryTab = ({ medicalHistories = [], appointments = [], do
               <th>Doctor</th>
               <th className="col-opcional">Especialidad</th>
               <th>Motivo / Diagnóstico</th>
+              {onOpenPaciente && <th style={{ width: "60px" }}></th>}
             </tr>
           </thead>
           <tbody>
             {paginated.map(h => {
-              const colors = espColor(h.especialidad);
+              const colors = espColor(h.especialidad || h.tipo_historia);
+              const espLabel = normalizeSpecialty(h.especialidad || h.tipo_historia || "");
+              const pacienteObj = { cedula: h.paciente_cedula, nombre_completo: h.paciente_nombre };
               return (
-                <tr key={h.id}>
+                <tr
+                  key={h.id}
+                  style={{ cursor: onOpenPaciente ? "pointer" : "default" }}
+                  onClick={() => onOpenPaciente && onOpenPaciente(pacienteObj)}
+                >
                   <td style={{ whiteSpace: "nowrap", color: "#64748B", fontSize: "0.875rem" }}>
                     {h.fecha || "—"}
                   </td>
@@ -242,7 +249,7 @@ export const MedicalHistoryTab = ({ medicalHistories = [], appointments = [], do
                     {h.doctor_nombre || "—"}
                   </td>
                   <td className="col-opcional">
-                    {h.especialidad ? (
+                    {espLabel ? (
                       <span style={{
                         display: "inline-block",
                         padding: "0.25rem 0.625rem",
@@ -252,7 +259,7 @@ export const MedicalHistoryTab = ({ medicalHistories = [], appointments = [], do
                         fontSize: "0.8125rem",
                         fontWeight: 600,
                       }}>
-                        {normalizeSpecialty(h.especialidad)}
+                        {espLabel}
                       </span>
                     ) : <span style={{ color: "#94A3B8" }}>—</span>}
                   </td>
@@ -273,6 +280,21 @@ export const MedicalHistoryTab = ({ medicalHistories = [], appointments = [], do
                       <span style={{ color: "#94A3B8" }}>—</span>
                     )}
                   </td>
+                  {onOpenPaciente && (
+                    <td onClick={e => e.stopPropagation()} style={{ textAlign: "center" }}>
+                      <button
+                        onClick={() => onOpenPaciente(pacienteObj)}
+                        style={{
+                          background: "#EFF6FF", border: "1px solid #BFDBFE",
+                          borderRadius: "6px", padding: "4px 10px",
+                          fontSize: "12px", color: "#1E40AF",
+                          cursor: "pointer", fontWeight: 600,
+                        }}
+                      >
+                        Ver HC
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}

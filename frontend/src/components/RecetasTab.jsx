@@ -105,7 +105,7 @@ export const RecetasTab = ({ prescriptions = [], user, token }) => {
   const handleEsp    = (v) => { setFilterEsp(v); setPage(1); };
   const handleFecha  = (v) => { setFilterFecha(v); setPage(1); };
 
-  const openPdf = async (id) => {
+  const openPdf = async (id, nombrePaciente) => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/prescriptions/${id}/pdf`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -113,8 +113,17 @@ export const RecetasTab = ({ prescriptions = [], user, token }) => {
       if (!response.ok) throw new Error("Error al generar PDF");
       const blob = await response.blob();
       const url  = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      // Usar <a> en vez de window.open — compatible con móvil (Safari/Chrome bloquean popups)
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      // En móvil descarga, en desktop abre
+      a.download = `receta-${(nombrePaciente || id).replace(/\s+/g, "-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
     } catch (err) {
       alert("No se pudo abrir el PDF. Verifique su sesión.");
     }
@@ -294,7 +303,7 @@ export const RecetasTab = ({ prescriptions = [], user, token }) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => openPdf(p.id)}
+                    onClick={() => openPdf(p.id, p.paciente_nombre)}
                     style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
                     <Download size={13} />

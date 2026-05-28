@@ -1,14 +1,11 @@
 /**
  * useCitaForm.js
  * Hook que encapsula toda la lógica del modal de nueva cita:
- * - estado del formulario (cita + ficha clínica)
- * - autocarga de paciente por cédula
- * - carga de antecedentes previos
+ * - estado cita + ficha clínica
+ * - autocomplete por cédula/pasaporte (incluye documentos extranjeros ≥6 chars)
+ * - fallback a appointments si no está en tabla pacientes (ej. David Orellana)
+ * - carga automática de antecedentes previos
  * - submit con guardado dual (cita + antecedentes)
- * - gestión de tabs
- *
- * Separado de NuevaCitaModal.jsx para permitir reutilización
- * y mantener el componente puramente visual.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -18,7 +15,7 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// ─── Valores por defecto ────────────────────────────────────────────────────
+// ─── Constantes exportadas ───────────────────────────────────────────────────
 
 export const ESPECIALIDADES = [
   "Medicina General", "Odontología", "Pediatría", "Nutrición",
@@ -29,20 +26,19 @@ const getLocalDate = () => new Date().toLocaleDateString("en-CA");
 
 export function defaultCita(user, paciente, fromPatient) {
   return {
-    nombre_completo:  paciente?.nombre_completo || paciente?.nombre || "",
-    cedula:           paciente?.cedula  || "",
-    telefono:         paciente?.telefono || "",
-    fecha_nacimiento: "",
-    sexo:             "",
-    email:            "",
-    direccion:        "",
-    fecha:            getLocalDate(),
-    hora:             "08:00",
-    especialidad:     fromPatient ? (user?.especialidad || "") : "",
-    doctor_nombre:    fromPatient ? (user?.nombre_completo || user?.nombre || "") : "",
-    doctor_id:        fromPatient ? (user?.doctor_id || "") : "",
-    observaciones:    "",
-    // Representante (menores)
+    nombre_completo:          paciente?.nombre_completo || paciente?.nombre || "",
+    cedula:                   paciente?.cedula   || "",
+    telefono:                 paciente?.telefono || "",
+    fecha_nacimiento:         "",
+    sexo:                     "",
+    email:                    "",
+    direccion:                "",
+    fecha:                    getLocalDate(),
+    hora:                     "08:00",
+    especialidad:             fromPatient ? (user?.especialidad || "") : "",
+    doctor_nombre:            fromPatient ? (user?.nombre_completo || user?.nombre || "") : "",
+    doctor_id:                fromPatient ? (user?.doctor_id || "") : "",
+    observaciones:            "",
     es_menor:                 false,
     representante_nombre:     "",
     representante_cedula:     "",
@@ -53,14 +49,14 @@ export function defaultCita(user, paciente, fromPatient) {
 
 export function defaultFicha() {
   return {
-    diabetes:       false,
-    hipertension:   false,
-    cardiopatias:   false,
-    hepatitis:      false,
-    vih:            false,
-    epilepsia:      false,
-    asma:           false,
-    embarazo:       false,
+    diabetes:                false,
+    hipertension:            false,
+    cardiopatias:            false,
+    hepatitis:               false,
+    vih:                     false,
+    epilepsia:               false,
+    asma:                    false,
+    embarazo:                false,
     alergias_medicamentos:   "",
     medicamentos_actuales:   "",
     ant_personales:          "",
@@ -71,7 +67,7 @@ export function defaultFicha() {
   };
 }
 
-// ─── Hook principal ─────────────────────────────────────────────────────────
+// ─── Hook principal ──────────────────────────────────────────────────────────
 
 export function useCitaForm({ isOpen, user, paciente, fromPatient, token, onClose, onSuccess }) {
   const [tab,          setTab]          = useState(0);
@@ -80,7 +76,7 @@ export function useCitaForm({ isOpen, user, paciente, fromPatient, token, onClos
   const [saving,       setSaving]       = useState(false);
   const [antecPreload, setAntecPreload] = useState(null);
 
-  // Reset cuando se abre el modal
+  // Reset al abrir
   useEffect(() => {
     if (isOpen) {
       setTab(0);
@@ -90,28 +86,28 @@ export function useCitaForm({ isOpen, user, paciente, fromPatient, token, onClos
     }
   }, [isOpen, paciente, fromPatient, user]);
 
-  // Setters individuales
   const setC = useCallback((field, value) => setCita(f => ({ ...f, [field]: value })), []);
   const setF = useCallback((field, value) => setFicha(f => ({ ...f, [field]: value })), []);
 
-  // Cargar antecedentes previos del paciente
-  const cargarAntecedentes = useCallback(async (cedula) => {
-    if (!cedula || cedula.length < 10 || !token) return;
+  // ── Carga de antecedentes ──────────────────────────────────────────────────
+  // Acepta cédulas EC (10), extranjeras (6+) y pasaportes
+  const cargarAntecedentes = useCallback(async (doc) => {
+    if (!doc || doc.trim().length < 5 || !token) return;
     try {
-      const res = await axios.get(`${API}/antecedentes-paciente/${cedula}`, {
+      const res = await axios.get(`${API}/antecedentes-paciente/${doc.trim()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data?.tiene_antecedentes) {
         setAntecPreload(res.data);
         setFicha(f => ({
           ...f,
-          diabetes:              res.data.diabetes      || f.diabetes,
-          hipertension:          res.data.hipertension  || f.hipertension,
-          cardiopatias:          res.data.cardiopatias  || f.cardiopatias,
-          hepatitis:             res.data.hepatitis     || f.hepatitis,
-          vih:                   res.data.vih           || f.vih,
-          epilepsia:             res.data.epilepsia     || f.epilepsia,
-          asma:                  res.data.asma          || f.asma,
+          diabetes:              res.data.diabetes              || f.diabetes,
+          hipertension:          res.data.hipertension          || f.hipertension,
+          cardiopatias:          res.data.cardiopatias          || f.cardiopatias,
+          hepatitis:             res.data.hepatitis             || f.hepatitis,
+          vih:                   res.data.vih                   || f.vih,
+          epilepsia:             res.data.epilepsia             || f.epilepsia,
+          asma:                  res.data.asma                  || f.asma,
           alergias_medicamentos: res.data.alergias_medicamentos || f.alergias_medicamentos,
           medicamentos_actuales: res.data.medicamentos_actuales || f.medicamentos_actuales,
           ant_personales:        res.data.ant_personales        || f.ant_personales,
@@ -120,33 +116,66 @@ export function useCitaForm({ isOpen, user, paciente, fromPatient, token, onClos
         }));
       }
     } catch {
-      // Silencioso — no bloquear el flujo
+      // Silencioso
     }
   }, [token]);
 
-  // Autocompletar al tipear cédula
+  // ── Autocomplete por cédula/pasaporte ──────────────────────────────────────
+  // Estrategia:
+  //   1. Busca en /financial/pacientes (tabla facturación)
+  //   2. Si no encuentra, busca en /appointments (pacientes solo agendados)
+  // Esto cubre a David Orellana y similares registrados solo por cita
   const handleCedulaChange = useCallback(async (cedula) => {
     setC("cedula", cedula);
-    if (cedula.length === 10 && token) {
-      try {
-        const res = await axios.get(`${API}/financial/pacientes?search=${cedula}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const pac = (res.data || []).find(p => p.cedula === cedula);
-        if (pac) {
-          setC("nombre_completo",  pac.nombre || pac.nombre_completo || "");
-          setC("telefono",         pac.telefono         || "");
-          setC("email",            pac.email            || "");
-          setC("direccion",        pac.direccion        || "");
-          setC("fecha_nacimiento", pac.fecha_nacimiento || "");
-          setC("sexo",             pac.sexo             || "");
-        }
-      } catch {}
-      await cargarAntecedentes(cedula);
-    }
+    const trimmed = cedula.trim();
+    if (trimmed.length < 6 || !token) return;
+
+    try {
+      // Fuente 1: tabla de pacientes financieros
+      const res = await axios.get(
+        `${API}/financial/pacientes?search=${encodeURIComponent(trimmed)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const lista = res.data || [];
+      let pac = lista.find(p => (p.cedula || "").trim() === trimmed);
+
+      // Fuente 2: appointments (cubre pacientes sin facturación aún)
+      if (!pac) {
+        try {
+          const resA = await axios.get(
+            `${API}/appointments?search=${encodeURIComponent(trimmed)}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const appt = (resA.data || []).find(a => (a.cedula || "").trim() === trimmed);
+          if (appt) {
+            pac = {
+              nombre:           appt.nombre_completo || appt.nombre || "",
+              cedula:           appt.cedula,
+              telefono:         appt.telefono         || "",
+              email:            appt.email            || "",
+              direccion:        appt.direccion        || "",
+              fecha_nacimiento: appt.fecha_nacimiento || "",
+              sexo:             appt.sexo             || "",
+            };
+          }
+        } catch {}
+      }
+
+      if (pac) {
+        const nombre = pac.nombre || pac.nombre_completo || "";
+        if (nombre)              setC("nombre_completo",  nombre);
+        if (pac.telefono)        setC("telefono",         pac.telefono);
+        if (pac.email)           setC("email",            pac.email);
+        if (pac.direccion)       setC("direccion",        pac.direccion);
+        if (pac.fecha_nacimiento) setC("fecha_nacimiento", pac.fecha_nacimiento);
+        if (pac.sexo)            setC("sexo",             pac.sexo);
+      }
+    } catch {}
+
+    await cargarAntecedentes(trimmed);
   }, [token, setC, cargarAntecedentes]);
 
-  // Submit principal
+  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!cita.nombre_completo.trim()) { toast.error("El nombre del paciente es obligatorio"); return; }
     if (!cita.fecha)                   { toast.error("La fecha es obligatoria");              return; }
@@ -154,18 +183,17 @@ export function useCitaForm({ isOpen, user, paciente, fromPatient, token, onClos
 
     setSaving(true);
     try {
-      // 1. Crear cita
       const payload = {
         ...cita,
-        estado:         "Programada",
-        observaciones:  ficha.motivo_consulta || cita.observaciones,
+        estado:          "Programada",
+        observaciones:   ficha.motivo_consulta || cita.observaciones,
         motivo_consulta: ficha.motivo_consulta || cita.observaciones,
       };
       await axios.post(`${API}/appointments`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // 2. Guardar antecedentes si hay cédula y datos clínicos
+      // Guardar antecedentes si hay cédula y datos clínicos
       const hayFicha = Object.entries(ficha).some(([k, v]) => {
         if (k === "motivo_consulta" || k === "observaciones_recepcion") return false;
         return typeof v === "boolean" ? v : (v && v.toString().trim().length > 0);
@@ -176,9 +204,7 @@ export function useCitaForm({ isOpen, user, paciente, fromPatient, token, onClos
           await axios.put(`${API}/antecedentes-paciente/${cita.cedula}`, ficha, {
             headers: { Authorization: `Bearer ${token}` },
           });
-        } catch {
-          // No bloquear si falla guardado de antecedentes
-        }
+        } catch {}
       }
 
       toast.success("✅ Cita creada" + (hayFicha ? " con ficha clínica" : ""));
@@ -192,15 +218,12 @@ export function useCitaForm({ isOpen, user, paciente, fromPatient, token, onClos
   }, [cita, ficha, token, onClose, onSuccess]);
 
   return {
-    // Estado
     tab, setTab,
     cita, setCita,
     ficha, setFicha,
     saving,
     antecPreload,
-    // Setters de campo
     setC, setF,
-    // Handlers
     handleCedulaChange,
     handleSubmit,
   };
