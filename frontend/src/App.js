@@ -218,10 +218,16 @@ function LegacyApp({ user: propUser, token: propToken }) {
             </>
           )}
           {user?.role === "Administrador" && (
-             <TabsTrigger value="config">
+            <>
+              <TabsTrigger value="catalogo">
+                <ListChecks className="tab-icon" />
+                Catálogo
+              </TabsTrigger>
+              <TabsTrigger value="config">
                 <UserCog className="tab-icon" />
                 Config
-             </TabsTrigger>
+              </TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -385,11 +391,14 @@ function LegacyApp({ user: propUser, token: propToken }) {
         )}
 
         {user?.role === "Administrador" && (
+          <>
+          <TabsContent value="catalogo" className="tab-content">
+            <CatalogoServiciosTab token={token} />
+          </TabsContent>
           <TabsContent value="config" className="tab-content">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FacturacionTab token={token} user={user} />
               <ConfiguracionSRI token={token} />
-              <CatalogoServiciosTab token={token} />
               <ConfiguracionIA token={token} />
               <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-100">
                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -409,6 +418,7 @@ function LegacyApp({ user: propUser, token: propToken }) {
               </div>
             </div>
           </TabsContent>
+          </>
         )}
       </Tabs>
     </MainLayout>

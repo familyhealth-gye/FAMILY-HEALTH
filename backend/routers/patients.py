@@ -61,9 +61,9 @@ async def get_antecedentes_paciente(
     current_user: TokenData = Depends(get_current_user)
 ):
     """
-    Busca los antecedentes clínicos de un paciente en TODAS sus consultas previas.
-    Retorna los antecedentes más completos encontrados + alertas activas.
-    Solo hay que llenarlos UNA VEZ — se reutilizan en consultas futuras.
+    Busca antecedentes clínicos. Fuente prioridad:
+    1. db.pacientes.antecedentes (guardados por recepción o doctor via PUT)
+    2. Historial clínico de cada especialidad (retrocompatibilidad)
     """
     antecedentes = {
         "diabetes": False,
@@ -92,6 +92,22 @@ async def get_antecedentes_paciente(
         "fecha_registro": "",
     }
 
+    # ── Prioridad 1: antecedentes guardados directamente en db.pacientes ──────
+    paciente_doc = await db.pacientes.find_one({"cedula": cedula}, {"_id": 0})
+    if paciente_doc and paciente_doc.get("antecedentes"):
+        ant = paciente_doc["antecedentes"]
+        for campo in ["diabetes","hipertension","cardiopatias","hepatitis","vih","epilepsia","embarazo","asma"]:
+            if ant.get(campo):
+                antecedentes[campo] = True
+        for campo in ["alergias_medicamentos","alergias","ant_familiares","ant_personales",
+                      "ant_quirurgicos","medicamentos_actuales"]:
+            if ant.get(campo):
+                antecedentes[campo] = ant[campo]
+        antecedentes["tiene_antecedentes"] = True
+        antecedentes["fuente"] = "Recepción/Ficha"
+        antecedentes["fecha_registro"] = paciente_doc.get("antecedentes_actualizados", "")
+
+    # ── Prioridad 2: historial clínico (retrocompatibilidad) ─────────────────
     busquedas = [
         ("medical_history_general", "Medicina General"),
         ("medical_history_pediatric", "Pediatría"),
@@ -184,7 +200,7 @@ async def update_antecedentes_paciente(
     await db.pacientes.update_one(
         {"cedula": cedula},
         {"$set": {"antecedentes": data, "antecedentes_actualizados": datetime.now(timezone.utc).isoformat()}},
-        upsert=False
+        upsert=True   # Crear el doc si no existe aún (paciente creado solo por cita)
     )
     return {"ok": True}
 

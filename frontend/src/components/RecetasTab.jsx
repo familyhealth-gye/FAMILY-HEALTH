@@ -105,8 +105,20 @@ export const RecetasTab = ({ prescriptions = [], user, token }) => {
   const handleEsp    = (v) => { setFilterEsp(v); setPage(1); };
   const handleFecha  = (v) => { setFilterFecha(v); setPage(1); };
 
-  const openPdf = (id) =>
-    window.open(`${BACKEND_URL}/api/prescriptions/${id}/pdf`, "_blank");
+  const openPdf = async (id) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/prescriptions/${id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Error al generar PDF");
+      const blob = await response.blob();
+      const url  = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      alert("No se pudo abrir el PDF. Verifique su sesión.");
+    }
+  };
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
