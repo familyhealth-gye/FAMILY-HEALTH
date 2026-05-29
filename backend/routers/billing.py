@@ -414,85 +414,158 @@ async def get_proforma_pdf(
     from fastapi.responses import Response
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
+    from reportlab.lib import colors
     from io import BytesIO
 
     proforma = await db.proformas.find_one({"id": proforma_id}, {"_id": 0})
     if not proforma:
         raise HTTPException(status_code=404, detail="Proforma no encontrada")
 
-    # Crear PDF
+    cfg = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+    clinica = cfg.get("valor", {}) if cfg else {}
+
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
-    # Logo
-    try:
-        c.drawImage("/app/frontend/public/logo.png", 50, height - 100, width=100, height=50, preserveAspectRatio=True)
-    except Exception:
-        pass
+    # ── Header con branding ────────────────────────────────────────
+    y = _clinica_header(c, clinica)
 
-    # Título
-    c.setFont("Helvetica-Bold", 20)
-    c.drawString(200, height - 70, "PROFORMA")
-
-    # Info
-    c.setFont("Helvetica", 10)
-    y = height - 120
-    c.drawString(50, y, f"N°: {proforma['numero_proforma']}")
-    c.drawString(50, y-15, f"Fecha: {proforma['fecha_emision']}")
-    c.drawString(50, y-30, f"Válida por: {proforma['validez_dias']} días")
-
-    # Cliente
-    y -= 60
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y, "CLIENTE:")
-    c.setFont("Helvetica", 10)
-    c.drawString(50, y-15, proforma['paciente_nombre'])
-    c.drawString(50, y-30, f"CI: {proforma['paciente_cedula']}")
-    c.drawString(50, y-45, f"Teléfono: {proforma['paciente_telefono']}")
-
-    # Items
-    y -= 80
+    # ── Título + número ────────────────────────────────────────────
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(40, y - 15, "PROFORMA")
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, "DESCRIPCIÓN")
-    c.drawString(350, y, "CANT.")
-    c.drawString(420, y, "P. UNIT")
-    c.drawString(500, y, "SUBTOTAL")
+    c.drawRightString(width - 40, y - 15, f"N° {proforma.get('numero_proforma', '')}")
+    c.setFillColorRGB(0, 0, 0)
 
-    c.line(50, y-5, width-50, y-5)
+    # Línea bajo título
+    c.setStrokeColorRGB(0.047, 0.290, 0.431)
+    c.setLineWidth(1)
+    c.line(40, y - 22, width - 40, y - 22)
+    y -= 35
 
+    # ── Bloque info emisión + cliente lado a lado ──────────────────
+    # Izquierda: datos emisión
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColorRGB(0.3, 0.3, 0.3)
+    c.drawString(40, y, "FECHA DE EMISIÓN")
+    c.drawString(40, y - 13, "VÁLIDA POR")
+    c.drawString(40, y - 26, "ESTADO")
+    c.setFont("Helvetica", 9)
+    c.setFillColorRGB(0, 0, 0)
+    c.drawString(160, y,      proforma.get("fecha_emision", ""))
+    c.drawString(160, y - 13, f"{proforma.get('validez_dias', 30)} días")
+    estado_prf = proforma.get("estado", "Pendiente")
+    color_estado = (0.1, 0.6, 0.1) if estado_prf == "Aprobada" else (0.6, 0.3, 0)
+    c.setFillColorRGB(*color_estado)
+    c.drawString(160, y - 26, estado_prf)
+    c.setFillColorRGB(0, 0, 0)
+
+    # Derecha: datos cliente
+    cx = width / 2 + 20
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColorRGB(0.3, 0.3, 0.3)
+    c.drawString(cx, y, "PACIENTE")
+    c.drawString(cx, y - 13, "CI / PASAPORTE")
+    c.drawString(cx, y - 26, "TELÉFONO")
+    c.setFont("Helvetica", 9)
+    c.setFillColorRGB(0, 0, 0)
+    c.drawString(cx + 100, y,      proforma.get("paciente_nombre", ""))
+    c.drawString(cx + 100, y - 13, proforma.get("paciente_cedula", ""))
+    c.drawString(cx + 100, y - 26, proforma.get("paciente_telefono", ""))
+
+    y -= 48
+
+    # ── Tabla de ítems ─────────────────────────────────────────────
+    # Encabezado tabla
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.rect(40, y - 2, width - 80, 18, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(48,        y + 4, "DESCRIPCIÓN")
+    c.drawString(370,       y + 4, "CANT.")
+    c.drawString(420,       y + 4, "P. UNIT.")
+    c.drawRightString(width - 45, y + 4, "SUBTOTAL")
+    c.setFillColorRGB(0, 0, 0)
     y -= 20
+
+    # Filas alternadas
+    c.setFont("Helvetica", 9)
+    for i, item in enumerate(proforma.get("items", [])):
+        if i % 2 == 0:
+            c.setFillColorRGB(0.96, 0.97, 1.0)
+            c.rect(40, y - 3, width - 80, 16, fill=1, stroke=0)
+        c.setFillColorRGB(0, 0, 0)
+        desc = item.get("descripcion", "")[:52]
+        c.drawString(48,  y + 4, desc)
+        c.drawString(380, y + 4, str(item.get("cantidad", 1)))
+        c.drawString(420, y + 4, f"${item.get('precio_unitario', 0):.2f}")
+        c.drawRightString(width - 45, y + 4, f"${item.get('subtotal', 0):.2f}")
+        y -= 16
+        if y < 160:   # Nueva página si no cabe
+            c.showPage()
+            y = height - 60
+
+    # Línea cierre tabla
+    c.setStrokeColorRGB(0.047, 0.290, 0.431)
+    c.setLineWidth(0.5)
+    c.line(40, y, width - 40, y)
+    y -= 20
+
+    # ── Totales ────────────────────────────────────────────────────
+    col_lbl = width - 180
+    col_val = width - 40
+
     c.setFont("Helvetica", 10)
-    for item in proforma['items']:
-        c.drawString(50, y, item['descripcion'][:40])
-        c.drawString(350, y, str(item['cantidad']))
-        c.drawString(420, y, f"${item['precio_unitario']:.2f}")
-        c.drawString(500, y, f"${item['subtotal']:.2f}")
-        y -= 15
+    c.setFillColorRGB(0.3, 0.3, 0.3)
+    c.drawRightString(col_lbl, y, "Subtotal:")
+    c.setFillColorRGB(0, 0, 0)
+    c.drawRightString(col_val, y, f"${proforma.get('subtotal', 0):.2f}")
+    y -= 16
 
-    # Totales
-    y -= 10
-    c.line(400, y, width-50, y)
-    y -= 20
-    c.drawString(420, y, "Subtotal:")
-    c.drawString(500, y, f"${proforma['subtotal']:.2f}")
-    y -= 15
-    c.drawString(420, y, "Descuento:")
-    c.drawString(500, y, f"-${proforma['descuento']:.2f}")
-    y -= 15
+    if proforma.get("descuento", 0) > 0:
+        c.setFillColorRGB(0.3, 0.3, 0.3)
+        c.drawRightString(col_lbl, y, "Descuento:")
+        c.setFillColorRGB(0.7, 0.1, 0.1)
+        c.drawRightString(col_val, y, f"-${proforma.get('descuento', 0):.2f}")
+        c.setFillColorRGB(0, 0, 0)
+        y -= 16
+
+    # Total destacado
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.rect(col_lbl - 10, y - 4, col_val - col_lbl + 50, 20, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(420, y, "TOTAL:")
-    c.drawString(500, y, f"${proforma['total']:.2f}")
+    c.drawRightString(col_lbl - 2, y + 2, "TOTAL:")
+    c.drawRightString(col_val, y + 2, f"${proforma.get('total', 0):.2f}")
+    c.setFillColorRGB(0, 0, 0)
+    y -= 35
 
-    # Observaciones
-    if proforma.get('observaciones'):
-        y -= 40
+    # ── Observaciones ──────────────────────────────────────────────
+    if proforma.get("observaciones"):
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColorRGB(0.3, 0.3, 0.3)
+        c.drawString(40, y, "OBSERVACIONES:")
         c.setFont("Helvetica", 9)
-        c.drawString(50, y, f"Observaciones: {proforma['observaciones']}")
+        c.setFillColorRGB(0, 0, 0)
+        y -= 14
+        c.drawString(40, y, proforma["observaciones"][:95])
+        y -= 30
+
+    # ── Pie de página ──────────────────────────────────────────────
+    c.setLineWidth(0.5)
+    c.setStrokeColorRGB(0.8, 0.8, 0.8)
+    c.line(40, 50, width - 40, 50)
+    c.setFont("Helvetica", 7)
+    c.setFillColorRGB(0.5, 0.5, 0.5)
+    c.drawCentredString(width / 2, 38,
+        f"{clinica.get('razon_social', 'FAMILY HEALTH')}   |   "
+        f"RUC: {clinica.get('ruc', '')}   |   "
+        f"{clinica.get('telefono', '')}   |   Documento no válido como factura")
 
     c.save()
     buffer.seek(0)
-
     return Response(content=buffer.getvalue(), media_type="application/pdf")
 
 # ========== ABONO ENDPOINTS ==========
@@ -854,3 +927,355 @@ async def enviar_ride_por_correo(invoice_id: str, data: dict = {}, current_user:
         raise HTTPException(status_code=401, detail="Error de autenticación Gmail. Usa una App Password de 16 caracteres.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar correo: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# DOCUMENTOS CLÍNICOS — Consentimiento, Certificado, Firma doctor
+# ═══════════════════════════════════════════════════════════════════
+
+def _clinica_header(c, buffer_info: dict):
+    """Dibuja el encabezado con logo y datos del consultorio."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    width, height = letter
+    nombre  = buffer_info.get("razon_social", "CENTRO DE ESPECIALIDADES FAMILY HEALTH")
+    comercial = buffer_info.get("nombre_comercial", "FAMILY HEALTH")
+    ruc     = buffer_info.get("ruc", "")
+    dir_    = buffer_info.get("direccion", "Guayaquil, Ecuador")
+    tel     = buffer_info.get("telefono", "")
+
+    # Banda azul superior
+    c.setFillColorRGB(0.047, 0.290, 0.431)  # #0C4A6E
+    c.rect(0, height - 80, width, 80, fill=1, stroke=0)
+
+    # Logo (si existe)
+    try:
+        c.drawImage("/app/frontend/public/logo.png", 30, height - 72,
+                    width=55, height=55, preserveAspectRatio=True, mask="auto")
+    except Exception:
+        pass
+
+    # Nombre en blanco
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(100, height - 32, nombre)
+    c.setFont("Helvetica", 9)
+    c.drawString(100, height - 46, f"RUC: {ruc}   |   {dir_}   |   Tel: {tel}")
+
+    # Línea divisoria bajo el banner
+    c.setStrokeColorRGB(0.047, 0.290, 0.431)
+    c.setFillColorRGB(0, 0, 0)
+    c.setLineWidth(0.5)
+    c.line(30, height - 90, width - 30, height - 90)
+
+    return height - 100  # y de inicio del contenido
+
+
+def _firma_doctor(c, doctor: dict, y: float, page_width: float):
+    """Dibuja la firma del doctor (imagen base64 si existe, línea si no)."""
+    firma_b64 = doctor.get("firma_imagen_b64")
+    nombre_dr = doctor.get("nombre", doctor.get("nombre_completo", ""))
+    especialidad = doctor.get("especialidad", "")
+    reg_msp = doctor.get("registro_msp", "")
+
+    x_firma = page_width / 2 - 60
+
+    if firma_b64:
+        try:
+            import base64
+            from PIL import Image as PILImage
+            from io import BytesIO as BIO
+            from reportlab.lib.utils import ImageReader
+            img_bytes = base64.b64decode(firma_b64)
+            img = PILImage.open(BIO(img_bytes))
+            ir = ImageReader(BIO(img_bytes))
+            c.drawImage(ir, x_firma, y - 50, width=120, height=50,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception:
+            c.setLineWidth(0.8)
+            c.line(x_firma, y - 10, x_firma + 120, y - 10)
+    else:
+        c.setLineWidth(0.8)
+        c.setStrokeColorRGB(0, 0, 0)
+        c.line(x_firma, y - 10, x_firma + 120, y - 10)
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawCentredString(x_firma + 60, y - 25, nombre_dr)
+    c.setFont("Helvetica", 8)
+    c.drawCentredString(x_firma + 60, y - 36, especialidad)
+    if reg_msp:
+        c.drawCentredString(x_firma + 60, y - 46, f"Reg. MSP: {reg_msp}")
+
+
+# ── Guardar firma del doctor ─────────────────────────────────────────────────
+@router.put("/doctors/{doctor_id}/firma")
+async def guardar_firma_doctor(
+    doctor_id: str,
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Guarda la imagen de firma del doctor en base64."""
+    await db.doctors.update_one(
+        {"id": doctor_id},
+        {"$set": {
+            "firma_imagen_b64": data.get("firma_imagen_b64", ""),
+            "registro_msp": data.get("registro_msp", ""),
+        }}
+    )
+    return {"ok": True}
+
+
+# ── Consentimiento Informado PDF ─────────────────────────────────────────────
+@router.get("/appointments/{appointment_id}/consentimiento-pdf")
+async def get_consentimiento_pdf(
+    appointment_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib import colors
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet
+    from io import BytesIO
+
+    appt = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+    if not appt:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    cfg = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+    clinica = cfg.get("valor", {}) if cfg else {}
+
+    doctor = None
+    if appt.get("doctor_id"):
+        doctor = await db.doctors.find_one({"id": appt["doctor_id"]}, {"_id": 0})
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    y = _clinica_header(c, clinica)
+
+    # Título
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(width / 2, y - 20, "CONSENTIMIENTO INFORMADO")
+    c.setFont("Helvetica", 8)
+    c.drawCentredString(width / 2, y - 32, f"Fecha: {appt.get('fecha', '')}   |   Especialidad: {appt.get('especialidad', '')}")
+
+    y -= 50
+
+    # Datos del paciente
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.drawString(40, y, "DATOS DEL PACIENTE")
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 10)
+    y -= 16
+    c.drawString(40, y, f"Nombre: {appt.get('nombre_completo', '')}")
+    y -= 14
+    c.drawString(40, y, f"Cédula / Pasaporte: {appt.get('cedula', 'No registrada')}")
+    y -= 14
+    c.drawString(40, y, f"Teléfono: {appt.get('telefono', '')}   |   Email: {appt.get('email', '')}")
+    y -= 25
+
+    # Cuerpo del consentimiento
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.drawString(40, y, "DECLARACIÓN DE CONSENTIMIENTO")
+    c.setFillColorRGB(0, 0, 0)
+    y -= 15
+
+    texto = (
+        "Yo, el/la paciente o representante legal identificado/a en este documento, "
+        "declaro que he sido informado/a de manera clara y comprensible sobre:\n\n"
+        "1. Mi estado de salud actual y el diagnóstico provisional.\n"
+        "2. El procedimiento o tratamiento propuesto, sus objetivos y características.\n"
+        "3. Los beneficios esperados del tratamiento.\n"
+        "4. Los riesgos posibles, complicaciones y efectos secundarios conocidos.\n"
+        "5. Las alternativas existentes al procedimiento propuesto.\n"
+        "6. Las consecuencias de no realizar el tratamiento.\n\n"
+        "He tenido la oportunidad de realizar todas las preguntas que consideré pertinentes "
+        "y he recibido respuestas satisfactorias. Comprendo que puedo revocar este consentimiento "
+        "en cualquier momento antes de que se inicie el procedimiento, sin que ello afecte "
+        "la calidad de la atención médica que se me brinde.\n\n"
+        "En pleno uso de mis facultades mentales, CONSIENTO voluntariamente a recibir el "
+        "procedimiento indicado y autorizo al equipo médico de este establecimiento de salud "
+        "a realizarlo."
+    )
+
+    c.setFont("Helvetica", 9)
+    text_obj = c.beginText(40, y)
+    text_obj.setFont("Helvetica", 9)
+    text_obj.setLeading(14)
+    for linea in texto.split("\n"):
+        # Wrap largo
+        if len(linea) > 95:
+            palabras = linea.split()
+            linea_actual = ""
+            for p in palabras:
+                if len(linea_actual) + len(p) + 1 < 95:
+                    linea_actual += (" " if linea_actual else "") + p
+                else:
+                    text_obj.textLine(linea_actual)
+                    linea_actual = p
+            if linea_actual:
+                text_obj.textLine(linea_actual)
+        else:
+            text_obj.textLine(linea)
+    c.drawText(text_obj)
+    y = text_obj.getY() - 30
+
+    # Firmas
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.drawString(40, y, "FIRMAS")
+    c.setFillColorRGB(0, 0, 0)
+    y -= 20
+
+    # Firma paciente
+    c.setLineWidth(0.8)
+    c.line(40, y - 10, 200, y - 10)
+    c.setFont("Helvetica", 8)
+    c.drawString(40, y - 22, "Firma del Paciente / Representante")
+    c.drawString(40, y - 33, f"CI: {appt.get('cedula', '________________')}")
+
+    # Firma doctor
+    if doctor:
+        _firma_doctor(c, doctor, y, width)
+    else:
+        c.line(width - 200, y - 10, width - 40, y - 10)
+        c.setFont("Helvetica", 8)
+        c.drawString(width - 200, y - 22, "Firma del Médico Responsable")
+
+    c.save()
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=consentimiento_{appointment_id}.pdf"}
+    )
+
+
+# ── Certificado Médico PDF ───────────────────────────────────────────────────
+@router.post("/appointments/{appointment_id}/certificado-pdf")
+async def get_certificado_pdf(
+    appointment_id: str,
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Genera certificado médico con días de reposo.
+    data: { dias_reposo: int, diagnostico: str, observaciones: str }
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    from io import BytesIO
+    from datetime import date
+
+    appt = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+    if not appt:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    cfg = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+    clinica = cfg.get("valor", {}) if cfg else {}
+
+    doctor = None
+    if appt.get("doctor_id"):
+        doctor = await db.doctors.find_one({"id": appt["doctor_id"]}, {"_id": 0})
+
+    dias_reposo  = int(data.get("dias_reposo", 0))
+    diagnostico  = data.get("diagnostico", "")
+    observaciones = data.get("observaciones", "")
+    fecha_emision = date.today().strftime("%d/%m/%Y")
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    y = _clinica_header(c, clinica)
+
+    # Título
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, y - 20, "CERTIFICADO MÉDICO")
+    y -= 45
+
+    # Datos doctor
+    nombre_dr    = (doctor or {}).get("nombre", current_user.username)
+    especialidad = (doctor or {}).get("especialidad", "")
+    reg_msp      = (doctor or {}).get("registro_msp", "")
+
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.drawString(40, y, "EL MÉDICO QUE SUSCRIBE:")
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 10)
+    y -= 16
+    c.drawString(40, y, f"Dr./Dra. {nombre_dr}   —   {especialidad}")
+    if reg_msp:
+        y -= 14
+        c.drawString(40, y, f"Reg. MSP: {reg_msp}")
+    y -= 25
+
+    # Cuerpo
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(0.047, 0.290, 0.431)
+    c.drawString(40, y, "CERTIFICA QUE:")
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 10)
+    y -= 18
+
+    nombre_pac = appt.get("nombre_completo", "")
+    cedula_pac = appt.get("cedula", "")
+
+    texto_cuerpo = [
+        f"El/La paciente {nombre_pac}, identificado/a con CI/Pasaporte: {cedula_pac},",
+        f"fue atendido/a en esta institución el día {appt.get('fecha', fecha_emision)},",
+        f"bajo diagnóstico de: {diagnostico if diagnostico else '___________________________________'}",
+        "",
+        f"Por tal motivo, se le indica REPOSO por {dias_reposo} día(s) a partir de la fecha de emisión." if dias_reposo > 0 else "No requiere reposo.",
+    ]
+
+    for linea in texto_cuerpo:
+        c.drawString(40, y, linea)
+        y -= 16
+
+    if observaciones:
+        y -= 10
+        c.setFont("Helvetica-Bold", 10)
+        c.setFillColorRGB(0.047, 0.290, 0.431)
+        c.drawString(40, y, "OBSERVACIONES:")
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont("Helvetica", 10)
+        y -= 16
+        c.drawString(40, y, observaciones[:90])
+        y -= 14
+        if len(observaciones) > 90:
+            c.drawString(40, y, observaciones[90:180])
+            y -= 14
+
+    y -= 10
+    c.setFont("Helvetica", 9)
+    c.drawString(40, y, f"Fecha de emisión: {fecha_emision}")
+    y -= 40
+
+    # Firma
+    if doctor:
+        _firma_doctor(c, doctor, y, width)
+    else:
+        c.setLineWidth(0.8)
+        c.line(width / 2 - 60, y - 10, width / 2 + 60, y - 10)
+        c.setFont("Helvetica", 8)
+        c.drawCentredString(width / 2, y - 22, "Firma del Médico")
+
+    # Pie
+    c.setFont("Helvetica", 7)
+    c.setFillColorRGB(0.5, 0.5, 0.5)
+    c.drawCentredString(width / 2, 30,
+        "Documento emitido electrónicamente — válido sin sello físico según normativa vigente")
+
+    c.save()
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=certificado_{appointment_id}.pdf"}
+    )

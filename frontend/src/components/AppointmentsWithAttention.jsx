@@ -5,11 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Phone, Edit, Trash2, Play, Check, ArrowLeft, CalendarPlus } from "lucide-react";
 import { NuevaCitaModal } from "./NuevaCitaModal";
 import { FichaPostCitaModal } from "./FichaPostCitaModal";
+import { DocumentosClinicosPanel } from "./DocumentosClinicosPanel";
 import { toast } from "sonner";
 import apiClient from "@/lib/axios";
 import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
+import { OdontologiaForm } from "./OdontologiaForm";
 import { NutricionForm } from "./NutricionForm";
 import { GinecologiaForm } from "./GinecologiaForm";
 import { EcografiaForm } from "./EcografiaForm";
@@ -486,6 +488,7 @@ export const AppointmentsWithAttention = ({
                 { key:'nombre_completo', label:'Nombre', full:true, placeholder:'Nombre del paciente' },
                 { key:'cedula', label:'Cédula', placeholder:'0000000000' },
                 { key:'telefono', label:'Teléfono', placeholder:'09XXXXXXXX' },
+                { key:'email', label:'Correo electrónico', full:true, placeholder:'correo@ejemplo.com', type:'email' },
                 { key:'fecha', label:'Fecha', type:'date' },
                 { key:'hora', label:'Hora', type:'time' },
                 { key:'doctor_nombre', label:'Doctor', placeholder:'Nombre del doctor' },
@@ -622,6 +625,14 @@ export const AppointmentsWithAttention = ({
                       📋 Ficha
                     </Button>
                   )}
+                  {(appointment.estado === "En Atención" || appointment.estado === "Atendido" || appointment.estado === "Pendiente de Pago") &&
+                    (user?.role === "Doctor" || user?.role === "Administrador") && (
+                    <DocumentosClinicosPanel
+                      appointment={appointment}
+                      token={token}
+                      compact={true}
+                    />
+                  )}
                   {appointment.estado === "Pendiente de Pago" && user?.role === "Recepcion" && (
                     <Button size="sm" variant="default" onClick={() => handleOpenPaymentModal(appointment)} className="payment-button">
                       <Check className="button-icon" size={14} />
@@ -721,7 +732,7 @@ export const AppointmentsWithAttention = ({
               onSuccess: handleAttentionSuccess,
             };
             if (esp === "Medicina General") return <MedicinaGeneralForm {...closeProps} />;
-            if (esp === "Odontología")      return <OdontologiaFormSimple {...closeProps} />;
+            if (esp === "Odontología")      return <OdontologiaForm {...closeProps} />;
             if (esp === "Pediatría")        return <PediatriaForm {...closeProps} />;
             if (esp === "Nutrición")        return <NutricionForm {...closeProps} />;
             if (esp === "Ecografía")        return <EcografiaForm {...closeProps} />;

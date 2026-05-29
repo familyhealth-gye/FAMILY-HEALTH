@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   Stethoscope, Users, FileText, Package, DollarSign,
-  ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile,
+  ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile, Zap, Settings,
 } from "lucide-react";
 
 // ── Tabs existentes ──────────────────────────────────────────────────────────
@@ -33,6 +33,7 @@ import { CatalogoServiciosTab }  from "@/components/CatalogoServiciosTab";
 import { ConfiguracionIA }       from "@/components/ConfiguracionIA";
 import { FacturacionTab }        from "@/components/FacturacionTab";
 import { ConfiguracionSRI }      from "@/components/ConfiguracionSRI";
+import { ProcedimientoRapidoTab } from "@/components/ProcedimientoRapidoTab";
 import { RecetasTab }            from "@/components/RecetasTab";
 import { MedicalHistoryTab }     from "@/components/MedicalHistoryTab";
 import { HistoriaClinicaCompleta } from "@/components/HistoriaClinicaCompleta";
@@ -170,11 +171,25 @@ function LegacyApp({ user: propUser, token: propToken }) {
                 <ListChecks className="tab-icon" />
                 Catálogo
               </TabsTrigger>
-              <TabsTrigger value="config">
-                <UserCog className="tab-icon" />
-                Config
+              <TabsTrigger value="facturacion">
+                <Settings className="tab-icon" />
+                Facturación
               </TabsTrigger>
             </>
+          )}
+
+          {(user?.role === "Administrador" || user?.role === "Recepcion" || user?.role === "Doctor") && (
+            <TabsTrigger value="procedimientos">
+              <Zap className="tab-icon" />
+              Procedimientos
+            </TabsTrigger>
+          )}
+
+          {user?.role === "Administrador" && (
+            <TabsTrigger value="config">
+              <UserCog className="tab-icon" />
+              Config
+            </TabsTrigger>
           )}
         </TabsList>
 
@@ -293,17 +308,30 @@ function LegacyApp({ user: propUser, token: propToken }) {
           </TabsContent>
         )}
 
-        {/* Admin: Catálogo separado */}
+        {/* Admin: Catálogo y Facturación como módulos separados */}
         {user?.role === "Administrador" && (
           <>
             <TabsContent value="catalogo" className="tab-content">
               <CatalogoServiciosTab token={token} />
             </TabsContent>
+            <TabsContent value="facturacion" className="tab-content">
+              <FacturacionTab token={token} user={user} />
+            </TabsContent>
+          </>
+        )}
 
-            {/* Config: solo configuración del sistema */}
+        {/* Procedimientos rápidos: sueros, inyecciones, etc. */}
+        {(user?.role === "Administrador" || user?.role === "Recepcion" || user?.role === "Doctor") && (
+          <TabsContent value="procedimientos" className="tab-content">
+            <ProcedimientoRapidoTab token={token} user={user} />
+          </TabsContent>
+        )}
+
+        {/* Config: solo configuración técnica del sistema */}
+        {user?.role === "Administrador" && (
+          <>
             <TabsContent value="config" className="tab-content">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FacturacionTab token={token} user={user} />
                 <ConfiguracionSRI token={token} />
                 <ConfiguracionIA token={token} />
                 <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-100">
