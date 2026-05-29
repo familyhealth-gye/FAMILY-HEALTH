@@ -688,8 +688,8 @@ export const AppointmentsWithAttention = ({
                           <Trash2 className="action-icon delete-icon" />
                         </Button>
                       )}
-                  </>
-                )}
+                    </>
+                  )}
               </td>
             </tr>
           ))}
