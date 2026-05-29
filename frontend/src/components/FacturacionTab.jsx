@@ -614,6 +614,7 @@ export const FacturacionTab = ({ token, user }) => {
                   padding: "12px 16px", background: "#f3f4f6", border: "none", borderRadius: "8px", cursor: "pointer",
                 }}>Cancelar</button>
               </div>
+            </div>
           </div>
         </div>
       )}
