@@ -287,15 +287,15 @@ export const AppointmentsWithAttention = ({
     }
   };
 
-  // Funcin para registrar el pago
+  // Función para registrar el pago
   const handleRegisterPayment = async () => {
     try {
-      const descuento = parseFloat(paymentForm.descuento) || 0;
+      const descuento        = parseFloat(paymentForm.descuento) || 0;
       const saldoConDescuento = Math.max(0, (consultaFinanciera.saldo || 0) - descuento);
-      const monto = parseFloat(paymentForm.monto);
-      
+      const monto            = parseFloat(paymentForm.monto);
+
       if (!consultaFinanciera || !paymentForm.monto || monto <= 0) {
-        toast.error("Ingrese un monto vlido");
+        toast.error("Ingrese un monto válido");
         return;
       }
       if (monto > saldoConDescuento + 0.01) {
@@ -303,45 +303,52 @@ export const AppointmentsWithAttention = ({
         return;
       }
 
-      // Si hay descuento, aplicarlo primero actualizando el total de la consulta
+      // ── Idempotencia: bloquear si ya fue pagada ───────────────────────────
+      try {
+        const estadoRes = await apiClient.get(`/financial/consultas/${consultaFinanciera.id}`);
+        if (estadoRes.data?.estado_pago === "pagado") {
+          toast.warning("Esta consulta ya fue pagada.");
+          setShowPaymentModal(false);
+          setConsultaFinanciera(null);
+          setSelectedAppointmentForPayment(null);
+          fetchData();
+          return;
+        }
+      } catch { /* continuar */ }
+
+      // ── Aplicar descuento si hay ──────────────────────────────────────────
       if (descuento > 0) {
         try {
-          await apiClient.put('/financial/consultas/' + consultaFinanciera.id,
-            {
-              descuento: descuento,
-              motivo_descuento: paymentForm.motivo_descuento || "Descuento aplicado",
-              total: (consultaFinanciera.total || 0) - descuento,
-              saldo: saldoConDescuento,
-            });
-        } catch { /* continuar igual si el endpoint no acepta descuento directo */ }
+          await apiClient.put(`/financial/consultas/${consultaFinanciera.id}`, {
+            descuento,
+            motivo_descuento: paymentForm.motivo_descuento || "Descuento aplicado",
+            total: (consultaFinanciera.total || 0) - descuento,
+            saldo: saldoConDescuento,
+          });
+        } catch { /* continuar */ }
       }
 
+      // ── Registrar pago ────────────────────────────────────────────────────
       const payloadPago = {
-        fecha: new Date().toISOString().split('T')[0],
-        monto: monto,
-        tipo_pago: paymentForm.tipo_pago,
-        referencia: paymentForm.referencia,
-        notas: (descuento > 0 ? ('Descuento $' + descuento.toFixed(2) + (paymentForm.motivo_descuento ? ' - ' + paymentForm.motivo_descuento : '') + '. ' + paymentForm.notas) : paymentForm.notas),
+        fecha:             new Date().toISOString().split("T")[0],
+        monto,
+        tipo_pago:         paymentForm.tipo_pago,
+        referencia:        paymentForm.referencia,
+        notas:             (descuento > 0
+          ? `Descuento $${descuento.toFixed(2)}${paymentForm.motivo_descuento ? " - " + paymentForm.motivo_descuento : ""}. `
+          : "") + (paymentForm.notas || ""),
         descuento_aplicado: descuento,
       };
 
-      const response = await apiClient.post(`/financial/consultas/${consultaFinanciera.id}/pagos`, payloadPago);
+      const response    = await apiClient.post(`/financial/consultas/${consultaFinanciera.id}/pagos`, payloadPago);
+      const pagoCompleto = (response.data?.saldo ?? saldoConDescuento - monto) <= 0.01;
 
-      if (response.data.saldo === 0) {
+      // ── Actualizar estado cita ─────────────────────────────────────────────
+      if (pagoCompleto) {
         await apiClient.put(`/appointments/${selectedAppointmentForPayment.id}`, { estado: "Pagada" });
-        toast.success("Pago registrado — cita marcada como pagada");
+        toast.success("✅ Pago completo — cita marcada como pagada");
       } else {
-        toast.success(`Pago registrado — saldo restante: $${response.data.saldo.toFixed(2)}`);
-      }
-
-      //  AUTO-FACTURACIN SRI  solo cuando el saldo queda en 0
-      const apt = selectedAppointmentForPayment;
-      const montoFinal = parseFloat(paymentForm.monto);
-      const descuentoFinal = parseFloat(paymentForm.descuento) || 0;
-
-      // Solo ofrecer factura si el pago qued completo (saldo = 0)
-      if (!pagoCompleto) {
-        toast.info('Pago parcial registrado.');
+        toast.success(`Abono registrado — saldo: $${(response.data?.saldo ?? 0).toFixed(2)}`);
         setShowPaymentModal(false);
         setConsultaFinanciera(null);
         setSelectedAppointmentForPayment(null);
@@ -349,63 +356,92 @@ export const AppointmentsWithAttention = ({
         return;
       }
 
-      const quiereFactura = window.confirm("Emitir factura al SRI?");
+      // ── Cerrar modal ANTES de auto-facturar ───────────────────────────────
+      const apt              = selectedAppointmentForPayment;
+      const consultaSnap     = consultaFinanciera;
+      const montoFinal       = monto;
+      const descuentoFinal   = descuento;
 
-      if (quiereFactura) {
-        try {
-          const factNombre = apt.factura_nombre || (apt.es_menor && apt.representante_nombre ? apt.representante_nombre : apt.nombre_completo);
-          const factCedula = apt.factura_cedula_ruc || (apt.es_menor && apt.representante_cedula ? apt.representante_cedula : apt.cedula);
-          const factEmail = apt.factura_email || (apt.es_menor && apt.representante_email ? apt.representante_email : apt.email || "");
-          const serviciosConsulta = (consultaFinanciera?.servicios || []).length > 0
-            ? consultaFinanciera.servicios.map(s => ({
-                descripcion: s.servicio || s.nombre || "Servicio médico",
-                cantidad: s.cantidad || 1, precio_unitario: s.precio_unitario || 0,
-                descuento: 0, subtotal: (s.precio_unitario || 0) * (s.cantidad || 1),
-              }))
-            : [{ descripcion: 'Consulta ' + apt.especialidad || "Médica" + '', cantidad: 1,
-                precio_unitario: montoFinal + descuentoFinal, descuento: descuentoFinal, subtotal: montoFinal }];
-
-          const facturaRes = await apiClient.post('/invoices', {
-            paciente_nombre: factNombre, paciente_cedula: factCedula,
-            paciente_telefono: apt.representante_telefono || apt.telefono || "",
-            paciente_email: factEmail, paciente_direccion: apt.factura_direccion || "",
-            doctor_id: apt.doctor_id || "", doctor_nombre: apt.doctor_nombre || "",
-            especialidad: apt.especialidad || "", tipo_pago: paymentForm.tipo_pago,
-            referencia_pago: paymentForm.referencia || "",
-            consulta_financiera_id: consultaFinanciera?.id || "", appointment_id: apt.id,
-            iva_porcentaje: 0,
-            detalles: serviciosConsulta,
-          });
-
-          const facturaId = facturaRes.data.id;
-          const numeroFactura = facturaRes.data.numero_factura;
-          toast.success('Factura creada.');
-
-          try {
-            const sriRes = await apiClient.post('/sri/emitir/' + facturaId + '', {});
-              if (sriRes.data.ok) { toast.success('Factura AUTORIZADA.');
-              if (factEmail) {
-                try {
-                  await apiClient.post('/sri/enviar-ride/' + facturaId + '', { email: factEmail });
-                  toast.success('RIDE enviado.');
-                } catch {}
-              }
-            } else {
-              toast.warning('Factura creada. Pendiente SRI.');
-            }
-          } catch {
-            toast.warning('Factura creada. Emite al SRI manualmente.');
-          }
-        } catch (factErr) {
-          toast.error("Error al crear la factura: " + (factErr.response?.data?.detail || factErr.message));
-        }
-      }
-
-      // Cerrar modal y refrescar datos
       setShowPaymentModal(false);
       setConsultaFinanciera(null);
       setSelectedAppointmentForPayment(null);
       fetchData();
+
+      // ── Auto-facturación directa (sin window.confirm) ─────────────────────
+      try {
+        const factNombre = apt.factura_nombre
+          || (apt.es_menor && apt.representante_nombre ? apt.representante_nombre : apt.nombre_completo);
+        const factCedula = apt.factura_cedula_ruc
+          || (apt.es_menor && apt.representante_cedula ? apt.representante_cedula : apt.cedula);
+        const factEmail  = apt.factura_email
+          || (apt.es_menor && apt.representante_email  ? apt.representante_email  : apt.email || "");
+        const factTel    = apt.representante_telefono || apt.telefono || "";
+        const factDir    = apt.factura_direccion || apt.direccion || "";
+
+        const serviciosConsulta = (consultaSnap?.servicios || []).length > 0
+          ? consultaSnap.servicios.map(s => ({
+              descripcion:     s.servicio || s.nombre || "Servicio médico",
+              cantidad:        s.cantidad || 1,
+              precio_unitario: s.precio_unitario || 0,
+              descuento:       0,
+              subtotal:        (s.precio_unitario || 0) * (s.cantidad || 1),
+            }))
+          : [{
+              descripcion:     `Consulta ${apt.especialidad || "Médica"}`,
+              cantidad:        1,
+              precio_unitario: montoFinal + descuentoFinal,
+              descuento:       descuentoFinal,
+              subtotal:        montoFinal,
+            }];
+
+        const facturaRes = await apiClient.post("/invoices", {
+          paciente_nombre:          factNombre,
+          paciente_cedula:          factCedula,
+          paciente_telefono:        factTel,
+          paciente_email:           factEmail,
+          paciente_direccion:       factDir,
+          doctor_id:                apt.doctor_id    || "",
+          doctor_nombre:            apt.doctor_nombre || "",
+          especialidad:             apt.especialidad  || "",
+          tipo_pago:                paymentForm.tipo_pago,
+          referencia_pago:          paymentForm.referencia || "",
+          consulta_financiera_id:   consultaSnap?.id || "",
+          appointment_id:           apt.id,
+          iva_porcentaje:           0,
+          detalles:                 serviciosConsulta,
+        });
+
+        const facturaId = facturaRes.data.id;
+        toast.success(`📄 Factura ${facturaRes.data.numero_factura} creada`);
+
+        // ── Emitir al SRI automáticamente ──────────────────────────────────
+        try {
+          const sriRes = await apiClient.post(`/sri/emitir/${facturaId}`, {});
+          if (sriRes.data?.ok) {
+            toast.success("✅ Autorizada por el SRI");
+            if (factEmail) {
+              try {
+                await apiClient.post(`/sri/enviar-ride/${facturaId}`, { email: factEmail });
+                toast.success(`📧 RIDE enviado a ${factEmail}`);
+              } catch { /* no bloquear */ }
+            }
+          } else {
+            toast.warning("Factura guardada — pendiente de autorización SRI");
+          }
+        } catch (sriErr) {
+          const det = sriErr.response?.data?.detail || "";
+          if (det.includes("p12") || det.includes("certificado") || det.includes("firma")) {
+            toast.info("Factura guardada. Configure el certificado .p12 en Facturación → Config. Clínica para emisión electrónica.");
+          } else {
+            toast.warning("Factura guardada. Verifique emisión en tab Facturación.");
+          }
+        }
+
+        fetchData(); // refrescar con factura ya creada
+
+      } catch (factErr) {
+        toast.error("Error al crear la factura: " + (factErr.response?.data?.detail || factErr.message));
+      }
 
     } catch (error) {
       toast.error(error.response?.data?.detail || "Error al registrar el pago");

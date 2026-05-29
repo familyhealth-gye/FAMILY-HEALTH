@@ -385,9 +385,16 @@ async def registrar_pago(
     """Registrar pago/abono a una consulta (actualización atómica de saldo y estado)."""
     from atomic_ops import registrar_pago_consulta
 
-    exists = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 1})
-    if not exists:
+    consulta = await db.consultas_financieras.find_one({"id": consulta_id}, {"_id": 0})
+    if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
+
+    # ── Idempotencia: rechazar si ya está completamente pagada ────────────────
+    if consulta.get("estado_pago") == "pagado":
+        raise HTTPException(
+            status_code=409,
+            detail="Esta consulta ya fue pagada. No se puede registrar otro pago."
+        )
 
     pago = Pago(
         consulta_id=consulta_id,

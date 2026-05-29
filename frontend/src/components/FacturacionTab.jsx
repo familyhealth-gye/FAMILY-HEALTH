@@ -614,11 +614,6 @@ export const FacturacionTab = ({ token, user }) => {
                   padding: "12px 16px", background: "#f3f4f6", border: "none", borderRadius: "8px", cursor: "pointer",
                 }}>Cancelar</button>
               </div>
-
-              <div style={{ marginTop: "10px", background: "#fffbeb", borderRadius: "8px", padding: "8px 12px", fontSize: "11px", color: "#92400e" }}>
-                💡 <strong>Flujo recomendado:</strong> Emite la factura aquí → Luego en el facturero electrónico del SRI (ride.ec o tu sistema SRI) → Ingresa el N° de autorización en la factura existente editándola.
-              </div>
-            </div>
           </div>
         </div>
       )}

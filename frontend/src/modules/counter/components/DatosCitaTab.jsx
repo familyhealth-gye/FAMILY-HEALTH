@@ -60,6 +60,17 @@ export function DatosCitaTab({
               />
             </div>
 
+            <div style={S.full}>
+              <label style={S.lbl}>Correo electrónico</label>
+              <input
+                type="email"
+                value={cita.email}
+                onChange={e => setC("email", e.target.value)}
+                placeholder="correo@ejemplo.com"
+                style={S.inp}
+              />
+            </div>
+
             <div>
               <label style={S.lbl}>Fecha nacimiento</label>
               <input
