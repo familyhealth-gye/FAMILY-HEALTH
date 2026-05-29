@@ -12,6 +12,7 @@ import { MedicinaGeneralForm } from "./MedicinaGeneralForm";
 import { PediatriaForm } from "./PediatriaForm";
 import { OdontologiaFormSimple } from "./OdontologiaFormSimple";
 import { OdontologiaForm } from "./OdontologiaForm";
+import { OdontogramaClinicoTab } from "./OdontogramaClinicoTab";
 import { NutricionForm } from "./NutricionForm";
 import { GinecologiaForm } from "./GinecologiaForm";
 import { EcografiaForm } from "./EcografiaForm";
@@ -357,10 +358,13 @@ export const AppointmentsWithAttention = ({
       }
 
       // ── Cerrar modal ANTES de auto-facturar ───────────────────────────────
+      // IMPORTANTE: capturar todo antes de limpiar estado React
       const apt              = selectedAppointmentForPayment;
       const consultaSnap     = consultaFinanciera;
       const montoFinal       = monto;
       const descuentoFinal   = descuento;
+      const tipoPagoSnap     = paymentForm.tipo_pago;
+      const referenciaSnap   = paymentForm.referencia || "";
 
       setShowPaymentModal(false);
       setConsultaFinanciera(null);
@@ -369,14 +373,24 @@ export const AppointmentsWithAttention = ({
 
       // ── Auto-facturación directa (sin window.confirm) ─────────────────────
       try {
-        const factNombre = apt.factura_nombre
-          || (apt.es_menor && apt.representante_nombre ? apt.representante_nombre : apt.nombre_completo);
-        const factCedula = apt.factura_cedula_ruc
-          || (apt.es_menor && apt.representante_cedula ? apt.representante_cedula : apt.cedula);
-        const factEmail  = apt.factura_email
-          || (apt.es_menor && apt.representante_email  ? apt.representante_email  : apt.email || "");
-        const factTel    = apt.representante_telefono || apt.telefono || "";
-        const factDir    = apt.factura_direccion || apt.direccion || "";
+        const factNombre = (apt.factura_nombre
+          || (apt.es_menor && apt.representante_nombre ? apt.representante_nombre : "")
+          || apt.nombre_completo
+          || apt.nombre
+          || "Paciente").trim();
+
+        const factCedula = (apt.factura_cedula_ruc
+          || (apt.es_menor && apt.representante_cedula ? apt.representante_cedula : "")
+          || apt.cedula
+          || "9999999999").trim();
+
+        const factEmail  = (apt.factura_email
+          || (apt.es_menor && apt.representante_email ? apt.representante_email : "")
+          || apt.email
+          || "").trim();
+
+        const factTel    = (apt.representante_telefono || apt.telefono || "").trim();
+        const factDir    = (apt.factura_direccion || apt.direccion || "").trim();
 
         const serviciosConsulta = (consultaSnap?.servicios || []).length > 0
           ? consultaSnap.servicios.map(s => ({
@@ -403,8 +417,8 @@ export const AppointmentsWithAttention = ({
           doctor_id:                apt.doctor_id    || "",
           doctor_nombre:            apt.doctor_nombre || "",
           especialidad:             apt.especialidad  || "",
-          tipo_pago:                paymentForm.tipo_pago,
-          referencia_pago:          paymentForm.referencia || "",
+          tipo_pago:                tipoPagoSnap,
+          referencia_pago:          referenciaSnap,
           consulta_financiera_id:   consultaSnap?.id || "",
           appointment_id:           apt.id,
           iva_porcentaje:           0,
@@ -768,7 +782,17 @@ export const AppointmentsWithAttention = ({
               onSuccess: handleAttentionSuccess,
             };
             if (esp === "Medicina General") return <MedicinaGeneralForm {...closeProps} />;
-            if (esp === "Odontología")      return <OdontologiaForm {...closeProps} />;
+            if (esp === "Odontología")      return (
+              <OdontogramaClinicoTab
+                token={token}
+                pacienteId={closeProps.appointment?.paciente_id || closeProps.appointment?.id}
+                pacienteNombre={closeProps.appointment?.nombre_completo || closeProps.appointment?.nombre}
+                pacienteCedula={closeProps.appointment?.cedula}
+                doctorId={closeProps.appointment?.doctor_id}
+                onClose={closeProps.onClose}
+                onOdontogramaLoaded={() => {}}
+              />
+            );
             if (esp === "Pediatría")        return <PediatriaForm {...closeProps} />;
             if (esp === "Nutrición")        return <NutricionForm {...closeProps} />;
             if (esp === "Ecografía")        return <EcografiaForm {...closeProps} />;
@@ -986,7 +1010,7 @@ export const AppointmentsWithAttention = ({
                 <button onClick={handleRegisterPayment}
                   style={{ flex:1, padding:"12px", background:"linear-gradient(135deg,#00a8cc,#005f73)", color:"white", border:"none", borderRadius:"8px", fontSize:"14px", fontWeight:"700", cursor:"pointer" }}>
                    Cobrar ${parseFloat(paymentForm.monto || 0).toFixed(2)}
-                  {(parseFloat(paymentForm.descuento)||0) > 0 && ' ($${parseFloat(paymentForm.descuento).toFixed(2)} desc.)'}
+                  {(parseFloat(paymentForm.descuento)||0) > 0 && ` (ahorra $${parseFloat(paymentForm.descuento).toFixed(2)})`}
                 </button>
                 <button onClick={() => { setShowPaymentModal(false); setConsultaFinanciera(null); setSelectedAppointmentForPayment(null); }}
                   style={{ padding:"12px 16px", background:"#f3f4f6", color:"#374151", border:"none", borderRadius:"8px", fontSize:"13px", cursor:"pointer" }}>
