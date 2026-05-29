@@ -208,7 +208,7 @@ export default function CajaTab() {
                     <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'13px' }}>
                       <thead>
                         <tr style={{ background:'#f0f9ff' }}>
-                          {['Paciente','Especialidad','Doctor','Forma Pago','Monto'].map(h=>(
+                          {['Paciente','Especialidad','Doctor','Forma Pago','Monto','Factura'].map(h=>(
                             <th key={h} style={{ padding:'8px 10px', textAlign:'left', color:'#005f73', fontWeight:'700', fontSize:'11px', borderBottom:'2px solid #b2ebf2' }}>{h}</th>
                           ))}
                         </tr>
@@ -225,6 +225,42 @@ export default function CajaTab() {
                               </span>
                             </td>
                             <td style={{ padding:'8px 10px', fontWeight:'800', color:'#059669', fontSize:'14px' }}>{fmt(d.monto)}</td>
+                            <td style={{ padding:'8px 10px' }}>
+                              {d.factura_numero ? (
+                                <span style={{ background:'#d1fae5', color:'#065f46', borderRadius:'8px', padding:'3px 8px', fontSize:'11px', fontWeight:'700' }}>
+                                  ✓ {d.factura_numero}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    // Abrir FacturacionTab con datos precargados via localStorage
+                                    const datos = {
+                                      paciente_nombre:  d.paciente_nombre  || "",
+                                      paciente_cedula:  d.paciente_cedula  || "",
+                                      paciente_telefono: d.paciente_telefono || "",
+                                      paciente_email:   d.paciente_email   || "",
+                                      doctor_nombre:    d.doctor_nombre    || "",
+                                      especialidad:     d.especialidad     || "",
+                                      tipo_pago:        d.tipo_pago        || "efectivo",
+                                      monto:            d.monto            || 0,
+                                      consulta_id:      d.consulta_id      || "",
+                                      appointment_id:   d.appointment_id   || "",
+                                    };
+                                    localStorage.setItem("prefill_factura", JSON.stringify(datos));
+                                    // Navegar al tab de facturación
+                                    window.dispatchEvent(new CustomEvent("navigate_to_tab", { detail: "invoices" }));
+                                    alert(`Datos de ${d.paciente_nombre} cargados en Facturación.\nVe al tab Facturación para revisar y emitir.`);
+                                  }}
+                                  style={{
+                                    background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:'8px',
+                                    padding:'4px 10px', fontSize:'11px', color:'#1E40AF',
+                                    fontWeight:'700', cursor:'pointer', whiteSpace:'nowrap',
+                                  }}
+                                >
+                                  📄 Facturar
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

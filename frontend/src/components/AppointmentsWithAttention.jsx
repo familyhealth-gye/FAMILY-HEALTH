@@ -357,7 +357,7 @@ export const AppointmentsWithAttention = ({
         return;
       }
 
-      // ── Cerrar modal ANTES de auto-facturar ───────────────────────────────
+      // ── Cerrar modal ANTES de mostrar opción de facturar ─────────────────
       // IMPORTANTE: capturar todo antes de limpiar estado React
       const apt              = selectedAppointmentForPayment;
       const consultaSnap     = consultaFinanciera;
@@ -371,91 +371,16 @@ export const AppointmentsWithAttention = ({
       setSelectedAppointmentForPayment(null);
       fetchData();
 
-      // ── Auto-facturación directa (sin window.confirm) ─────────────────────
-      try {
-        const factNombre = (apt.factura_nombre
-          || (apt.es_menor && apt.representante_nombre ? apt.representante_nombre : "")
-          || apt.nombre_completo
-          || apt.nombre
-          || "Paciente").trim();
-
-        const factCedula = (apt.factura_cedula_ruc
-          || (apt.es_menor && apt.representante_cedula ? apt.representante_cedula : "")
-          || apt.cedula
-          || "9999999999").trim();
-
-        const factEmail  = (apt.factura_email
-          || (apt.es_menor && apt.representante_email ? apt.representante_email : "")
-          || apt.email
-          || "").trim();
-
-        const factTel    = (apt.representante_telefono || apt.telefono || "").trim();
-        const factDir    = (apt.factura_direccion || apt.direccion || "").trim();
-
-        const serviciosConsulta = (consultaSnap?.servicios || []).length > 0
-          ? consultaSnap.servicios.map(s => ({
-              descripcion:     s.servicio || s.nombre || "Servicio médico",
-              cantidad:        s.cantidad || 1,
-              precio_unitario: s.precio_unitario || 0,
-              descuento:       0,
-              subtotal:        (s.precio_unitario || 0) * (s.cantidad || 1),
-            }))
-          : [{
-              descripcion:     `Consulta ${apt.especialidad || "Médica"}`,
-              cantidad:        1,
-              precio_unitario: montoFinal + descuentoFinal,
-              descuento:       descuentoFinal,
-              subtotal:        montoFinal,
-            }];
-
-        const facturaRes = await apiClient.post("/invoices", {
-          paciente_nombre:          factNombre,
-          paciente_cedula:          factCedula,
-          paciente_telefono:        factTel,
-          paciente_email:           factEmail,
-          paciente_direccion:       factDir,
-          doctor_id:                apt.doctor_id    || "",
-          doctor_nombre:            apt.doctor_nombre || "",
-          especialidad:             apt.especialidad  || "",
-          tipo_pago:                tipoPagoSnap,
-          referencia_pago:          referenciaSnap,
-          consulta_financiera_id:   consultaSnap?.id || "",
-          appointment_id:           apt.id,
-          iva_porcentaje:           0,
-          detalles:                 serviciosConsulta,
-        });
-
-        const facturaId = facturaRes.data.id;
-        toast.success(`📄 Factura ${facturaRes.data.numero_factura} creada`);
-
-        // ── Emitir al SRI automáticamente ──────────────────────────────────
-        try {
-          const sriRes = await apiClient.post(`/sri/emitir/${facturaId}`, {});
-          if (sriRes.data?.ok) {
-            toast.success("✅ Autorizada por el SRI");
-            if (factEmail) {
-              try {
-                await apiClient.post(`/sri/enviar-ride/${facturaId}`, { email: factEmail });
-                toast.success(`📧 RIDE enviado a ${factEmail}`);
-              } catch { /* no bloquear */ }
-            }
-          } else {
-            toast.warning("Factura guardada — pendiente de autorización SRI");
-          }
-        } catch (sriErr) {
-          const det = sriErr.response?.data?.detail || "";
-          if (det.includes("p12") || det.includes("certificado") || det.includes("firma")) {
-            toast.info("Factura guardada. Configure el certificado .p12 en Facturación → Config. Clínica para emisión electrónica.");
-          } else {
-            toast.warning("Factura guardada. Verifique emisión en tab Facturación.");
-          }
+      // ── Notificar con opción de ir a facturar ─────────────────────────────
+      // No se factura automáticamente — el usuario puede ajustar datos
+      // (nombre, cédula a nombre de otra persona) antes de emitir
+      toast.success(
+        `✅ Cobro registrado — $${montoFinal.toFixed(2)}`,
+        {
+          duration: 8000,
+          description: "Ve a Caja para emitir la factura con los datos correctos.",
         }
-
-        fetchData(); // refrescar con factura ya creada
-
-      } catch (factErr) {
-        toast.error("Error al crear la factura: " + (factErr.response?.data?.detail || factErr.message));
-      }
+      );
 
     } catch (error) {
       toast.error(error.response?.data?.detail || "Error al registrar el pago");
@@ -789,6 +714,7 @@ export const AppointmentsWithAttention = ({
                 pacienteNombre={closeProps.appointment?.nombre_completo || closeProps.appointment?.nombre}
                 pacienteCedula={closeProps.appointment?.cedula}
                 doctorId={closeProps.appointment?.doctor_id}
+                appointment={closeProps.appointment}
                 onClose={closeProps.onClose}
                 onOdontogramaLoaded={() => {}}
               />

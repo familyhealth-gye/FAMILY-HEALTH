@@ -10,7 +10,7 @@
  * Navegación       → components/SmartNav.jsx
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "@/App.css";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Button }            from "@/components/ui/button";
@@ -153,6 +153,13 @@ function LegacyApp({ user: propUser, token: propToken }) {
 
   const [activeTab, setActiveTab] = useState("appointments");
   const [hcPaciente, setHcPaciente] = useState(null);
+
+  // Escuchar evento de navegación entre tabs (ej. desde CajaTab → Facturación)
+  useEffect(() => {
+    const handler = (e) => setActiveTab(e.detail);
+    window.addEventListener("navigate_to_tab", handler);
+    return () => window.removeEventListener("navigate_to_tab", handler);
+  }, []);
 
   if (authLoading) return <div className="flex items-center justify-center h-screen">Cargando...</div>;
   if (!isAuthenticated) return <Login />;

@@ -178,23 +178,23 @@ const Diente = ({ diente, onSelectDiente, onSelectSuperficie, isSelected, herram
   );
 };
 
-export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacienteCedula, doctorId, onClose, onOdontogramaLoaded }) => {
+export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacienteCedula, doctorId, onClose, onOdontogramaLoaded, appointment }) => {
   const [odontograma, setOdontograma] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tipoDenticion, setTipoDenticion] = useState("permanente");
   const [dienteSeleccionado, setDienteSeleccionado] = useState(null);
   const [superficieSeleccionada, setSuperficieSeleccionada] = useState(null);
-  const [herramientaActual, setHerramientaActual] = useState("sano"); // Diagnóstico a aplicar
-  const [modoEdicion, setModoEdicion] = useState("superficie"); // superficie | diente
-  
-  // Estado del panel de detalles
+  const [herramientaActual, setHerramientaActual] = useState("sano");
+  const [modoEdicion, setModoEdicion] = useState("superficie");
   const [detalleDialogOpen, setDetalleDialogOpen] = useState(false);
-  
-  // Diagnóstico general
   const [diagnosticoGeneral, setDiagnosticoGeneral] = useState("");
   const [higieneOral, setHigieneOral] = useState("");
   const [estadoEncias, setEstadoEncias] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  // Tratamientos realizados en esta consulta
+  const [tratamientos, setTratamientos] = useState([]);
+  const [nuevoTratamiento, setNuevoTratamiento] = useState({ descripcion: "", diente: "", precio: "" });
+  const [generandoProforma, setGenerandoProforma] = useState(false);
 
   useEffect(() => {
     if (pacienteId || pacienteCedula) {
@@ -889,6 +889,147 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ══ TRATAMIENTOS DE ESTA CONSULTA + PROFORMA ══════════════════════ */}
+      <div style={{
+        margin: "20px 0 0", padding: "16px 20px",
+        background: "#F8FAFF", border: "1px solid #BFDBFE", borderRadius: "12px",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+          <h3 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0C4A6E" }}>
+            🦷 Tratamientos realizados en esta consulta
+          </h3>
+          {tratamientos.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!appointment?.id) { toast.error("Sin cita vinculada, no se puede generar proforma"); return; }
+                setGenerandoProforma(true);
+                try {
+                  const items = tratamientos.map(t => ({
+                    descripcion: `${t.descripcion}${t.diente ? ` — Diente ${t.diente}` : ""}`,
+                    cantidad: 1,
+                    precio_unitario: parseFloat(t.precio) || 0,
+                    descuento: 0,
+                    subtotal: parseFloat(t.precio) || 0,
+                  }));
+                  const res = await axios.post(`${API}/proformas`, {
+                    paciente_nombre:   pacienteNombre || appointment?.nombre_completo || "",
+                    paciente_cedula:   pacienteCedula || appointment?.cedula || "",
+                    paciente_telefono: appointment?.telefono || "",
+                    doctor_id:         doctorId || appointment?.doctor_id || "",
+                    doctor_nombre:     appointment?.doctor_nombre || "",
+                    appointment_id:    appointment?.id,
+                    especialidad:      "Odontología",
+                    validez_dias:      30,
+                    items,
+                    subtotal:    items.reduce((s, i) => s + i.subtotal, 0),
+                    descuento:   0,
+                    total:       items.reduce((s, i) => s + i.subtotal, 0),
+                    observaciones: diagnosticoGeneral || "",
+                  }, { headers: { Authorization: `Bearer ${token}` } });
+                  toast.success(`✅ Proforma ${res.data.numero_proforma || ""} creada`);
+                } catch (e) {
+                  toast.error("Error al crear proforma: " + (e.response?.data?.detail || e.message));
+                } finally {
+                  setGenerandoProforma(false);
+                }
+              }}
+              disabled={generandoProforma}
+              style={{
+                padding: "7px 14px", background: "#0C4A6E", color: "white",
+                border: "none", borderRadius: "8px", fontSize: "12px",
+                fontWeight: "700", cursor: generandoProforma ? "not-allowed" : "pointer",
+              }}
+            >
+              {generandoProforma ? "Generando..." : "📋 Generar Proforma"}
+            </button>
+          )}
+        </div>
+
+        {/* Agregar tratamiento */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "8px", marginBottom: "12px", alignItems: "end" }}>
+          <div>
+            <label style={{ fontSize: "10px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "3px", textTransform: "uppercase" }}>
+              Descripción del tratamiento
+            </label>
+            <input
+              value={nuevoTratamiento.descripcion}
+              onChange={e => setNuevoTratamiento(f => ({ ...f, descripcion: e.target.value }))}
+              placeholder="Ej: Extracción, Restauración, Endodoncia..."
+              style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #BFDBFE", borderRadius: "7px", fontSize: "13px", boxSizing: "border-box" }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: "10px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "3px", textTransform: "uppercase" }}>
+              Diente
+            </label>
+            <input
+              value={nuevoTratamiento.diente}
+              onChange={e => setNuevoTratamiento(f => ({ ...f, diente: e.target.value }))}
+              placeholder="Ej: 16"
+              style={{ width: "70px", padding: "7px 10px", border: "1.5px solid #BFDBFE", borderRadius: "7px", fontSize: "13px" }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: "10px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "3px", textTransform: "uppercase" }}>
+              Precio $
+            </label>
+            <input
+              type="number"
+              value={nuevoTratamiento.precio}
+              onChange={e => setNuevoTratamiento(f => ({ ...f, precio: e.target.value }))}
+              placeholder="0.00"
+              style={{ width: "80px", padding: "7px 10px", border: "1.5px solid #BFDBFE", borderRadius: "7px", fontSize: "13px" }}
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!nuevoTratamiento.descripcion.trim()) { toast.error("Ingrese la descripción"); return; }
+              setTratamientos(t => [...t, { ...nuevoTratamiento, id: Date.now() }]);
+              setNuevoTratamiento({ descripcion: "", diente: dienteSeleccionado?.numero_fdi?.toString() || "", precio: "" });
+            }}
+            style={{
+              padding: "7px 14px", background: "#0369A1", color: "white",
+              border: "none", borderRadius: "7px", fontSize: "13px",
+              fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            + Agregar
+          </button>
+        </div>
+
+        {/* Lista de tratamientos */}
+        {tratamientos.length === 0 ? (
+          <p style={{ color: "#9CA3AF", fontSize: "12px", textAlign: "center", padding: "12px" }}>
+            Sin tratamientos registrados. Agregue los procedimientos realizados.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {tratamientos.map((t, i) => (
+              <div key={t.id} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "8px 12px", background: "white", borderRadius: "8px",
+                border: "1px solid #E0EDFF",
+              }}>
+                <div>
+                  <span style={{ fontWeight: "600", fontSize: "13px", color: "#0C4A6E" }}>{t.descripcion}</span>
+                  {t.diente && <span style={{ fontSize: "11px", color: "#6B7280", marginLeft: "8px" }}>Diente {t.diente}</span>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontWeight: "700", color: "#059669" }}>${parseFloat(t.precio || 0).toFixed(2)}</span>
+                  <button
+                    onClick={() => setTratamientos(ts => ts.filter((_, j) => j !== i))}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", fontSize: "16px" }}
+                  >×</button>
+                </div>
+              </div>
+            ))}
+            <div style={{ textAlign: "right", fontWeight: "700", color: "#0C4A6E", fontSize: "14px", paddingTop: "4px" }}>
+              Total: ${tratamientos.reduce((s, t) => s + parseFloat(t.precio || 0), 0).toFixed(2)}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
