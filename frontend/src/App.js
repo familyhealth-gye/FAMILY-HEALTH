@@ -1,26 +1,26 @@
 /**
  * App.js
- * Punto de entrada principal. Responsabilidades:
- *   - Routing de rutas principales
- *   - LegacyApp: montaje de tabs, permisos por rol, navegación
+ * Responsabilidades:
+ *   - Routing principal
+ *   - LegacyApp: SmartNav (móvil: dropdown, desktop: tabs), permisos, contenido
  *
- * Lógica de datos → hooks/useAppData.js
- * Gestión de doctores → components/tabs/DoctoresTab.jsx
- * Counter/Intake → modules/counter/
+ * Lógica de datos  → hooks/useAppData.js
+ * Doctores tab     → components/tabs/DoctoresTab.jsx
+ * Counter/Intake   → modules/counter/
+ * Navegación       → components/SmartNav.jsx
  */
 
 import { useState } from "react";
 import "@/App.css";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Button }            from "@/components/ui/button";
+import { toast }             from "sonner";
 import {
   Stethoscope, Users, FileText, Package, DollarSign,
   ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile, Zap,
 } from "lucide-react";
 
-// ── Tabs existentes ──────────────────────────────────────────────────────────
-import { InvoicesTab }           from "@/components/InvoicesTab";
+// ── Componentes de tabs ──────────────────────────────────────────────────────
 import { AbonosTab }             from "@/components/AbonosTab";
 import { InventoryTab }          from "@/components/InventoryTab";
 import { PaymentsTab }           from "@/components/PaymentsTab";
@@ -33,18 +33,19 @@ import { CatalogoServiciosTab }  from "@/components/CatalogoServiciosTab";
 import { ConfiguracionIA }       from "@/components/ConfiguracionIA";
 import { FacturacionTab }        from "@/components/FacturacionTab";
 import { ConfiguracionSRI }      from "@/components/ConfiguracionSRI";
-import { ProcedimientoRapidoTab } from "@/components/ProcedimientoRapidoTab";
 import { RecetasTab }            from "@/components/RecetasTab";
 import { MedicalHistoryTab }     from "@/components/MedicalHistoryTab";
 import { HistoriaClinicaCompleta } from "@/components/HistoriaClinicaCompleta";
 import { OdontogramaStandalone } from "@/components/OdontogramaStandalone";
+import { ProcedimientoRapidoTab } from "@/components/ProcedimientoRapidoTab";
 
 // ── Módulos extraídos ────────────────────────────────────────────────────────
 import { DoctoresTab }  from "@/components/tabs/DoctoresTab";
 import { useAppData }   from "@/hooks/useAppData";
+import { SmartNav }     from "@/components/SmartNav";
 
 // ── Auth / Layout / Router ───────────────────────────────────────────────────
-import { Login }        from "@/pages/Login";
+import { Login }            from "@/pages/Login";
 import { Routes, Route, Navigate } from "react-router-dom";
 import DentalWorkspace      from "@/workspaces/DentalWorkspace";
 import FinancialWorkspace   from "@/workspaces/FinancialWorkspace";
@@ -54,15 +55,95 @@ import { MainLayout }       from "@/components/layout/MainLayout";
 import apiClient            from "@/lib/axios";
 import { normalizeSpecialty } from "@/lib/specialties";
 
+// ─── Definición de items de navegación ───────────────────────────────────────
+// group: clinico | operativo | admin | config
+// roles: null = todos los autenticados
+function buildNavItems(user) {
+  const role = user?.role;
+  const isAdmin    = role === "Administrador";
+  const isRecep    = role === "Recepcion";
+  const isDoctor   = role === "Doctor";
+  const isAdminRec = isAdmin || isRecep;
+
+  return [
+    // ── Clínico ────────────────────────────────────────────────────────
+    {
+      value: "appointments", label: "Citas", group: "clinico",
+      icon: Users,
+    },
+    isAdmin && {
+      value: "doctors", label: "Doctores", group: "clinico",
+      icon: Stethoscope,
+    },
+    isDoctor && {
+      value: "pacientes", label: "Pacientes", group: "clinico",
+      icon: Users,
+    },
+    isAdminRec && {
+      value: "history", label: "Historias", group: "clinico",
+      icon: ClipboardList,
+    },
+    {
+      value: "prescriptions", label: "Recetas", group: "clinico",
+      icon: FileText,
+    },
+    (isAdmin || isRecep || isDoctor) && {
+      value: "procedimientos", label: "Procedimientos", group: "clinico",
+      icon: Zap,
+    },
+    // ── Operativo ──────────────────────────────────────────────────────
+    isAdminRec && {
+      value: "invoices", label: "Facturación", group: "operativo",
+      icon: FileText,
+    },
+    isAdminRec && {
+      value: "proformas", label: "Proformas", group: "operativo",
+      icon: Receipt,
+    },
+    isAdminRec && {
+      value: "abonos", label: "Abonos", group: "operativo",
+      icon: CreditCard,
+    },
+    isAdminRec && {
+      value: "caja", label: "Caja", group: "operativo",
+      icon: DollarSign,
+    },
+    // ── Admin ──────────────────────────────────────────────────────────
+    isAdmin && {
+      value: "inventory", label: "Inventario", group: "admin",
+      icon: Package,
+    },
+    isAdmin && {
+      value: "payments", label: "Pagos Doctores", group: "admin",
+      icon: DollarSign,
+    },
+    isAdmin && {
+      value: "users", label: "Usuarios", group: "admin",
+      icon: UserCog,
+    },
+    isAdmin && {
+      value: "catalogo", label: "Catálogo", group: "admin",
+      icon: ListChecks,
+    },
+    // ── Odontograma standalone (Doctor odontólogo) ─────────────────────
+    (isDoctor && normalizeSpecialty(user?.especialidad) === "Odontología") && {
+      value: "odontograma-standalone", label: "Odontograma", group: "clinico",
+      icon: Smile,
+    },
+    // ── Config ────────────────────────────────────────────────────────
+    isAdmin && {
+      value: "config", label: "Configuración", group: "config",
+      icon: UserCog,
+    },
+  ].filter(Boolean);
+}
+
 // ─── LegacyApp ───────────────────────────────────────────────────────────────
-// Componente principal de la app (tabs + contenido).
-// Mantiene su nombre para no romper referencias internas.
 function LegacyApp({ user: propUser, token: propToken }) {
   const { user: authUser, token: authToken, isAuthenticated, loading: authLoading } = useAuth();
   const user  = propUser  || authUser;
   const token = propToken || authToken;
 
-  // ── Datos globales ─────────────────────────────────────────────────────────
   const {
     users, doctors, appointments, invoices, inventory,
     doctorPayments, medicalHistories, prescriptions,
@@ -70,176 +151,66 @@ function LegacyApp({ user: propUser, token: propToken }) {
     loading, fetchData,
   } = useAppData(user, isAuthenticated);
 
-  // ── Estado local de UI ─────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState("appointments");
   const [hcPaciente, setHcPaciente] = useState(null);
 
-  if (authLoading) {
-    return <div className="flex items-center justify-center h-screen">Cargando...</div>;
-  }
+  if (authLoading) return <div className="flex items-center justify-center h-screen">Cargando...</div>;
   if (!isAuthenticated) return <Login />;
+
+  const navItems = buildNavItems(user);
 
   return (
     <MainLayout>
-      <Tabs defaultValue="appointments" className="tabs-container">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="tabs-container">
 
-        {/* ══ NAVEGACIÓN ═══════════════════════════════════════════════════ */}
-        <TabsList className="tabs-list tabs-list-extended">
+        {/* ══ NAVEGACIÓN INTELIGENTE ══════════════════════════════════ */}
+        <SmartNav
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          items={navItems}
+          userRole={user?.role}
+        />
 
-          <TabsTrigger value="appointments">
-            <Users className="tab-icon" />
-            Citas
-          </TabsTrigger>
+        {/* ══ CONTENIDO ════════════════════════════════════════════════ */}
 
-          {user?.role === "Administrador" && (
-            <TabsTrigger value="doctors">
-              <Stethoscope className="tab-icon" />
-              Doctores
-            </TabsTrigger>
-          )}
-
-          {user?.role === "Doctor" && (
-            <TabsTrigger value="pacientes">
-              <Users className="tab-icon" />
-              Pacientes
-            </TabsTrigger>
-          )}
-
-          {(user?.role === "Administrador" || user?.role === "Recepcion") && (
-            <TabsTrigger value="history">
-              <ClipboardList className="tab-icon" />
-              Historias
-            </TabsTrigger>
-          )}
-
-          <TabsTrigger value="prescriptions">
-            <FileText className="tab-icon" />
-            Recetas
-          </TabsTrigger>
-
-          {(user?.role === "Administrador" || user?.role === "Recepcion") && (
-            <TabsTrigger value="invoices">
-              <FileText className="tab-icon" />
-              Facturación
-            </TabsTrigger>
-          )}
-
-          {user?.role === "Administrador" && (
-            <>
-              <TabsTrigger value="inventory">
-                <Package className="tab-icon" />
-                Inventario
-              </TabsTrigger>
-              <TabsTrigger value="payments">
-                <DollarSign className="tab-icon" />
-                Pagos
-              </TabsTrigger>
-              <TabsTrigger value="users">
-                <UserCog className="tab-icon" />
-                Usuarios
-              </TabsTrigger>
-            </>
-          )}
-
-          {(user?.role === "Administrador" || user?.role === "Recepcion") && (
-            <>
-              <TabsTrigger value="proformas">
-                <Receipt className="tab-icon" />
-                Proformas
-              </TabsTrigger>
-              <TabsTrigger value="abonos">
-                <CreditCard className="tab-icon" />
-                Abonos
-              </TabsTrigger>
-              <TabsTrigger value="caja">
-                <DollarSign className="tab-icon" />
-                Caja
-              </TabsTrigger>
-            </>
-          )}
-
-          {user?.role === "Doctor" &&
-            normalizeSpecialty(user?.especialidad) === "Odontología" && (
-            <TabsTrigger value="odontograma-standalone">
-              <Smile className="tab-icon" />
-              Odontograma
-            </TabsTrigger>
-          )}
-
-          {user?.role === "Administrador" && (
-            <TabsTrigger value="catalogo">
-              <ListChecks className="tab-icon" />
-              Catálogo
-            </TabsTrigger>
-          )}
-
-          {(user?.role === "Administrador" || user?.role === "Recepcion" || user?.role === "Doctor") && (
-            <TabsTrigger value="procedimientos">
-              <Zap className="tab-icon" />
-              Procedimientos
-            </TabsTrigger>
-          )}
-
-          {user?.role === "Administrador" && (
-            <TabsTrigger value="config">
-              <UserCog className="tab-icon" />
-              Config
-            </TabsTrigger>
-          )}
-        </TabsList>
-
-        {/* ══ CONTENIDO ════════════════════════════════════════════════════ */}
-
-        {/* Citas / Agenda */}
+        {/* Citas */}
         <TabsContent value="appointments" className="tab-content">
           <AppointmentsWithAttention
             filteredAppointments={appointments}
-            user={user}
-            token={token}
-            fetchData={fetchData}
-            handleEditAppointment={null}
-            handleDeleteAppointment={null}
+            user={user} token={token} fetchData={fetchData}
+            handleEditAppointment={null} handleDeleteAppointment={null}
             openWhatsApp={(phone) => {
               if (phone) window.open("https://wa.me/" + phone.replace(/[^0-9]/g, ""), "_blank");
             }}
           />
         </TabsContent>
 
-        {/* Doctores — componente extraído */}
+        {/* Doctores */}
         {user?.role === "Administrador" && (
           <TabsContent value="doctors" className="tab-content">
-            <DoctoresTab
-              doctors={doctors}
-              specialties={specialties}
-              fetchData={fetchData}
-            />
+            <DoctoresTab doctors={doctors} specialties={specialties} fetchData={fetchData} />
           </TabsContent>
         )}
 
-        {/* Pacientes (vista Doctor) */}
+        {/* Pacientes (Doctor) */}
         {user?.role === "Doctor" && (
           <TabsContent value="pacientes" className="tab-content">
             <PacientesTab user={user} token={token} />
           </TabsContent>
         )}
 
-        {/* Historias clínicas */}
+        {/* Historias */}
         {(user?.role === "Administrador" || user?.role === "Recepcion") && (
           <TabsContent value="history" className="tab-content">
             {hcPaciente ? (
               <HistoriaClinicaCompleta
-                paciente={hcPaciente}
-                token={token}
-                user={user}
+                paciente={hcPaciente} token={token} user={user}
                 onBack={() => setHcPaciente(null)}
               />
             ) : (
               <MedicalHistoryTab
-                medicalHistories={medicalHistories}
-                appointments={appointments}
-                doctors={doctors}
-                fetchData={fetchData}
-                token={token}
-                user={user}
+                medicalHistories={medicalHistories} appointments={appointments}
+                doctors={doctors} fetchData={fetchData} token={token} user={user}
                 onOpenPaciente={setHcPaciente}
               />
             )}
@@ -251,25 +222,42 @@ function LegacyApp({ user: propUser, token: propToken }) {
           <RecetasTab prescriptions={prescriptions} user={user} token={token} />
         </TabsContent>
 
-        {/* Facturación — InvoicesTab + config FacturacionTab (Admin ve ambas, Recepción solo facturas) */}
-        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
-          <TabsContent value="invoices" className="tab-content">
-            <InvoicesTab
-              invoices={invoices}
-              doctors={doctors}
-              monthlyTotals={monthlyTotals}
-              fetchData={fetchData}
-              token={token}
-            />
-            {user?.role === "Administrador" && (
-              <div style={{ marginTop: "32px" }}>
-                <FacturacionTab token={token} user={user} />
-              </div>
-            )}
+        {/* Procedimientos */}
+        {(user?.role === "Administrador" || user?.role === "Recepcion" || user?.role === "Doctor") && (
+          <TabsContent value="procedimientos" className="tab-content">
+            <ProcedimientoRapidoTab token={token} user={user} />
           </TabsContent>
         )}
 
-        {/* Admin: Inventario, Pagos, Usuarios */}
+        {/* ── Facturación — Admin ve todo, Counter/Recepción ve lista + nueva factura ── */}
+        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
+          <TabsContent value="invoices" className="tab-content">
+            <FacturacionTab token={token} user={user} />
+          </TabsContent>
+        )}
+
+        {/* Proformas */}
+        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
+          <TabsContent value="proformas" className="tab-content">
+            <ProformasTab token={token} />
+          </TabsContent>
+        )}
+
+        {/* Abonos */}
+        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
+          <TabsContent value="abonos" className="tab-content">
+            <AbonosTab token={token} />
+          </TabsContent>
+        )}
+
+        {/* Caja */}
+        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
+          <TabsContent value="caja" className="tab-content">
+            <CajaTab />
+          </TabsContent>
+        )}
+
+        {/* Admin: Inventario, Pagos, Usuarios, Catálogo */}
         {user?.role === "Administrador" && (
           <>
             <TabsContent value="inventory" className="tab-content">
@@ -281,75 +269,46 @@ function LegacyApp({ user: propUser, token: propToken }) {
             <TabsContent value="users" className="tab-content">
               <UsersTab users={users} doctors={doctors} specialties={specialties} fetchData={fetchData} user={user} token={token} />
             </TabsContent>
-          </>
-        )}
-
-        {/* Recepción / Admin: Proformas, Abonos, Caja */}
-        {(user?.role === "Administrador" || user?.role === "Recepcion") && (
-          <>
-            <TabsContent value="proformas" className="tab-content">
-              <ProformasTab token={token} />
-            </TabsContent>
-            <TabsContent value="abonos" className="tab-content">
-              <AbonosTab token={token} />
-            </TabsContent>
-            <TabsContent value="caja" className="tab-content">
-              <CajaTab />
+            <TabsContent value="catalogo" className="tab-content">
+              <CatalogoServiciosTab token={token} />
             </TabsContent>
           </>
         )}
 
-        {/* Odontograma standalone (Doctor Odontólogo) */}
-        {user?.role === "Doctor" &&
-          normalizeSpecialty(user?.especialidad) === "Odontología" && (
+        {/* Odontograma standalone */}
+        {user?.role === "Doctor" && normalizeSpecialty(user?.especialidad) === "Odontología" && (
           <TabsContent value="odontograma-standalone" className="tab-content">
             <OdontogramaStandalone token={token} user={user} />
           </TabsContent>
         )}
 
-        {/* Admin: Catálogo */}
+        {/* Configuración — solo Admin */}
         {user?.role === "Administrador" && (
-          <TabsContent value="catalogo" className="tab-content">
-            <CatalogoServiciosTab token={token} />
-          </TabsContent>
-        )}
-
-        {/* Procedimientos rápidos: sueros, inyecciones, etc. */}
-        {(user?.role === "Administrador" || user?.role === "Recepcion" || user?.role === "Doctor") && (
-          <TabsContent value="procedimientos" className="tab-content">
-            <ProcedimientoRapidoTab token={token} user={user} />
-          </TabsContent>
-        )}
-
-        {/* Config: solo configuración técnica del sistema */}
-        {user?.role === "Administrador" && (
-          <>
-            <TabsContent value="config" className="tab-content">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ConfiguracionSRI token={token} />
-                <ConfiguracionIA token={token} />
-                <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-100">
-                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-medical-600" />
-                    Mantenimiento de Datos
-                  </h3>
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        const res = await apiClient.post("/admin/migrar-edades");
-                        toast.success(res.data.mensaje);
-                      } catch {
-                        toast.error("Error en migración");
-                      }
-                    }}
-                  >
-                    Migrar Edades de Pacientes
-                  </Button>
-                </div>
+          <TabsContent value="config" className="tab-content">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ConfiguracionSRI token={token} />
+              <ConfiguracionIA token={token} />
+              <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-medical-600" />
+                  Mantenimiento de Datos
+                </h3>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await apiClient.post("/admin/migrar-edades");
+                      toast.success(res.data.mensaje);
+                    } catch {
+                      toast.error("Error en migración");
+                    }
+                  }}
+                >
+                  Migrar Edades de Pacientes
+                </Button>
               </div>
-            </TabsContent>
-          </>
+            </div>
+          </TabsContent>
         )}
 
       </Tabs>
@@ -357,34 +316,16 @@ function LegacyApp({ user: propUser, token: propToken }) {
   );
 }
 
-// ─── Router principal ─────────────────────────────────────────────────────────
+// ─── Router ───────────────────────────────────────────────────────────────────
 function App() {
   const { isAuthenticated, loading, user, token } = useAuth();
-
   if (loading) return null;
-
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={!isAuthenticated ? <Login /> : <Navigate to="/" />}
-      />
-      <Route
-        path="/financiero"
-        element={isAuthenticated && ENABLE_DENTAL_V2
-          ? <FinancialWorkspace />
-          : <Navigate to="/" />}
-      />
-      <Route
-        path="/odontologia-v2/:appointmentId"
-        element={isAuthenticated ? <DentalWorkspace /> : <Navigate to="/login" />}
-      />
-      <Route
-        path="/*"
-        element={isAuthenticated
-          ? <LegacyApp user={user} token={token} />
-          : <Navigate to="/login" />}
-      />
+      <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+      <Route path="/financiero" element={isAuthenticated && ENABLE_DENTAL_V2 ? <FinancialWorkspace /> : <Navigate to="/" />} />
+      <Route path="/odontologia-v2/:appointmentId" element={isAuthenticated ? <DentalWorkspace /> : <Navigate to="/login" />} />
+      <Route path="/*" element={isAuthenticated ? <LegacyApp user={user} token={token} /> : <Navigate to="/login" />} />
     </Routes>
   );
 }
