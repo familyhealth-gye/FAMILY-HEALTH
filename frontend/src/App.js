@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   Stethoscope, Users, FileText, Package, DollarSign,
-  ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile, Zap, Settings,
+  ClipboardList, UserCog, Receipt, CreditCard, ListChecks, Smile, Zap,
 } from "lucide-react";
 
 // ── Tabs existentes ──────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ function LegacyApp({ user: propUser, token: propToken }) {
           {(user?.role === "Administrador" || user?.role === "Recepcion") && (
             <TabsTrigger value="invoices">
               <FileText className="tab-icon" />
-              Facturas
+              Facturación
             </TabsTrigger>
           )}
 
@@ -166,16 +166,10 @@ function LegacyApp({ user: propUser, token: propToken }) {
           )}
 
           {user?.role === "Administrador" && (
-            <>
-              <TabsTrigger value="catalogo">
-                <ListChecks className="tab-icon" />
-                Catálogo
-              </TabsTrigger>
-              <TabsTrigger value="facturacion">
-                <Settings className="tab-icon" />
-                Facturación
-              </TabsTrigger>
-            </>
+            <TabsTrigger value="catalogo">
+              <ListChecks className="tab-icon" />
+              Catálogo
+            </TabsTrigger>
           )}
 
           {(user?.role === "Administrador" || user?.role === "Recepcion" || user?.role === "Doctor") && (
@@ -257,7 +251,7 @@ function LegacyApp({ user: propUser, token: propToken }) {
           <RecetasTab prescriptions={prescriptions} user={user} token={token} />
         </TabsContent>
 
-        {/* Facturas */}
+        {/* Facturación — InvoicesTab + config FacturacionTab (Admin ve ambas, Recepción solo facturas) */}
         {(user?.role === "Administrador" || user?.role === "Recepcion") && (
           <TabsContent value="invoices" className="tab-content">
             <InvoicesTab
@@ -267,6 +261,11 @@ function LegacyApp({ user: propUser, token: propToken }) {
               fetchData={fetchData}
               token={token}
             />
+            {user?.role === "Administrador" && (
+              <div style={{ marginTop: "32px" }}>
+                <FacturacionTab token={token} user={user} />
+              </div>
+            )}
           </TabsContent>
         )}
 
@@ -308,16 +307,11 @@ function LegacyApp({ user: propUser, token: propToken }) {
           </TabsContent>
         )}
 
-        {/* Admin: Catálogo y Facturación como módulos separados */}
+        {/* Admin: Catálogo */}
         {user?.role === "Administrador" && (
-          <>
-            <TabsContent value="catalogo" className="tab-content">
-              <CatalogoServiciosTab token={token} />
-            </TabsContent>
-            <TabsContent value="facturacion" className="tab-content">
-              <FacturacionTab token={token} user={user} />
-            </TabsContent>
-          </>
+          <TabsContent value="catalogo" className="tab-content">
+            <CatalogoServiciosTab token={token} />
+          </TabsContent>
         )}
 
         {/* Procedimientos rápidos: sueros, inyecciones, etc. */}
