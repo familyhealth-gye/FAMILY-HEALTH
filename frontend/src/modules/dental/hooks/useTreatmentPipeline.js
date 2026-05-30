@@ -12,8 +12,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/axios';
-import { PIPELINE_STATE_PRIORITY } from '../engine/clinical_rules';
-import { useRetryQueue } from './useRetryQueue';
+import { PIPELINE_STATE_PRIORITY } from '@/modules/dental/engine/clinical_rules';
+import { useRetryQueue } from '@/modules/dental/hooks/useRetryQueue';
 
 const DEBOUNCE_MS = 1400;
 

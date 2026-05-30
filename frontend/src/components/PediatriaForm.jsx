@@ -361,6 +361,7 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
           cedula={appointment.cedula}
           token={token}
           especialidad="Pediatría"
+          readOnly={true}
           onLoad={ant => {
             if (ant.tiene_antecedentes) {
               setForm(f => ({

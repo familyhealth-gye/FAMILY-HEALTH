@@ -62,6 +62,37 @@ export const FacturacionTab = ({ token, user }) => {
 
   useEffect(() => { cargar(); }, []);
 
+  // ── Leer prefill de Caja al montar o cuando cambie ───────────────────────
+  useEffect(() => {
+    const raw = localStorage.getItem("prefill_factura");
+    if (!raw) return;
+    try {
+      const datos = JSON.parse(raw);
+      localStorage.removeItem("prefill_factura"); // consumir una sola vez
+      const monto = parseFloat(datos.monto) || 0;
+      setForm(f => ({
+        ...f,
+        paciente_nombre:        datos.paciente_nombre   || "",
+        paciente_cedula:        datos.paciente_cedula   || "",
+        paciente_telefono:      datos.paciente_telefono || "",
+        paciente_email:         datos.paciente_email    || "",
+        doctor_nombre:          datos.doctor_nombre     || "",
+        especialidad:           datos.especialidad      || "",
+        tipo_pago:              datos.tipo_pago         || "efectivo",
+        consulta_financiera_id: datos.consulta_id       || "",
+        appointment_id:         datos.appointment_id    || "",
+        detalles: [{
+          descripcion:     `Consulta ${datos.especialidad || "Médica"}`,
+          cantidad:        1,
+          precio_unitario: monto,
+          descuento:       0,
+          subtotal:        monto,
+        }],
+      }));
+      setVista("nueva"); // abrir directamente en nueva factura
+    } catch { /* JSON malformado, ignorar */ }
+  }, []);
+
   const cargar = async () => {
     setLoading(true);
     try {

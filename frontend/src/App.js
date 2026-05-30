@@ -47,9 +47,6 @@ import { SmartNav }     from "@/components/SmartNav";
 // ── Auth / Layout / Router ───────────────────────────────────────────────────
 import { Login }            from "@/pages/Login";
 import { Routes, Route, Navigate } from "react-router-dom";
-import DentalWorkspace      from "@/workspaces/DentalWorkspace";
-import FinancialWorkspace   from "@/workspaces/FinancialWorkspace";
-import { ENABLE_DENTAL_V2 } from "@/lib/constants";
 import { useAuth }          from "@/hooks/useAuth";
 import { MainLayout }       from "@/components/layout/MainLayout";
 import apiClient            from "@/lib/axios";
@@ -330,8 +327,6 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
-      <Route path="/financiero" element={isAuthenticated && ENABLE_DENTAL_V2 ? <FinancialWorkspace /> : <Navigate to="/" />} />
-      <Route path="/odontologia-v2/:appointmentId" element={isAuthenticated ? <DentalWorkspace /> : <Navigate to="/login" />} />
       <Route path="/*" element={isAuthenticated ? <LegacyApp user={user} token={token} /> : <Navigate to="/login" />} />
     </Routes>
   );

@@ -437,6 +437,7 @@ export const NutricionForm = ({ appointment, token, onClose, onSuccess }) => {
             cedula={appointment.cedula}
             token={token}
             especialidad="Nutrición"
+            readOnly={true}
             onLoad={ant => setForm(f => ({
               ...f,
               ant_familiares: ant.ant_familiares || f.ant_familiares,

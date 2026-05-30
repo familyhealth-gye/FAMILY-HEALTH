@@ -247,9 +247,7 @@ export default function CajaTab() {
                                       appointment_id:   d.appointment_id   || "",
                                     };
                                     localStorage.setItem("prefill_factura", JSON.stringify(datos));
-                                    // Navegar al tab de facturación
                                     window.dispatchEvent(new CustomEvent("navigate_to_tab", { detail: "invoices" }));
-                                    alert(`Datos de ${d.paciente_nombre} cargados en Facturación.\nVe al tab Facturación para revisar y emitir.`);
                                   }}
                                   style={{
                                     background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:'8px',

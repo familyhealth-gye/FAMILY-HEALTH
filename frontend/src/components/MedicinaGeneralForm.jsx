@@ -239,6 +239,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
         cedula={appointment.cedula}
         token={token}
         especialidad="Medicina General"
+        readOnly={true}
         onLoad={ant => {
           if (ant.tiene_antecedentes) {
             setForm(f => ({

@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { evaluarReglas, getRecetaConAlergias, PROCEDURE_DEFAULTS } from '../engine/clinical_rules';
+import { evaluarReglas, getRecetaConAlergias, PROCEDURE_DEFAULTS } from '@/modules/dental/engine/clinical_rules';
 import apiClient from '@/lib/axios';
 
 export const useClinicalEngine = ({ paciente }) => {

@@ -23,10 +23,11 @@ const API = `${BACKEND_URL}/api`;
  *   onLoad: (antecedentes) => void  — callback con los datos cargados
  *   onChange: (antecedentes) => void — callback cuando el doctor edita
  */
-export const AntecedentesPanel = ({ cedula, token, especialidad, onLoad, onChange }) => {
+export const AntecedentesPanel = ({ cedula, token, especialidad, onLoad, onChange, readOnly = false }) => {
   const [loading, setLoading] = useState(true);
   const [antecedentes, setAntecedentes] = useState(null);
   const [editando, setEditando] = useState(false);
+  const [expandido, setExpandido] = useState(false);
   const [form, setForm] = useState({
     diabetes: false, hipertension: false, cardiopatias: false,
     hepatitis: false, vih: false, epilepsia: false, embarazo: false, asma: false,
@@ -89,6 +90,70 @@ export const AntecedentesPanel = ({ cedula, token, especialidad, onLoad, onChang
       Cargando antecedentes...
     </div>
   );
+
+  // ── Modo solo-lectura (doctor ve datos llenados por counter) ─────────────
+  if (readOnly) {
+    const alertas = [];
+    if (form.alergias_medicamentos) alertas.push(`⚠️ Alérgico: ${form.alergias_medicamentos}`);
+    if (form.diabetes)     alertas.push("Diabetes");
+    if (form.hipertension) alertas.push("HTA");
+    if (form.cardiopatias) alertas.push("Cardiopatías");
+    if (form.asma)         alertas.push("Asma");
+    if (form.epilepsia)    alertas.push("Epilepsia");
+    if (form.embarazo)     alertas.push("Embarazo");
+    if (form.vih)          alertas.push("VIH+");
+
+    return (
+      <div style={{ marginBottom: "12px" }}>
+        {/* Alerta de alergias siempre visible */}
+        {form.alergias_medicamentos && (
+          <div style={{
+            background: "#FEF2F2", border: "1.5px solid #FCA5A5",
+            borderRadius: "8px", padding: "8px 12px", marginBottom: "8px",
+            fontSize: "12px", fontWeight: "700", color: "#DC2626",
+          }}>
+            ⚠️ ALERGIA: {form.alergias_medicamentos}
+          </div>
+        )}
+        {/* Resumen colapsable */}
+        <button
+          onClick={() => setExpandido(e => !e)}
+          style={{
+            width: "100%", textAlign: "left", background: "#F8FAFF",
+            border: "1px solid #BFDBFE", borderRadius: "8px",
+            padding: "8px 12px", cursor: "pointer", fontSize: "12px",
+            color: "#1E40AF", fontWeight: "600",
+            display: "flex", justifyContent: "space-between",
+          }}
+        >
+          <span>📋 Antecedentes del paciente {alertas.length > 0 ? `(${alertas.length} activos)` : "(sin antecedentes)"}</span>
+          <span>{expandido ? "▲" : "▼"}</span>
+        </button>
+        {expandido && (
+          <div style={{
+            background: "#F8FAFF", border: "1px solid #BFDBFE",
+            borderRadius: "0 0 8px 8px", padding: "10px 12px",
+            fontSize: "12px", color: "#374151",
+          }}>
+            {alertas.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
+                {alertas.map((a, i) => (
+                  <span key={i} style={{ background: "#FEE2E2", color: "#DC2626", borderRadius: "10px", padding: "2px 8px", fontSize: "11px", fontWeight: "600" }}>{a}</span>
+                ))}
+              </div>
+            )}
+            {form.medicamentos_actuales && <p style={{ margin: "4px 0" }}><strong>Medicamentos:</strong> {form.medicamentos_actuales}</p>}
+            {form.ant_personales && <p style={{ margin: "4px 0" }}><strong>Antecedentes:</strong> {form.ant_personales}</p>}
+            {form.ant_quirurgicos && <p style={{ margin: "4px 0" }}><strong>Quirúrgicos:</strong> {form.ant_quirurgicos}</p>}
+            {form.ant_familiares && <p style={{ margin: "4px 0" }}><strong>Familiares:</strong> {form.ant_familiares}</p>}
+            {alertas.length === 0 && !form.medicamentos_actuales && !form.ant_personales && (
+              <p style={{ color: "#9CA3AF", margin: 0 }}>Sin antecedentes registrados por recepción</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>

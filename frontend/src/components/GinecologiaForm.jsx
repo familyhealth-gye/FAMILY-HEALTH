@@ -274,6 +274,7 @@ export const GinecologiaForm = ({ appointment, token, onClose, onSuccess }) => {
             cedula={appointment.cedula}
             token={token}
             especialidad="Ginecología"
+            readOnly={true}
             onLoad={ant => setForm(f => ({
               ...f,
               ant_familiares_hta: ant.hipertension || f.ant_familiares_hta,
