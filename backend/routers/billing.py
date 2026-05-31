@@ -1026,9 +1026,10 @@ async def guardar_firma_doctor(
 
 
 # ── Consentimiento Informado PDF ─────────────────────────────────────────────
-@router.get("/appointments/{appointment_id}/consentimiento-pdf")
+@router.post("/appointments/{appointment_id}/consentimiento-pdf")
 async def get_consentimiento_pdf(
     appointment_id: str,
+    data: dict = {},
     current_user: TokenData = Depends(get_current_user)
 ):
     from reportlab.lib.pagesizes import letter
@@ -1055,11 +1056,16 @@ async def get_consentimiento_pdf(
 
     y = _clinica_header(c, clinica)
 
+    procedimiento = data.get("procedimiento", "") if data else ""
+
     # Título
     c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2, y - 20, "CONSENTIMIENTO INFORMADO")
     c.setFont("Helvetica", 8)
-    c.drawCentredString(width / 2, y - 32, f"Fecha: {appt.get('fecha', '')}   |   Especialidad: {appt.get('especialidad', '')}")
+    subtitulo = f"Fecha: {appt.get('fecha', '')}   |   Especialidad: {appt.get('especialidad', '')}"
+    if procedimiento:
+        subtitulo += f"   |   Procedimiento: {procedimiento}"
+    c.drawCentredString(width / 2, y - 32, subtitulo)
 
     y -= 50
 
@@ -1198,8 +1204,8 @@ async def get_certificado_pdf(
     c.drawCentredString(width / 2, y - 20, "CERTIFICADO MÉDICO")
     y -= 45
 
-    # Datos doctor
-    nombre_dr    = (doctor or {}).get("nombre", current_user.username)
+    # Datos doctor — usa emisor_nombre del request si lo provee (counter/admin)
+    nombre_dr    = data.get("emisor_nombre") or (doctor or {}).get("nombre") or current_user.username
     especialidad = (doctor or {}).get("especialidad", "")
     reg_msp      = (doctor or {}).get("registro_msp", "")
 

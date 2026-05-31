@@ -102,6 +102,47 @@ async def delete_odontogram(
 
 # ========== ODONTOGRAMA CLÍNICO ENDPOINTS (FDI) ==========
 
+# Numeración FDI permanente por cuadrante
+_FDI_PERMANENTE = {
+    1: [18,17,16,15,14,13,12,11],
+    2: [21,22,23,24,25,26,27,28],
+    3: [31,32,33,34,35,36,37,38],
+    4: [48,47,46,45,44,43,42,41],
+}
+_FDI_TEMPORAL = {
+    5: [55,54,53,52,51],
+    6: [61,62,63,64,65],
+    7: [71,72,73,74,75],
+    8: [81,82,83,84,85],
+}
+_SUPERFICIES = ["vestibular","palatino","mesial","distal","oclusal"]
+
+def _generar_dientes(tipo: str) -> list:
+    """Genera lista de DienteFDI con 5 superficies vacías para un odontograma nuevo."""
+    dientes = []
+    mapa = _FDI_TEMPORAL if tipo == "temporal" else _FDI_PERMANENTE
+    if tipo == "mixta":
+        mapa = {**_FDI_PERMANENTE, **_FDI_TEMPORAL}
+    for cuadrante, numeros in mapa.items():
+        for pos, num_fdi in enumerate(numeros, 1):
+            dientes.append({
+                "numero_fdi": str(num_fdi),
+                "tipo": "temporal" if cuadrante >= 5 else "permanente",
+                "cuadrante": cuadrante,
+                "posicion": pos,
+                "estado": "sano",
+                "ausente": False,
+                "implante": False,
+                "corona": False,
+                "tiene_temporal": False,
+                "tiene_permanente": cuadrante < 5,
+                "superficies": [
+                    {"nombre": s, "diagnostico": "", "color": ""}
+                    for s in _SUPERFICIES
+                ],
+            })
+    return dientes
+
 @router.post("/odontogramas-clinicos", response_model=OdontogramaClinico)
 async def crear_odontogramas_clinicos(
     input: OdontogramaCreate,
@@ -132,7 +173,9 @@ async def crear_odontogramas_clinicos(
         doctor_nombre=nombre_doctor,
         tipo_denticion=input.tipo_denticion,
         fecha=input.fecha or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        dientes=input.dientes,
+        # Si no vienen dientes, generarlos automáticamente
+        dientes=[DienteFDI(**d) for d in _generar_dientes(input.tipo_denticion)]
+              if not input.dientes else input.dientes,
         diagnostico_general=input.diagnostico_general,
         higiene_oral=input.higiene_oral,
         estado_encias=input.estado_encias,

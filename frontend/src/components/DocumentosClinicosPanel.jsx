@@ -62,6 +62,7 @@ function CertificadoModal({ appointment, token, onClose }) {
     dias_reposo:   0,
     diagnostico:   "",
     observaciones: "",
+    emisor_nombre: "",  // quién firma — se prerrellena con doctor si existe
   });
   const [loading, setLoading] = useState(false);
 
@@ -74,7 +75,7 @@ function CertificadoModal({ appointment, token, onClose }) {
       await descargarPdfPost(
         `${BACKEND_URL}/api/appointments/${appointment.id}/certificado-pdf`,
         token,
-        form,
+        { dias_reposo: form.dias_reposo, diagnostico: form.diagnostico, observaciones: form.observaciones, emisor_nombre: form.emisor_nombre },
         `certificado-${appointment.nombre_completo?.replace(/\s+/g, "-") || appointment.id}.pdf`
       );
       toast.success("✅ Certificado generado");
@@ -167,6 +168,18 @@ function CertificadoModal({ appointment, token, onClose }) {
             />
           </div>
 
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: "700", color: "#374151", display: "block", marginBottom: "5px", textTransform: "uppercase" }}>
+              Médico que emite <span style={{ fontWeight: "400", color: "#9CA3AF" }}>(dejar vacío para usar doctor de la cita)</span>
+            </label>
+            <input
+              value={form.emisor_nombre}
+              onChange={e => set("emisor_nombre", e.target.value)}
+              placeholder={appointment?.doctor_nombre || "Dr. Nombre Apellido"}
+              style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #BFDBFE", borderRadius: "8px", fontSize: "13px", boxSizing: "border-box", outline: "none" }}
+            />
+          </div>
+
           {/* Acciones */}
           <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
             <button
@@ -194,27 +207,93 @@ function CertificadoModal({ appointment, token, onClose }) {
   );
 }
 
-// ─── Componente principal ────────────────────────────────────────────────────
+const PROCEDIMIENTOS_CONSENTIMIENTO = [
+  "Consulta General",
+  "Extracción Simple",
+  "Extracción Molar / 3er Molar",
+  "Endodoncia",
+  "Implante Dental",
+  "Prótesis Total",
+  "Prótesis Parcial",
+  "Corona Dental",
+  "Restauración / Resina",
+  "Cirugía Periodontal",
+  "Injerto Óseo / Tejido",
+  "Blanqueamiento Dental",
+  "Ortodoncia",
+  "Limpieza Profunda",
+  "Procedimiento Quirúrgico",
+  "Otro procedimiento",
+];
 
-export function DocumentosClinicosPanel({ appointment, token, compact = false }) {
-  const [showCertificado, setShowCertificado] = useState(false);
-  const [loadingConsentimiento, setLoadingConsentimiento] = useState(false);
+function ConsentimientoModal({ appointment, token, onClose }) {
+  const [procedimiento, setProcedimiento] = useState(appointment?.especialidad === "Odontología" ? "Consulta General" : "Consulta General");
+  const [loading, setLoading] = useState(false);
 
-  const handleConsentimiento = async () => {
-    setLoadingConsentimiento(true);
+  const handleGenerar = async () => {
+    setLoading(true);
     try {
-      await descargarPdfGet(
+      await descargarPdfPost(
         `${BACKEND_URL}/api/appointments/${appointment.id}/consentimiento-pdf`,
         token,
-        `consentimiento-${appointment.nombre_completo?.replace(/\s+/g, "-") || appointment.id}.pdf`
+        { procedimiento },
+        `consentimiento-${(appointment.nombre_completo || appointment.id).replace(/\s+/g, "-")}.pdf`
       );
       toast.success("✅ Consentimiento generado");
+      onClose();
     } catch {
       toast.error("Error al generar el consentimiento");
     } finally {
-      setLoadingConsentimiento(false);
+      setLoading(false);
     }
   };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10001,padding:"16px" }}>
+      <div style={{ background:"white",borderRadius:"14px",width:"100%",maxWidth:"420px",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",overflow:"hidden" }}>
+        <div style={{ background:"#0C4A6E",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <span style={{ color:"white",fontWeight:"700",fontSize:"15px" }}>📋 Consentimiento Informado</span>
+          <button onClick={onClose} style={{ background:"none",border:"none",cursor:"pointer",color:"rgba(255,255,255,0.7)",fontSize:"18px" }}>×</button>
+        </div>
+        <div style={{ padding:"20px",display:"flex",flexDirection:"column",gap:"14px" }}>
+          <div style={{ background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:"8px",padding:"8px 12px",fontSize:"12px",color:"#1E40AF" }}>
+            👤 <strong>{appointment.nombre_completo}</strong>
+            {appointment.cedula && <span style={{ marginLeft:"8px" }}>CI: {appointment.cedula}</span>}
+          </div>
+          <div>
+            <label style={{ fontSize:"11px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"5px",textTransform:"uppercase" }}>
+              Procedimiento a consentir *
+            </label>
+            <select
+              value={procedimiento}
+              onChange={e => setProcedimiento(e.target.value)}
+              autoFocus
+              style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #BFDBFE",borderRadius:"8px",fontSize:"13px",boxSizing:"border-box" }}
+            >
+              {PROCEDIMIENTOS_CONSENTIMIENTO.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display:"flex",gap:"10px" }}>
+            <button
+              onClick={handleGenerar}
+              disabled={loading}
+              style={{ flex:1,padding:"11px",background:loading?"#93C5FD":"#0C4A6E",color:"white",border:"none",borderRadius:"8px",fontSize:"14px",fontWeight:"700",cursor:loading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px" }}
+            >
+              {loading ? "Generando..." : "📄 Generar PDF"}
+            </button>
+            <button onClick={onClose} style={{ padding:"11px 16px",background:"#F3F4F6",color:"#374151",border:"none",borderRadius:"8px",fontSize:"13px",cursor:"pointer" }}>Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DocumentosClinicosPanel({ appointment, token, compact = false }) {
+  const [showCertificado,    setShowCertificado]    = useState(false);
+  const [showConsentimiento, setShowConsentimiento] = useState(false);
 
   const btnBase = {
     border: "1px solid #BFDBFE", borderRadius: "7px",
@@ -230,15 +309,11 @@ export function DocumentosClinicosPanel({ appointment, token, compact = false })
     <>
       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
         <button
-          onClick={handleConsentimiento}
-          disabled={loadingConsentimiento}
-          style={{ ...btnBase, opacity: loadingConsentimiento ? 0.6 : 1 }}
+          onClick={() => setShowConsentimiento(true)}
+          style={btnBase}
           title="Generar consentimiento informado"
         >
-          {loadingConsentimiento
-            ? <Loader2 size={11} className="animate-spin" />
-            : <FileText size={11} />
-          }
+          <FileText size={11} />
           Consentimiento
         </button>
 
@@ -251,6 +326,14 @@ export function DocumentosClinicosPanel({ appointment, token, compact = false })
           Certificado
         </button>
       </div>
+
+      {showConsentimiento && (
+        <ConsentimientoModal
+          appointment={appointment}
+          token={token}
+          onClose={() => setShowConsentimiento(false)}
+        />
+      )}
 
       {showCertificado && (
         <CertificadoModal

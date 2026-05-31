@@ -231,8 +231,11 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
   useEffect(() => {
     if (pacienteId || pacienteCedula) {
       buscarOdontogramaExistente();
+    } else if (appointment?.id) {
+      // Paciente sin id/cedula explícito — crear directamente con datos del appointment
+      crearNuevoOdontograma();
     }
-  }, [pacienteId, pacienteCedula]);
+  }, [pacienteId, pacienteCedula, appointment?.id]);
 
   const buscarOdontogramaExistente = async () => {
     setLoading(true);
@@ -590,14 +593,20 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
     );
   }
 
-  // Mostrar mensaje si no hay dientes cargados
+  // Si odontograma existe pero sin dientes, crear automáticamente
   if (!odontograma?.dientes || odontograma.dientes.length === 0) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>Inicializando odontograma...</p>
-        <Button onClick={crearNuevoOdontograma} style={{ marginTop: '1rem' }}>
-          Crear Odontograma
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p style={{ color: "#6B7280", marginBottom: "12px" }}>Preparando odontograma...</p>
+        <Button
+          onClick={crearNuevoOdontograma}
+          style={{ marginTop: "8px", background: "#0C4A6E", color: "white", padding: "10px 24px" }}
+        >
+          Iniciar Odontograma
         </Button>
+        <p style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "8px" }}>
+          {pacienteNombre || appointment?.nombre_completo || "Paciente nuevo"}
+        </p>
       </div>
     );
   }
