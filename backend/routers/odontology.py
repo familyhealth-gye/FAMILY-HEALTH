@@ -107,25 +107,31 @@ async def crear_odontogramas_clinicos(
     input: OdontogramaCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    # Obtener info doctor
-    doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
-    if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor no encontrado")
+    # Obtener info doctor — opcional, no bloquear si no existe
+    doctor = None
+    if input.doctor_id:
+        doctor = await db.doctors.find_one({"id": input.doctor_id}, {"_id": 0})
 
-    # Obtener info paciente (desde collection pacientes)
-    paciente = await db.pacientes.find_one({"id": input.paciente_id}, {"_id": 0})
-    if not paciente:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+    # Obtener info paciente — buscar por id, luego por cédula, luego usar datos del input
+    paciente = None
+    if input.paciente_id:
+        paciente = await db.pacientes.find_one({"id": input.paciente_id}, {"_id": 0})
+    if not paciente and input.paciente_cedula:
+        paciente = await db.pacientes.find_one({"cedula": input.paciente_cedula}, {"_id": 0})
 
-    # Crear objeto
+    # Usar datos del input como fallback si no existe en db.pacientes
+    nombre_paciente = (paciente or {}).get("nombre_completo") or (paciente or {}).get("nombre") or input.paciente_nombre or ""
+    cedula_paciente = (paciente or {}).get("cedula") or input.paciente_cedula or ""
+    nombre_doctor   = (doctor  or {}).get("nombre") or input.doctor_nombre or ""
+
     odontograma = OdontogramaClinico(
-        paciente_id=input.paciente_id,
-        paciente_nombre=paciente.get('nombre_completo', ''),
-        paciente_cedula=paciente.get('cedula', ''),
-        doctor_id=input.doctor_id,
-        doctor_nombre=doctor.get('nombre', ''),
+        paciente_id=input.paciente_id or "",
+        paciente_nombre=nombre_paciente,
+        paciente_cedula=cedula_paciente,
+        doctor_id=input.doctor_id or "",
+        doctor_nombre=nombre_doctor,
         tipo_denticion=input.tipo_denticion,
-        fecha=input.fecha or datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        fecha=input.fecha or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         dientes=input.dientes,
         diagnostico_general=input.diagnostico_general,
         higiene_oral=input.higiene_oral,
@@ -135,8 +141,8 @@ async def crear_odontogramas_clinicos(
     )
 
     doc = odontograma.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['updated_at'] = doc['updated_at'].isoformat()
+    doc["created_at"] = doc["created_at"].isoformat()
+    doc["updated_at"] = doc["updated_at"].isoformat()
 
     await db.odontogramas_clinicos.insert_one(doc)
     return odontograma

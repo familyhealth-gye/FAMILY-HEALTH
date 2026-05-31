@@ -312,33 +312,33 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
 
   const crearNuevoOdontograma = async () => {
     try {
+      // Usar todos los datos disponibles del appointment como fallback
+      const payload = {
+        paciente_id:      pacienteId             || appointment?.paciente_id || "",
+        paciente_nombre:  pacienteNombre          || appointment?.nombre_completo || appointment?.nombre || "",
+        paciente_cedula:  pacienteCedula          || appointment?.cedula || "",
+        doctor_id:        doctorId               || appointment?.doctor_id || "",
+        doctor_nombre:    appointment?.doctor_nombre || "",
+        tipo_denticion:   tipoDenticion,
+      };
+
       const response = await axios.post(
         `${API}/odontogramas-clinicos`,
-        {
-          paciente_id: pacienteId,
-          paciente_nombre: pacienteNombre,
-          paciente_cedula: pacienteCedula,
-          doctor_id: doctorId,
-          tipo_denticion: tipoDenticion
-        },
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      // Obtener el odontograma creado
-      const nuevoOdontograma = await axios.get(
-        `${API}/odontogramas-clinicos/${response.data.id}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      setOdontograma(nuevoOdontograma.data);
-      // Notificar al padre que se creó el odontograma
-      if (onOdontogramaLoaded) {
-        onOdontogramaLoaded(nuevoOdontograma.data.id);
-      }
-      toast.success("Odontograma creado");
+
+      // El POST devuelve el odontograma completo — no necesita segundo GET
+      const nuevoOdontograma = response.data;
+      setOdontograma(nuevoOdontograma);
+      if (onOdontogramaLoaded) onOdontogramaLoaded(nuevoOdontograma.id);
+      toast.success("✅ Odontograma creado");
     } catch (error) {
-      console.error("Error al crear odontograma:", error);
-      toast.error("Error al crear odontograma");
+      const det = error.response?.data?.detail || error.message;
+      console.error("Error al crear odontograma:", det);
+      toast.error(`Error al crear odontograma: ${det}`);
+      // No dejar al usuario pegado — mostrar estado de error
+      setOdontograma(null);
     }
   };
 

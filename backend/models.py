@@ -708,10 +708,11 @@ class OdontogramaClinico(BaseModel):
 
 
 class OdontogramaCreate(BaseModel):
-    paciente_id: str
+    paciente_id: str = ""
     paciente_nombre: str = ""
     paciente_cedula: str = ""
-    doctor_id: str
+    doctor_id: str = ""
+    doctor_nombre: str = ""
     tipo_denticion: str = "permanente"
     fecha: str = ""
     dientes: List[DienteFDI] = []
