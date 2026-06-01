@@ -405,3 +405,16 @@
     min-width: 460px;
   }
 }
+/* ── Layout reorder: diagnóstico general arriba, acciones/tratamientos abajo ── */
+.odontograma-clinico {
+  display: flex;
+  flex-direction: column;
+}
+.odontograma-clinico .odontograma-header          { order: 1; }
+.odontograma-clinico .diagnostico-general-panel   { order: 2; margin-bottom: 12px; }
+.odontograma-clinico .herramientas-diagnostico    { order: 3; }
+.odontograma-clinico .odontograma-grid            { order: 4; }
+.odontograma-clinico .leyenda-odontograma         { order: 5; }
+/* Acciones rápidas y tratamientos — después del odontograma */
+.odontograma-clinico > div[style*="F8FAFF"]       { order: 6; }
+.odontograma-clinico > div[style*="Tratamientos"] { order: 7; }

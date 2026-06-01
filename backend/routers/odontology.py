@@ -287,6 +287,54 @@ async def eliminar_odontograma_clinico(
     return {"message": "Odontograma eliminado con éxito"}
 
 
+@router.put("/odontogramas-clinicos/{odontograma_id}/diente/{numero_fdi}/superficie/{nombre_superficie}")
+async def actualizar_superficie_diente(
+    odontograma_id: str,
+    numero_fdi: str,
+    nombre_superficie: str,
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Actualiza el diagnóstico de una superficie específica de un diente."""
+    diagnostico = data.get("diagnostico", "")
+
+    odontograma = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not odontograma:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+
+    dientes = odontograma.get("dientes", [])
+    diente_encontrado = False
+
+    for diente in dientes:
+        if str(diente.get("numero_fdi", "")) == str(numero_fdi):
+            diente_encontrado = True
+            superficies = diente.get("superficies", [])
+            superficie_encontrada = False
+            for s in superficies:
+                if s.get("nombre") == nombre_superficie:
+                    s["diagnostico"] = diagnostico
+                    superficie_encontrada = True
+                    break
+            if not superficie_encontrada:
+                superficies.append({"nombre": nombre_superficie, "diagnostico": diagnostico, "color": ""})
+            # Actualizar estado general del diente
+            diags_activos = [s.get("diagnostico","") for s in superficies if s.get("diagnostico") and s.get("diagnostico") != "sano"]
+            diente["estado"] = diags_activos[0] if diags_activos else "sano"
+            break
+
+    if not diente_encontrado:
+        raise HTTPException(status_code=404, detail=f"Diente {numero_fdi} no encontrado en el odontograma")
+
+    await db.odontogramas_clinicos.update_one(
+        {"id": odontograma_id},
+        {"$set": {
+            "dientes": dientes,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    return {"ok": True, "diente": numero_fdi, "superficie": nombre_superficie, "diagnostico": diagnostico}
+
+
 # ========== PLAN DE TRATAMIENTO HELPERS ==========
 
 def clasificar_procedimiento_por_superficies(superficies):

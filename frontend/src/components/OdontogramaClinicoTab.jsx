@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { Save, User, Zap, Brain } from "lucide-react";
 import "./OdontogramaClinico.css";
+import { AntecedentesPanel } from "@/components/AntecedentesPanel";
 
 // ── Motor clínico extraído del V2 ────────────────────────────────────────────
 import { PROCEDURE_DEFAULTS, clasificarPorSuperficies, evaluarReglas, getRecetaConAlergias } from "@/modules/dental/engine/clinical_rules";
@@ -531,11 +532,12 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
     const dientes = odontograma.dientes;
     
     if (tipoDenticion === "permanente") {
-      // Cuadrantes 1 y 2 (superiores), 4 y 3 (inferiores)
-      const cuadrante1 = dientes.filter(d => d.cuadrante === 1).sort((a, b) => b.posicion - a.posicion);
-      const cuadrante2 = dientes.filter(d => d.cuadrante === 2).sort((a, b) => a.posicion - b.posicion);
-      const cuadrante4 = dientes.filter(d => d.cuadrante === 4).sort((a, b) => b.posicion - a.posicion);
-      const cuadrante3 = dientes.filter(d => d.cuadrante === 3).sort((a, b) => a.posicion - b.posicion);
+      // Q1: 18→11 (derecha a centro), Q2: 21→28 (centro a izquierda)
+      // Q4: 48→41 (derecha a centro), Q3: 31→38 (centro a izquierda)
+      const cuadrante1 = dientes.filter(d => d.cuadrante === 1).sort((a, b) => a.posicion - b.posicion); // 18→11
+      const cuadrante2 = dientes.filter(d => d.cuadrante === 2).sort((a, b) => a.posicion - b.posicion); // 21→28
+      const cuadrante4 = dientes.filter(d => d.cuadrante === 4).sort((a, b) => a.posicion - b.posicion); // 48→41
+      const cuadrante3 = dientes.filter(d => d.cuadrante === 3).sort((a, b) => a.posicion - b.posicion); // 31→38
       
       return {
         superior: [...cuadrante1, ...cuadrante2],
@@ -543,9 +545,9 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
       };
     } else if (tipoDenticion === "temporal") {
       // Cuadrantes 5 y 6 (superiores), 8 y 7 (inferiores)
-      const cuadrante5 = dientes.filter(d => d.cuadrante === 5).sort((a, b) => b.posicion - a.posicion);
+      const cuadrante5 = dientes.filter(d => d.cuadrante === 5).sort((a, b) => a.posicion - b.posicion);
       const cuadrante6 = dientes.filter(d => d.cuadrante === 6).sort((a, b) => a.posicion - b.posicion);
-      const cuadrante8 = dientes.filter(d => d.cuadrante === 8).sort((a, b) => b.posicion - a.posicion);
+      const cuadrante8 = dientes.filter(d => d.cuadrante === 8).sort((a, b) => a.posicion - b.posicion);
       const cuadrante7 = dientes.filter(d => d.cuadrante === 7).sort((a, b) => a.posicion - b.posicion);
       
       return {
@@ -556,11 +558,11 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
       // Mixta: mostrar ambos
       const permanentes = {
         superior: [
-          ...dientes.filter(d => d.cuadrante === 1).sort((a, b) => b.posicion - a.posicion),
+          ...dientes.filter(d => d.cuadrante === 1).sort((a, b) => a.posicion - b.posicion),
           ...dientes.filter(d => d.cuadrante === 2).sort((a, b) => a.posicion - b.posicion)
         ],
         inferior: [
-          ...dientes.filter(d => d.cuadrante === 4).sort((a, b) => b.posicion - a.posicion),
+          ...dientes.filter(d => d.cuadrante === 4).sort((a, b) => a.posicion - b.posicion),
           ...dientes.filter(d => d.cuadrante === 3).sort((a, b) => a.posicion - b.posicion)
         ]
       };
@@ -612,7 +614,21 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
   }
 
   return (
-    <div className="odontograma-clinico">
+    <div style={{ background: "white", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div className="odontograma-clinico" style={{ flex: 1 }}>
+      {/* ── ANTECEDENTES del paciente (llenados por counter) ─────────────── */}
+      {(appointment?.cedula || pacienteCedula) && (
+        <div style={{ padding: "0 0 8px" }}>
+          <AntecedentesPanel
+            cedula={appointment?.cedula || pacienteCedula}
+            token={token}
+            especialidad="Odontología"
+            readOnly={true}
+            onLoad={() => {}}
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="odontograma-header">
         <div className="header-info">
@@ -1278,6 +1294,7 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };
