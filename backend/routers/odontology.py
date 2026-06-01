@@ -282,6 +282,55 @@ async def eliminar_odontograma_clinico(
     current_user: TokenData = Depends(get_current_user)
 ):
     result = await db.odontogramas_clinicos.delete_one({"id": odontograma_id})
+
+
+@router.get("/odontogramas-clinicos/{odontograma_id}/evolucion")
+async def get_evolucion_odontograma(
+    odontograma_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Retorna el historial de evolución del odontograma:
+    registros de procedimientos realizados en consultas anteriores.
+    Busca en colecciones: odontogramas (historial guardado), appointments
+    y medical_history_odontology para construir la línea de tiempo.
+    """
+    evolucion = []
+
+    # 1. Registros de evolución directa en el odontograma
+    odonto = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if odonto:
+        cedula = odonto.get("paciente_cedula", "")
+        # 2. Historial de consultas odontológicas por cédula
+        if cedula:
+            historiales = await db.medical_history_odontology.find(
+                {"paciente_cedula": cedula},
+                {"_id": 0, "fecha": 1, "doctor_nombre": 1, "tratamiento": 1,
+                 "diagnostico": 1, "observaciones": 1, "procedimiento": 1}
+            ).sort("fecha", -1).limit(50).to_list(50)
+
+            for h in historiales:
+                evolucion.append({
+                    "fecha":         h.get("fecha", ""),
+                    "profesional":   h.get("doctor_nombre", ""),
+                    "procedimiento": h.get("tratamiento") or h.get("procedimiento") or h.get("diagnostico", ""),
+                    "observaciones": h.get("observaciones", ""),
+                    "fuente":        "historia_clinica",
+                })
+
+        # 3. Evoluciones guardadas directamente en el odontograma
+        for ev in odonto.get("evolucion", []):
+            evolucion.append({
+                "fecha":         ev.get("fecha", ""),
+                "profesional":   ev.get("doctor_nombre", ""),
+                "procedimiento": ev.get("procedimiento", ""),
+                "observaciones": ev.get("observaciones", ""),
+                "fuente":        "odontograma",
+            })
+
+    # Ordenar por fecha descendente
+    evolucion.sort(key=lambda x: x.get("fecha", ""), reverse=True)
+    return evolucion
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Odontograma no encontrado")
     return {"message": "Odontograma eliminado con éxito"}

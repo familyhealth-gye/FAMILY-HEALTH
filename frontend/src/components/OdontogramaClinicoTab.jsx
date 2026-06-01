@@ -1,28 +1,29 @@
-import { useState, useEffect, useCallback } from "react";
+/**
+ * OdontogramaClinicoTab.jsx
+ * Flujo principal de atención odontológica.
+ *
+ * Layout (en orden visual):
+ *  1. Antecedentes (readOnly — llenados por counter)
+ *  2. Diagnóstico General
+ *  3. Toolbar + Odontograma interactivo (5 caras)
+ *  4. Leyenda
+ *  5. Acciones Rápidas (procedimientos + estados de diente)
+ *  6. Plan de Tratamiento automático
+ *  7. Tratamiento realizado en esta consulta
+ *  8. Evolución
+ */
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
-import { Save, User, Zap, Brain } from "lucide-react";
+import { Save, Zap, Brain, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import "./OdontogramaClinico.css";
 import { AntecedentesPanel } from "@/components/AntecedentesPanel";
-
-// ── Motor clínico extraído del V2 ────────────────────────────────────────────
 import { PROCEDURE_DEFAULTS, clasificarPorSuperficies, evaluarReglas, getRecetaConAlergias } from "@/modules/dental/engine/clinical_rules";
 import { useClinicalEngine } from "@/modules/dental/hooks/useClinicalEngine";
 import { useTreatmentPipeline } from "@/modules/dental/hooks/useTreatmentPipeline";
@@ -30,1061 +31,627 @@ import { useTreatmentPipeline } from "@/modules/dental/hooks/useTreatmentPipelin
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Procedimientos rápidos con precios del motor clínico
-const QUICK_PROCEDURES = [
-  { name: "Resina Simple",    color: "#3B82F6" },
-  { name: "Resina Compuesta", color: "#6366F1" },
-  { name: "Resina Compleja",  color: "#8B5CF6" },
-  { name: "Extracción",       color: "#EF4444" },
-  { name: "Endodoncia",       color: "#7C3AED" },
-  { name: "Corona",           color: "#F59E0B" },
-  { name: "Sellante",         color: "#10B981" },
-  { name: "Limpieza",         color: "#06B6D4" },
-];
+// ─── Constantes ──────────────────────────────────────────────────────────────
 
-// Colores para diagnósticos
-const COLORES_DIAGNOSTICO = {
-  sano: "#FFFFFF",
-  caries: "#EF4444",        // Rojo
-  restauracion: "#3B82F6",  // Azul
-  endodoncia: "#8B5CF6",    // Violeta
-  corona: "#F59E0B",        // Amarillo/Naranja
-  sellante: "#10B981",      // Verde
-  fractura: "#EC4899"       // Rosa
+const COLORES_DIAG = {
+  sano: "#FFFFFF", caries: "#EF4444", restauracion: "#3B82F6",
+  endodoncia: "#8B5CF6", corona: "#F59E0B", sellante: "#10B981", fractura: "#EC4899",
 };
 
-// Estados del diente completo
-const ESTADOS_DIENTE = [
-  { value: "presente", label: "Presente", color: "#FFFFFF" },
-  { value: "ausente", label: "Ausente", color: "#1F2937" },
-  { value: "extraccion", label: "Para Extracción", color: "#DC2626" },
-  { value: "no_erupcionado", label: "No Erupcionado", color: "#9CA3AF" },
-  { value: "exfoliado", label: "Exfoliado", color: "#D1D5DB" },
-  { value: "implante", label: "Implante", color: "#06B6D4" },
-  { value: "protesis", label: "Prótesis", color: "#F97316" }
-];
-
-// Diagnósticos por superficie
 const DIAGNOSTICOS = [
-  { value: "sano", label: "Sano", color: "#FFFFFF" },
-  { value: "caries", label: "Caries", color: "#EF4444" },
-  { value: "restauracion", label: "Restauración", color: "#3B82F6" },
-  { value: "endodoncia", label: "Endodoncia", color: "#8B5CF6" },
-  { value: "corona", label: "Corona", color: "#F59E0B" },
-  { value: "sellante", label: "Sellante", color: "#10B981" },
-  { value: "fractura", label: "Fractura", color: "#EC4899" }
+  { value: "sano",        label: "Sano",        color: "#FFFFFF" },
+  { value: "caries",      label: "Caries",      color: "#EF4444" },
+  { value: "restauracion",label: "Restauración",color: "#3B82F6" },
+  { value: "endodoncia",  label: "Endodoncia",  color: "#8B5CF6" },
+  { value: "corona",      label: "Corona",      color: "#F59E0B" },
+  { value: "sellante",    label: "Sellante",    color: "#10B981" },
+  { value: "fractura",    label: "Fractura",    color: "#EC4899" },
 ];
 
-// Componente de diente individual con superficies clickeables
-const Diente = ({ diente, onSelectDiente, onSelectSuperficie, isSelected, herramientaActual }) => {
-  const { numero_fdi, estado, superficies, tipo } = diente;
-  
-  const esPosterior = parseInt(numero_fdi[1]) > 3;
-  const esInferior = ['3', '4', '7', '8'].includes(numero_fdi[0]);
-  
-  // Obtener colores de superficies
-  const getSuperficieColor = (nombreSuperficie) => {
-    const sup = superficies?.find(s => s.nombre === nombreSuperficie);
-    if (!sup) return "#FFFFFF";
-    return COLORES_DIAGNOSTICO[sup.diagnostico] || "#FFFFFF";
+// Prioridad clínica para consolidar diagnóstico dominante por diente
+const PRIORIDAD = { endodoncia: 5, corona: 4, fractura: 3, restauracion: 2, sellante: 1, caries: 0 };
+
+// Precios por defecto cuando no están en el catálogo
+const PRECIOS_DEFAULT = {
+  "Resina Simple": 25, "Resina Compuesta": 40, "Resina Compleja": 60,
+  "Extracción": 45, "Extracción Molar": 80, "Endodoncia": 180, "Corona": 250,
+  "Sellante": 25, "Limpieza": 40, "Implante": 800, "Prótesis Total": 600,
+  "Prótesis Parcial": 350, "Puente": 450, "Poste": 120, "Blanqueamiento": 150,
+};
+
+// Acciones rápidas unificadas (procedimientos + estados de diente)
+const ACCIONES_RAPIDAS = [
+  { name: "Resina Simple",    color: "#3B82F6", grupo: "restauracion" },
+  { name: "Resina Compuesta", color: "#6366F1", grupo: "restauracion" },
+  { name: "Resina Compleja",  color: "#8B5CF6", grupo: "restauracion" },
+  { name: "Sellante",         color: "#10B981", grupo: "prevencion"   },
+  { name: "Limpieza",         color: "#06B6D4", grupo: "prevencion"   },
+  { name: "Extracción",       color: "#EF4444", grupo: "cirugia",  esEstado: true, estado: "extraccion" },
+  { name: "Extracción Molar", color: "#DC2626", grupo: "cirugia"      },
+  { name: "Endodoncia",       color: "#7C3AED", grupo: "endodoncia",  esEstado: true, estado: "endodoncia_activa" },
+  { name: "Poste",            color: "#A78BFA", grupo: "endodoncia"   },
+  { name: "Corona",           color: "#F59E0B", grupo: "protesis",    esEstado: true, estado: "corona_activa" },
+  { name: "Puente",           color: "#D97706", grupo: "protesis"     },
+  { name: "Implante",         color: "#06B6D4", grupo: "implantologia", esEstado: true, estado: "implante" },
+  { name: "Prótesis Total",   color: "#F97316", grupo: "protesis"     },
+  { name: "Prótesis Parcial", color: "#EA580C", grupo: "protesis"     },
+  { name: "Blanqueamiento",   color: "#FCD34D", grupo: "estetica"     },
+];
+
+// ─── Subcomponente Diente SVG ─────────────────────────────────────────────────
+
+const Diente = ({ diente, onSelectDiente, onSelectSuperficie, isSelected }) => {
+  const { numero_fdi, estado, superficies } = diente;
+  const esInferior = ["3","4","7","8"].includes(String(numero_fdi)[0]);
+  const esPosterior = parseInt(String(numero_fdi)[1]) > 3;
+
+  const getColor = (nombre) => {
+    // Si el diente está realizado, colorear en azul
+    if (estado === "realizado") return "#93C5FD";
+    const s = superficies?.find(s => s.nombre === nombre);
+    return COLORES_DIAG[s?.diagnostico] || "#FFFFFF";
   };
-  
-  // Renderizar diente según estado
+
   if (estado === "ausente" || estado === "exfoliado") {
     return (
-      <div 
-        className="diente-container ausente"
-        onClick={() => onSelectDiente(diente)}
-        style={{ cursor: 'pointer' }}
-      >
+      <div className="diente-container ausente" onClick={() => onSelectDiente(diente)} style={{ cursor: "pointer" }}>
         <div className="diente-numero">{numero_fdi}</div>
-        <div className="diente-grafico ausente">
-          <span style={{ fontSize: '1.5rem' }}>✕</span>
-        </div>
+        <div className="diente-grafico ausente"><span style={{ fontSize: "1.2rem" }}>✕</span></div>
       </div>
     );
   }
-  
-  if (estado === "implante") {
-    return (
-      <div 
-        className="diente-container implante"
-        onClick={() => onSelectDiente(diente)}
-        style={{ cursor: 'pointer' }}
-      >
-        <div className="diente-numero">{numero_fdi}</div>
-        <div className="diente-grafico implante">
-          <span style={{ fontSize: '1.2rem' }}>⬡</span>
-        </div>
-      </div>
-    );
-  }
-  
-  // Diente normal con superficies
+
   return (
-    <div 
-      className={`diente-container ${isSelected ? 'selected' : ''} ${tipo}`}
-      style={{ cursor: 'pointer' }}
-    >
-      <div className="diente-numero" onClick={() => onSelectDiente(diente)}>
-        {numero_fdi}
-      </div>
-      <svg 
-        viewBox="0 0 50 50" 
-        className="diente-svg"
-        onClick={() => onSelectDiente(diente)}
-      >
-        {/* Superficie vestibular (arriba para superiores, abajo para inferiores) */}
-        <polygon
-          points={esInferior ? "10,35 40,35 35,45 15,45" : "10,15 40,15 35,5 15,5"}
-          fill={getSuperficieColor("vestibular")}
-          stroke="#374151"
-          strokeWidth="1"
-          className="superficie"
-          onClick={(e) => { e.stopPropagation(); onSelectSuperficie(diente, "vestibular"); }}
-        />
-        
-        {/* Superficie palatina/lingual (abajo para superiores, arriba para inferiores) */}
-        <polygon
-          points={esInferior ? "10,15 40,15 35,5 15,5" : "10,35 40,35 35,45 15,45"}
-          fill={getSuperficieColor(esInferior ? "lingual" : "palatino")}
-          stroke="#374151"
-          strokeWidth="1"
-          className="superficie"
-          onClick={(e) => { e.stopPropagation(); onSelectSuperficie(diente, esInferior ? "lingual" : "palatino"); }}
-        />
-        
-        {/* Superficie mesial (izquierda) */}
-        <polygon
-          points="5,10 15,15 15,35 5,40"
-          fill={getSuperficieColor("mesial")}
-          stroke="#374151"
-          strokeWidth="1"
-          className="superficie"
-          onClick={(e) => { e.stopPropagation(); onSelectSuperficie(diente, "mesial"); }}
-        />
-        
-        {/* Superficie distal (derecha) */}
-        <polygon
-          points="45,10 35,15 35,35 45,40"
-          fill={getSuperficieColor("distal")}
-          stroke="#374151"
-          strokeWidth="1"
-          className="superficie"
-          onClick={(e) => { e.stopPropagation(); onSelectSuperficie(diente, "distal"); }}
-        />
-        
-        {/* Superficie oclusal/incisal (centro) */}
-        <polygon
-          points="15,15 35,15 35,35 15,35"
-          fill={getSuperficieColor(esPosterior ? "oclusal" : "incisal")}
-          stroke="#374151"
-          strokeWidth="1.5"
-          className="superficie centro"
-          onClick={(e) => { e.stopPropagation(); onSelectSuperficie(diente, esPosterior ? "oclusal" : "incisal"); }}
-        />
-        
-        {/* Indicador de estado especial */}
-        {estado === "extraccion" && (
-          <text x="25" y="28" textAnchor="middle" fill="#DC2626" fontSize="16" fontWeight="bold">X</text>
-        )}
-        {estado === "no_erupcionado" && (
-          <circle cx="25" cy="25" r="8" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeDasharray="3,3" />
-        )}
+    <div className={`diente-container ${isSelected ? "selected" : ""}`} style={{ cursor: "pointer" }}>
+      <div className="diente-numero" onClick={() => onSelectDiente(diente)}>{numero_fdi}</div>
+      <svg viewBox="0 0 50 50" className="diente-svg" onClick={() => onSelectDiente(diente)}>
+        {/* Vestibular */}
+        <polygon points={esInferior ? "10,35 40,35 35,45 15,45" : "10,15 40,15 35,5 15,5"}
+          fill={getColor("vestibular")} stroke="#374151" strokeWidth="1" className="superficie"
+          onClick={e => { e.stopPropagation(); onSelectSuperficie(diente, "vestibular"); }} />
+        {/* Palatino/Lingual */}
+        <polygon points={esInferior ? "10,15 40,15 35,5 15,5" : "10,35 40,35 35,45 15,45"}
+          fill={getColor(esInferior ? "lingual" : "palatino")} stroke="#374151" strokeWidth="1" className="superficie"
+          onClick={e => { e.stopPropagation(); onSelectSuperficie(diente, esInferior ? "lingual" : "palatino"); }} />
+        {/* Mesial */}
+        <polygon points="5,10 15,15 15,35 5,40"
+          fill={getColor("mesial")} stroke="#374151" strokeWidth="1" className="superficie"
+          onClick={e => { e.stopPropagation(); onSelectSuperficie(diente, "mesial"); }} />
+        {/* Distal */}
+        <polygon points="45,10 35,15 35,35 45,40"
+          fill={getColor("distal")} stroke="#374151" strokeWidth="1" className="superficie"
+          onClick={e => { e.stopPropagation(); onSelectSuperficie(diente, "distal"); }} />
+        {/* Oclusal/Incisal */}
+        <polygon points="15,15 35,15 35,35 15,35"
+          fill={getColor(esPosterior ? "oclusal" : "incisal")} stroke="#374151" strokeWidth="1.5" className="superficie centro"
+          onClick={e => { e.stopPropagation(); onSelectSuperficie(diente, esPosterior ? "oclusal" : "incisal"); }} />
+        {/* Indicadores de estado */}
+        {estado === "extraccion" && <text x="25" y="30" textAnchor="middle" fill="#DC2626" fontSize="18" fontWeight="bold">X</text>}
+        {estado === "implante"   && <text x="25" y="30" textAnchor="middle" fill="#06B6D4" fontSize="14" fontWeight="bold">I</text>}
+        {estado === "no_erupcionado" && <circle cx="25" cy="25" r="8" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeDasharray="3,3" />}
       </svg>
     </div>
   );
 };
 
-export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacienteCedula, doctorId, onClose, onOdontogramaLoaded, appointment }) => {
-  const [odontograma, setOdontograma] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [tipoDenticion, setTipoDenticion] = useState("permanente");
-  const [dienteSeleccionado, setDienteSeleccionado] = useState(null);
-  const [superficieSeleccionada, setSuperficieSeleccionada] = useState(null);
-  const [herramientaActual, setHerramientaActual] = useState("sano");
-  const [modoEdicion, setModoEdicion] = useState("superficie");
-  const [detalleDialogOpen, setDetalleDialogOpen] = useState(false);
-  const [diagnosticoGeneral, setDiagnosticoGeneral] = useState("");
-  const [higieneOral, setHigieneOral] = useState("");
-  const [estadoEncias, setEstadoEncias] = useState("");
-  const [observaciones, setObservaciones] = useState("");
-  const [tratamientos, setTratamientos] = useState([]);
-  const [nuevoTratamiento, setNuevoTratamiento] = useState({ descripcion: "", diente: "", precio: "" });
-  const [generandoProforma, setGenerandoProforma] = useState(false);
-  const [aiSugerencias, setAiSugerencias] = useState([]);
+// ─── Componente principal ─────────────────────────────────────────────────────
 
-  // ── Motor clínico V2 integrado ────────────────────────────────────────────
+export const OdontogramaClinicoTab = ({
+  token, pacienteId, pacienteNombre, pacienteCedula,
+  doctorId, onClose, onOdontogramaLoaded, appointment,
+}) => {
+  // ── Estado ──────────────────────────────────────────────────────────────────
+  const [odontograma,       setOdontograma]       = useState(null);
+  const [loading,           setLoading]           = useState(false);
+  const [tipoDenticion,     setTipoDenticion]     = useState("permanente");
+  const [herramienta,       setHerramienta]       = useState("caries");
+  const [dienteSeleccionado,setDienteSeleccionado]= useState(null);
+  const [aiSugerencias,     setAiSugerencias]     = useState([]);
+
+  // Diagnóstico general
+  const [higieneOral,       setHigieneOral]       = useState("");
+  const [estadoEncias,      setEstadoEncias]       = useState("");
+  const [diagGeneral,       setDiagGeneral]       = useState("");
+  const [observaciones,     setObservaciones]     = useState("");
+
+  // Plan de tratamiento automático
+  const [planAuto,          setPlanAuto]          = useState([]); // { diente, proc, precio, estado }
+
+  // Tratamiento realizado hoy
+  const [realizados,        setRealizados]        = useState([]);
+  const [formRealizado,     setFormRealizado]     = useState({
+    diente: "", procedimiento: "", notas: "", longitud_conducto: "", materiales: "",
+  });
+
+  // Evolución
+  const [evolucion,         setEvolucion]         = useState([]);
+  const [loadingEvolucion,  setLoadingEvolucion]  = useState(false);
+  const [showEvolucion,     setShowEvolucion]     = useState(false);
+
+  // Motor clínico
   const pacienteParaEngine = {
     alergias: appointment?.alergias_medicamentos || appointment?.alergias || "",
     ant_diabetes: appointment?.diabetes || false,
   };
-  const { evaluateLocal, getProcedureDefaults, getAdjustedPrescription, requestAIAnalysis, aiLoading } =
+  const { evaluateLocal, getAdjustedPrescription, requestAIAnalysis, aiLoading } =
     useClinicalEngine({ paciente: pacienteParaEngine });
-
-  // ── Plan de tratamiento (pipeline V2) ─────────────────────────────────────
-  const { plan, addProcedure, updateProcedureState, totals } = useTreatmentPipeline({
-    appointmentId:   appointment?.id,
-    pacienteCedula:  pacienteCedula || appointment?.cedula,
+  const { plan, addProcedure, updateProcedureState } = useTreatmentPipeline({
+    appointmentId: appointment?.id,
+    pacienteCedula: pacienteCedula || appointment?.cedula,
     appointment,
   });
 
+  // ── Carga inicial ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (pacienteId || pacienteCedula) {
-      buscarOdontogramaExistente();
-    } else if (appointment?.id) {
-      // Paciente sin id/cedula explícito — crear directamente con datos del appointment
-      crearNuevoOdontograma();
-    }
+    if (pacienteId || pacienteCedula) buscarOdontograma();
+    else if (appointment?.id) crearOdontograma();
   }, [pacienteId, pacienteCedula, appointment?.id]);
 
-  const buscarOdontogramaExistente = async () => {
+  const buscarOdontograma = async () => {
     setLoading(true);
     try {
-      let response = null;
-      
-      // Primero intentar buscar por cédula (más confiable)
+      let res = null;
       if (pacienteCedula) {
-        try {
-          response = await axios.get(
-            `${API}/odontogramas-clinicos/cedula/${pacienteCedula}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-        } catch (e) {
-          console.log("No se encontró odontograma por cédula, intentando por ID");
-        }
+        try { res = await axios.get(`${API}/odontogramas-clinicos/cedula/${pacienteCedula}`, { headers: { Authorization: `Bearer ${token}` } }); } catch {}
       }
-      
-      // Si no encontró por cédula, buscar por pacienteId
-      if ((!response || !response.data || response.data.length === 0) && pacienteId) {
-        response = await axios.get(
-          `${API}/odontogramas-clinicos/paciente/${pacienteId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+      if (!res?.data?.length && pacienteId) {
+        try { res = await axios.get(`${API}/odontogramas-clinicos/paciente/${pacienteId}`, { headers: { Authorization: `Bearer ${token}` } }); } catch {}
       }
-      
-      if (response?.data && response.data.length > 0) {
-        // Usar el odontograma más reciente
-        const ultimoOdontograma = response.data[0];
-        setOdontograma(ultimoOdontograma);
-        setTipoDenticion(ultimoOdontograma.tipo_denticion || "permanente");
-        setDiagnosticoGeneral(ultimoOdontograma.diagnostico_general || "");
-        setHigieneOral(ultimoOdontograma.higiene_oral || "");
-        setEstadoEncias(ultimoOdontograma.estado_encias || "");
-        setObservaciones(ultimoOdontograma.observaciones || "");
-        // Notificar al padre que se cargó el odontograma
-        if (onOdontogramaLoaded) {
-          onOdontogramaLoaded(ultimoOdontograma.id);
-        }
+      if (res?.data?.length > 0) {
+        cargarOdontogramaData(res.data[0]);
       } else {
-        // Antes de crear, verificar si existe odontograma en formato legacy
-        let legacyFound = false;
-        if (pacienteCedula) {
-          try {
-            const legacyRes = await axios.get(
-              `${API}/odontogramas-clinicos/cedula/${pacienteCedula}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            const legacyData = Array.isArray(legacyRes.data) ? legacyRes.data : [];
-            if (legacyData.length > 0) {
-              // Existe en legacy — cargar sin crear nuevo
-              const legacyOdonto = legacyData[0];
-              setOdontograma(legacyOdonto);
-              setTipoDenticion(legacyOdonto.tipo_denticion || "permanente");
-              setDiagnosticoGeneral(legacyOdonto.diagnostico_general || "");
-              setHigieneOral(legacyOdonto.higiene_oral || "");
-              setEstadoEncias(legacyOdonto.estado_encias || "");
-              setObservaciones(legacyOdonto.observaciones || "");
-              if (onOdontogramaLoaded) onOdontogramaLoaded(legacyOdonto.id);
-              legacyFound = true;
-            }
-          } catch (legacyErr) {
-            console.log("No existe odontograma legacy tampoco:", legacyErr.message);
-          }
-        }
-        if (!legacyFound) {
-          // Realmente no existe — crear nuevo
-          await crearNuevoOdontograma();
-        }
+        await crearOdontograma();
       }
-    } catch (error) {
-      console.error("Error al buscar odontograma:", error);
-      await crearNuevoOdontograma();
+    } catch {
+      await crearOdontograma();
     }
     setLoading(false);
   };
 
-  const crearNuevoOdontograma = async () => {
+  const cargarOdontogramaData = (o) => {
+    setOdontograma(o);
+    setTipoDenticion(o.tipo_denticion || "permanente");
+    setDiagGeneral(o.diagnostico_general || "");
+    setHigieneOral(o.higiene_oral || "");
+    setEstadoEncias(o.estado_encias || "");
+    setObservaciones(o.observaciones || "");
+    if (onOdontogramaLoaded) onOdontogramaLoaded(o.id);
+    // Reconstruir plan automático desde dientes guardados
+    reconstruirPlanDesdeOdontograma(o);
+  };
+
+  const crearOdontograma = async () => {
     try {
-      // Usar todos los datos disponibles del appointment como fallback
       const payload = {
-        paciente_id:      pacienteId             || appointment?.paciente_id || "",
-        paciente_nombre:  pacienteNombre          || appointment?.nombre_completo || appointment?.nombre || "",
-        paciente_cedula:  pacienteCedula          || appointment?.cedula || "",
-        doctor_id:        doctorId               || appointment?.doctor_id || "",
-        doctor_nombre:    appointment?.doctor_nombre || "",
-        tipo_denticion:   tipoDenticion,
+        paciente_id:     pacienteId || appointment?.paciente_id || "",
+        paciente_nombre: pacienteNombre || appointment?.nombre_completo || "",
+        paciente_cedula: pacienteCedula || appointment?.cedula || "",
+        doctor_id:       doctorId || appointment?.doctor_id || "",
+        doctor_nombre:   appointment?.doctor_nombre || "",
+        tipo_denticion:  tipoDenticion,
       };
-
-      const response = await axios.post(
-        `${API}/odontogramas-clinicos`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      // El POST devuelve el odontograma completo — no necesita segundo GET
-      const nuevoOdontograma = response.data;
-      setOdontograma(nuevoOdontograma);
-      if (onOdontogramaLoaded) onOdontogramaLoaded(nuevoOdontograma.id);
-      toast.success("✅ Odontograma creado");
-    } catch (error) {
-      const det = error.response?.data?.detail || error.message;
-      console.error("Error al crear odontograma:", det);
-      toast.error(`Error al crear odontograma: ${det}`);
-      // No dejar al usuario pegado — mostrar estado de error
-      setOdontograma(null);
+      const res = await axios.post(`${API}/odontogramas-clinicos`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      cargarOdontogramaData(res.data);
+      toast.success("Odontograma creado");
+    } catch (e) {
+      toast.error("Error al crear odontograma: " + (e.response?.data?.detail || e.message));
     }
   };
 
-  const cambiarTipoDenticion = async (nuevoTipo) => {
-    if (!odontograma) return;
-    
-    if (!window.confirm(`¿Cambiar a dentición ${nuevoTipo}? Esto regenerará los dientes.`)) {
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      await axios.post(
-        `${API}/odontogramas-clinicos/${odontograma.id}/cambiar-denticion`,
-        { tipo_denticion: nuevoTipo },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      setTipoDenticion(nuevoTipo);
-      await buscarOdontogramaExistente();
-      toast.success(`Dentición cambiada a ${nuevoTipo}`);
-    } catch (error) {
-      console.error("Error al cambiar dentición:", error);
-      toast.error("Error al cambiar dentición");
-    }
-    setLoading(false);
+  // Reconstruir plan de tratamiento desde dientes del odontograma
+  const reconstruirPlanDesdeOdontograma = (o) => {
+    const nuevoPlan = [];
+    (o.dientes || []).forEach(diente => {
+      const supAfectadas = (diente.superficies || []).filter(s => s.diagnostico && s.diagnostico !== "sano");
+      if (supAfectadas.length === 0) return;
+      const item = calcularItemPlan(diente.numero_fdi, supAfectadas);
+      if (item) nuevoPlan.push(item);
+    });
+    setPlanAuto(nuevoPlan);
   };
 
-  const handleSelectDiente = (diente) => {
-    setDienteSeleccionado(diente);
-    setSuperficieSeleccionada(null);
-    
-    if (modoEdicion === "diente") {
-      setDetalleDialogOpen(true);
-    }
+  // Calcular el ítem del plan para un diente dado sus superficies afectadas
+  const calcularItemPlan = (numero_fdi, supAfectadas) => {
+    if (!supAfectadas.length) return null;
+    const diagDominante = [...supAfectadas]
+      .sort((a, b) => (PRIORIDAD[b.diagnostico] || 0) - (PRIORIDAD[a.diagnostico] || 0))[0]?.diagnostico || "caries";
+    const proc = diagDominante === "endodoncia" ? "Endodoncia"
+      : diagDominante === "corona"    ? "Corona"
+      : diagDominante === "sellante"  ? "Sellante"
+      : diagDominante === "fractura"  ? "Resina Compleja"
+      : clasificarPorSuperficies(supAfectadas.length);
+    const supCodigos = supAfectadas.map(s =>
+      ({ vestibular:"V", palatino:"P", lingual:"L", mesial:"M", distal:"D", oclusal:"O", incisal:"I" })[s.nombre] || "?"
+    ).join("");
+    const precio = PROCEDURE_DEFAULTS[proc]?.precio || PRECIOS_DEFAULT[proc] || 0;
+    return {
+      id: `plan-${numero_fdi}`,
+      diente: String(numero_fdi), procedimiento: proc,
+      superficies: supCodigos, precio,
+      estado: "pendiente", diagnostico: diagDominante,
+    };
   };
 
-  const handleSelectSuperficie = async (diente, nombreSuperficie) => {
-    if (modoEdicion === "superficie") {
-      // Aplicar diagnóstico directamente
-      await aplicarDiagnosticoSuperficie(diente, nombreSuperficie, herramientaActual);
-    } else {
-      setDienteSeleccionado(diente);
-      setSuperficieSeleccionada(nombreSuperficie);
-      setDetalleDialogOpen(true);
-    }
-  };
-
+  // ── Aplicar diagnóstico a superficie ────────────────────────────────────────
   const aplicarDiagnosticoSuperficie = async (diente, nombreSuperficie, diagnostico) => {
-    if (!odontograma?.id) {
-      toast.error("Odontograma no cargado aún, espere un momento");
-      return;
-    }
-
+    if (!odontograma?.id) { toast.error("Odontograma no cargado"); return; }
     try {
       await axios.put(
         `${API}/odontogramas-clinicos/${odontograma.id}/diente/${diente.numero_fdi}/superficie/${nombreSuperficie}`,
-        { diagnostico },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { diagnostico }, { headers: { Authorization: `Bearer ${token}` } }
       );
-
       // Actualizar estado local
-      const copia = { ...odontograma, dientes: odontograma.dientes.map(d => {
-        if (d.numero_fdi !== diente.numero_fdi) return d;
-        return {
-          ...d,
-          superficies: d.superficies.map(s =>
-            s.nombre === nombreSuperficie ? { ...s, diagnostico } : s
-          ),
-        };
-      })};
+      const copia = {
+        ...odontograma,
+        dientes: odontograma.dientes.map(d =>
+          d.numero_fdi !== diente.numero_fdi ? d : {
+            ...d,
+            superficies: d.superficies.map(s =>
+              s.nombre === nombreSuperficie ? { ...s, diagnostico } : s
+            ),
+          }
+        ),
+      };
       setOdontograma(copia);
 
-      // ── Auto-agregar a lista de tratamientos si no es "sano" ─────────────
-      if (diagnostico && diagnostico !== "sano") {
-        const etiquetas = {
-          caries: "Caries", restauracion: "Restauración", endodoncia: "Endodoncia",
-          corona: "Corona", sellante: "Sellante", fractura: "Fractura",
-        };
-        const precios = {
-          caries: 25, restauracion: 40, endodoncia: 150,
-          corona: 200, sellante: 20, fractura: 50,
-        };
-        const etiqueta  = etiquetas[diagnostico] || diagnostico;
-        const supLabel  = { vestibular: "V", palatino: "P", lingual: "L", mesial: "M", distal: "D", oclusal: "O" }[nombreSuperficie] || nombreSuperficie;
-        const desc      = `${etiqueta} — D${diente.numero_fdi} sup. ${supLabel}`;
+      // Recalcular plan para este diente
+      const dienteActual = copia.dientes.find(d => d.numero_fdi === diente.numero_fdi);
+      const supAfectadas = (dienteActual?.superficies || []).filter(s => s.diagnostico && s.diagnostico !== "sano");
 
-        setTratamientos(ts => {
-          if (ts.some(t => t.descripcion === desc)) return ts;
-          return [...ts, {
-            id: Date.now(), descripcion: desc,
-            diente: String(diente.numero_fdi),
-            precio: String(precios[diagnostico] || 0),
-            estado: "pendiente",
-          }];
+      if (supAfectadas.length > 0) {
+        const item = calcularItemPlan(diente.numero_fdi, supAfectadas);
+        setPlanAuto(prev => {
+          const sinEste = prev.filter(p => p.diente !== String(diente.numero_fdi));
+          return item ? [...sinEste, item] : sinEste;
         });
-        setNuevoTratamiento(f => ({ ...f, diente: String(diente.numero_fdi) }));
+        // Pre-seleccionar diente en formulario "realizado"
+        setFormRealizado(f => ({ ...f, diente: String(diente.numero_fdi), procedimiento: item?.procedimiento || "" }));
 
-        // ── Motor clínico: evaluar reglas y sugerir procedimientos ────────
-        const superficiesAfectadas = (copia.dientes
-          .find(d => d.numero_fdi === diente.numero_fdi)
-          ?.superficies?.filter(s => s.diagnostico && s.diagnostico !== "sano")
-          ?.map(s => s.nombre?.[0]?.toUpperCase()) || []);
-
-        const sugerencias = evaluateLocal({
-          selectedSurfaces:  superficiesAfectadas,
-          toothHistory:      [],
-          paciente:          pacienteParaEngine,
-          procedimiento:     etiqueta,
-        });
-
-        // Sugerencia automática por número de superficies
-        const procSugerido = clasificarPorSuperficies(superficiesAfectadas.length);
-        if (procSugerido && procSugerido !== "Resina Simple") {
-          sugerencias.unshift({
+        // Sugerencias motor clínico
+        if (supAfectadas.length >= 2) {
+          const proc = item?.procedimiento || "";
+          setAiSugerencias([{
             tipo: "info",
-            texto: `${superficiesAfectadas.length} superficies → se sugiere ${procSugerido}`,
-            procedimientos_alternativos: [procSugerido],
-          });
+            texto: `${supAfectadas.length} superficies afectadas → ${proc} recomendado`,
+            procedimientos_alternativos: supAfectadas.length >= 4 ? ["Corona"] : supAfectadas.length === 3 ? ["Resina Compleja"] : [],
+            diente_numero: String(diente.numero_fdi),
+          }]);
         }
-
-        if (sugerencias.length > 0) setAiSugerencias(sugerencias);
       } else {
-        setAiSugerencias([]);
+        // Sano — quitar del plan
+        setPlanAuto(prev => prev.filter(p => p.diente !== String(diente.numero_fdi)));
+        setAiSugerencias(prev => prev.filter(s => s.diente_numero !== String(diente.numero_fdi)));
       }
-
-    } catch (error) {
-      console.error("Error al actualizar superficie:", error);
-      toast.error(`Error al marcar ${nombreSuperficie} — ${error.response?.data?.detail || error.message}`);
+    } catch (e) {
+      toast.error(`Error al marcar superficie: ${e.response?.data?.detail || e.message}`);
     }
   };
 
-  const aplicarEstadoDiente = async (nuevoEstado) => {
-    if (!odontograma || !dienteSeleccionado) return;
-    
+  // ── Aplicar acción rápida a diente seleccionado ──────────────────────────────
+  const aplicarAccionRapida = async (accion) => {
+    const dNum = dienteSeleccionado?.numero_fdi;
+    const precio = PROCEDURE_DEFAULTS[accion.name]?.precio || PRECIOS_DEFAULT[accion.name] || 0;
+
+    // Si tiene estado asociado, marcarlo en el diente
+    if (accion.esEstado && dNum && odontograma?.id) {
+      try {
+        await axios.put(
+          `${API}/odontogramas-clinicos/${odontograma.id}/diente/${dNum}`,
+          { estado: accion.estado },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const copia = {
+          ...odontograma,
+          dientes: odontograma.dientes.map(d =>
+            d.numero_fdi !== dNum ? d : { ...d, estado: accion.estado }
+          ),
+        };
+        setOdontograma(copia);
+        setDienteSeleccionado(prev => prev ? { ...prev, estado: accion.estado } : prev);
+      } catch {}
+    }
+
+    // Agregar al plan (reemplazando si ya existe para este diente)
+    const itemNuevo = {
+      id: dNum ? `plan-${dNum}` : `plan-rapido-${Date.now()}`,
+      diente: String(dNum || "General"),
+      procedimiento: accion.name, superficies: "",
+      precio, estado: "pendiente",
+    };
+    if (dNum) {
+      setPlanAuto(prev => {
+        const sinEste = prev.filter(p => p.diente !== String(dNum));
+        return [...sinEste, itemNuevo];
+      });
+    } else {
+      setPlanAuto(prev => [...prev, itemNuevo]);
+    }
+
+    // Pre-cargar en formulario de realizado
+    setFormRealizado(f => ({ ...f, diente: String(dNum || ""), procedimiento: accion.name }));
+
+    // Motor clínico — receta
     try {
-      await axios.put(
-        `${API}/odontogramas-clinicos/${odontograma.id}/diente/${dienteSeleccionado.numero_fdi}`,
-        { estado: nuevoEstado },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Actualizar estado local
-      const nuevosOdontogramas = { ...odontograma };
-      const dienteIndex = nuevosOdontogramas.dientes.findIndex(d => d.numero_fdi === dienteSeleccionado.numero_fdi);
-      if (dienteIndex >= 0) {
-        nuevosOdontogramas.dientes[dienteIndex].estado = nuevoEstado;
-      }
-      setOdontograma(nuevosOdontogramas);
-      setDienteSeleccionado({ ...dienteSeleccionado, estado: nuevoEstado });
-      
-      toast.success(`Diente ${dienteSeleccionado.numero_fdi} marcado como ${nuevoEstado}`);
-    } catch (error) {
-      console.error("Error al actualizar diente:", error);
-      toast.error("Error al actualizar diente");
-    }
+      const receta = getAdjustedPrescription(accion.name);
+      if (receta?.length > 0) toast.info(`Receta: ${receta.map(r => r.nombre).join(", ")}`);
+    } catch {}
+
+    // Limpiar sugerencias de IA para este diente
+    if (dNum) setAiSugerencias(prev => prev.filter(s => s.diente_numero !== String(dNum)));
   };
 
+  // ── Guardar diagnóstico general ──────────────────────────────────────────────
   const guardarDiagnosticoGeneral = async () => {
     if (!odontograma) return;
-    
-    setLoading(true);
     try {
-      await axios.put(
-        `${API}/odontogramas-clinicos/${odontograma.id}`,
-        {
-          diagnostico_general: diagnosticoGeneral,
-          higiene_oral: higieneOral,
-          estado_encias: estadoEncias,
-          observaciones: observaciones
-        },
+      await axios.put(`${API}/odontogramas-clinicos/${odontograma.id}`,
+        { diagnostico_general: diagGeneral, higiene_oral: higieneOral, estado_encias: estadoEncias, observaciones },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      toast.success("Diagnóstico guardado");
-    } catch (error) {
-      console.error("Error al guardar:", error);
-      toast.error("Error al guardar diagnóstico");
-    }
-    setLoading(false);
+      toast.success("Diagnóstico general guardado");
+    } catch { toast.error("Error al guardar"); }
   };
 
-  // Organizar dientes por cuadrantes
+  // ── Marcar procedimiento del plan como realizado ─────────────────────────────
+  const marcarRealizado = (planId) => {
+    const item = planAuto.find(p => p.id === planId);
+    if (!item) return;
+    setPlanAuto(prev => prev.map(p => p.id === planId ? { ...p, estado: "realizado" } : p));
+    // Agregar a realizados hoy
+    setRealizados(prev => [...prev, { ...item, id: Date.now(), fecha: new Date().toLocaleDateString("es-EC") }]);
+    // Marcar diente como realizado en el SVG
+    if (item.diente && item.diente !== "General" && odontograma) {
+      setOdontograma(prev => ({
+        ...prev,
+        dientes: prev.dientes.map(d =>
+          d.numero_fdi === item.diente ? { ...d, estado: "realizado" } : d
+        ),
+      }));
+    }
+  };
+
+  // ── Registrar tratamiento realizado manualmente ──────────────────────────────
+  const agregarRealizado = () => {
+    if (!formRealizado.diente && !formRealizado.procedimiento) {
+      toast.error("Seleccione diente y procedimiento"); return;
+    }
+    const nuevo = {
+      id: Date.now(),
+      diente: formRealizado.diente,
+      procedimiento: formRealizado.procedimiento,
+      notas: formRealizado.notas,
+      longitud_conducto: formRealizado.longitud_conducto,
+      materiales: formRealizado.materiales,
+      fecha: new Date().toLocaleDateString("es-EC"),
+      hora: new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" }),
+    };
+    setRealizados(prev => [...prev, nuevo]);
+    setFormRealizado({ diente: "", procedimiento: "", notas: "", longitud_conducto: "", materiales: "" });
+    // Marcar en el SVG si hay diente
+    if (nuevo.diente && odontograma) {
+      setOdontograma(prev => ({
+        ...prev,
+        dientes: prev.dientes.map(d =>
+          d.numero_fdi === nuevo.diente ? { ...d, estado: "realizado" } : d
+        ),
+      }));
+    }
+  };
+
+  // ── Cargar evolución previa ──────────────────────────────────────────────────
+  const cargarEvolucion = async () => {
+    if (!odontograma?.id) return;
+    setLoadingEvolucion(true);
+    try {
+      const res = await axios.get(`${API}/odontogramas-clinicos/${odontograma.id}/evolucion`,
+        { headers: { Authorization: `Bearer ${token}` } });
+      setEvolucion(Array.isArray(res.data) ? res.data : []);
+    } catch { setEvolucion([]); }
+    setLoadingEvolucion(false);
+  };
+
+  // ── Organizar dientes en arcos ───────────────────────────────────────────────
   const organizarDientes = () => {
     if (!odontograma?.dientes) return { superior: [], inferior: [] };
-    
-    const dientes = odontograma.dientes;
-    
-    if (tipoDenticion === "permanente") {
-      // Q1: 18→11 (derecha a centro), Q2: 21→28 (centro a izquierda)
-      // Q4: 48→41 (derecha a centro), Q3: 31→38 (centro a izquierda)
-      const cuadrante1 = dientes.filter(d => d.cuadrante === 1).sort((a, b) => a.posicion - b.posicion); // 18→11
-      const cuadrante2 = dientes.filter(d => d.cuadrante === 2).sort((a, b) => a.posicion - b.posicion); // 21→28
-      const cuadrante4 = dientes.filter(d => d.cuadrante === 4).sort((a, b) => a.posicion - b.posicion); // 48→41
-      const cuadrante3 = dientes.filter(d => d.cuadrante === 3).sort((a, b) => a.posicion - b.posicion); // 31→38
-      
-      return {
-        superior: [...cuadrante1, ...cuadrante2],
-        inferior: [...cuadrante4, ...cuadrante3]
-      };
-    } else if (tipoDenticion === "temporal") {
-      // Cuadrantes 5 y 6 (superiores), 8 y 7 (inferiores)
-      const cuadrante5 = dientes.filter(d => d.cuadrante === 5).sort((a, b) => a.posicion - b.posicion);
-      const cuadrante6 = dientes.filter(d => d.cuadrante === 6).sort((a, b) => a.posicion - b.posicion);
-      const cuadrante8 = dientes.filter(d => d.cuadrante === 8).sort((a, b) => a.posicion - b.posicion);
-      const cuadrante7 = dientes.filter(d => d.cuadrante === 7).sort((a, b) => a.posicion - b.posicion);
-      
-      return {
-        superior: [...cuadrante5, ...cuadrante6],
-        inferior: [...cuadrante8, ...cuadrante7]
-      };
-    } else {
-      // Mixta: mostrar ambos
-      const permanentes = {
-        superior: [
-          ...dientes.filter(d => d.cuadrante === 1).sort((a, b) => a.posicion - b.posicion),
-          ...dientes.filter(d => d.cuadrante === 2).sort((a, b) => a.posicion - b.posicion)
-        ],
-        inferior: [
-          ...dientes.filter(d => d.cuadrante === 4).sort((a, b) => a.posicion - b.posicion),
-          ...dientes.filter(d => d.cuadrante === 3).sort((a, b) => a.posicion - b.posicion)
-        ]
-      };
-      const temporales = {
-        superior: [
-          ...dientes.filter(d => d.cuadrante === 5).sort((a, b) => b.posicion - a.posicion),
-          ...dientes.filter(d => d.cuadrante === 6).sort((a, b) => a.posicion - b.posicion)
-        ],
-        inferior: [
-          ...dientes.filter(d => d.cuadrante === 8).sort((a, b) => b.posicion - a.posicion),
-          ...dientes.filter(d => d.cuadrante === 7).sort((a, b) => a.posicion - b.posicion)
-        ]
-      };
-      
-      return { permanentes, temporales };
-    }
+    const d = odontograma.dientes;
+    return {
+      superior: [
+        ...d.filter(x => x.cuadrante === 1).sort((a, b) => a.posicion - b.posicion),
+        ...d.filter(x => x.cuadrante === 2).sort((a, b) => a.posicion - b.posicion),
+      ],
+      inferior: [
+        ...d.filter(x => x.cuadrante === 4).sort((a, b) => a.posicion - b.posicion),
+        ...d.filter(x => x.cuadrante === 3).sort((a, b) => a.posicion - b.posicion),
+      ],
+    };
   };
 
-  const denticionOrganizada = organizarDientes();
+  const { superior, inferior } = organizarDientes();
 
-  // Debug para verificar datos
-  console.log("Odontograma:", odontograma?.id, "Dientes:", odontograma?.dientes?.length);
-  console.log("Denticion organizada:", denticionOrganizada);
+  // ── Estilos compartidos ──────────────────────────────────────────────────────
+  const sCard = { marginBottom: "16px", padding: "16px", background: "#F8FAFF", border: "1px solid #BFDBFE", borderRadius: "12px" };
+  const sTitle = { margin: "0 0 12px", fontSize: "14px", fontWeight: "700", color: "#0C4A6E", display: "flex", alignItems: "center", gap: "6px" };
+  const sInput = { width: "100%", padding: "8px 10px", border: "1.5px solid #BFDBFE", borderRadius: "8px", fontSize: "13px", boxSizing: "border-box", outline: "none" };
+  const sLabel = { fontSize: "11px", fontWeight: "700", color: "#374151", display: "block", marginBottom: "3px", textTransform: "uppercase" };
+  const sRow2  = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" };
 
-  if (loading && !odontograma) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>Cargando odontograma...</p>
-      </div>
-    );
-  }
+  // ── Estados de carga ─────────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={{ padding: "40px", textAlign: "center", color: "#6B7280" }}>
+      <div style={{ fontSize: "14px" }}>Cargando odontograma...</div>
+    </div>
+  );
 
-  // Si odontograma existe pero sin dientes, crear automáticamente
-  if (!odontograma?.dientes || odontograma.dientes.length === 0) {
-    return (
-      <div style={{ padding: "2rem", textAlign: "center" }}>
-        <p style={{ color: "#6B7280", marginBottom: "12px" }}>Preparando odontograma...</p>
-        <Button
-          onClick={crearNuevoOdontograma}
-          style={{ marginTop: "8px", background: "#0C4A6E", color: "white", padding: "10px 24px" }}
-        >
-          Iniciar Odontograma
-        </Button>
-        <p style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "8px" }}>
-          {pacienteNombre || appointment?.nombre_completo || "Paciente nuevo"}
-        </p>
-      </div>
-    );
-  }
+  if (!odontograma?.dientes?.length) return (
+    <div style={{ padding: "40px", textAlign: "center" }}>
+      <p style={{ color: "#6B7280", marginBottom: "16px" }}>
+        {pacienteNombre || appointment?.nombre_completo || "Paciente nuevo"}
+      </p>
+      <Button onClick={crearOdontograma} style={{ background: "#0C4A6E", color: "white", padding: "12px 28px" }}>
+        Iniciar Odontograma
+      </Button>
+    </div>
+  );
 
+  // ── RENDER PRINCIPAL ─────────────────────────────────────────────────────────
   return (
-    <div style={{ background: "white", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-    <div className="odontograma-clinico" style={{ flex: 1 }}>
-      {/* ── ANTECEDENTES del paciente (llenados por counter) ─────────────── */}
+    <div style={{ padding: "12px", maxWidth: "100%", background: "white" }}>
+
+      {/* ══ 1. ANTECEDENTES ════════════════════════════════════════════════ */}
       {(appointment?.cedula || pacienteCedula) && (
-        <div style={{ padding: "0 0 8px" }}>
+        <div style={{ marginBottom: "12px" }}>
           <AntecedentesPanel
             cedula={appointment?.cedula || pacienteCedula}
-            token={token}
-            especialidad="Odontología"
-            readOnly={true}
-            onLoad={() => {}}
+            token={token} especialidad="Odontología"
+            readOnly={true} onLoad={() => {}}
           />
         </div>
       )}
 
-      {/* Header */}
-      <div className="odontograma-header">
-        <div className="header-info">
-          <h2>Odontograma Clínico</h2>
-          {pacienteNombre && (
-            <div className="paciente-info">
-              <User size={16} />
-              <span>{pacienteNombre}</span>
-              {pacienteCedula && <span className="cedula">({pacienteCedula})</span>}
-            </div>
-          )}
-        </div>
-        
-        <div className="header-controls">
-          <Select value={tipoDenticion} onValueChange={cambiarTipoDenticion}>
-            <SelectTrigger style={{ width: '180px' }}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="permanente">Permanente (32)</SelectItem>
-              <SelectItem value="temporal">Temporal (20)</SelectItem>
-              <SelectItem value="mixta">Mixta</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Button onClick={guardarDiagnosticoGeneral} disabled={loading}>
-            <Save size={16} style={{ marginRight: '0.5rem' }} />
-            Guardar
-          </Button>
-        </div>
-      </div>
-
-      {/* Barra de herramientas de diagnóstico */}
-      <div className="herramientas-diagnostico">
-        <div className="modo-edicion">
-          <Label>Modo:</Label>
-          <div className="modo-buttons">
-            <Button 
-              variant={modoEdicion === "superficie" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setModoEdicion("superficie")}
-            >
-              Superficie
-            </Button>
-            <Button 
-              variant={modoEdicion === "diente" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setModoEdicion("diente")}
-            >
-              Diente
-            </Button>
+      {/* ══ 2. DIAGNÓSTICO GENERAL ═════════════════════════════════════════ */}
+      <div style={sCard}>
+        <h3 style={sTitle}>🩺 Diagnóstico General</h3>
+        <div style={{ ...sRow2, marginBottom: "10px" }}>
+          <div>
+            <label style={sLabel}>Higiene Oral</label>
+            <select value={higieneOral} onChange={e => setHigieneOral(e.target.value)} style={sInput}>
+              <option value="">Seleccione...</option>
+              {["Excelente","Buena","Regular","Mala","Muy mala"].map(o => <option key={o}>{o}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={sLabel}>Estado de Encías</label>
+            <select value={estadoEncias} onChange={e => setEstadoEncias(e.target.value)} style={sInput}>
+              <option value="">Seleccione...</option>
+              {["Sanas","Gingivitis leve","Gingivitis moderada","Periodontitis leve","Periodontitis avanzada"].map(o => <option key={o}>{o}</option>)}
+            </select>
           </div>
         </div>
-        
-        {modoEdicion === "superficie" && (
-          <div className="diagnosticos-toolbar">
-            <Label>Diagnóstico:</Label>
-            <div className="diagnostico-buttons">
-              {DIAGNOSTICOS.map(diag => (
-                <button
-                  key={diag.value}
-                  className={`diag-btn ${herramientaActual === diag.value ? 'active' : ''}`}
-                  onClick={() => setHerramientaActual(diag.value)}
-                  style={{ 
-                    backgroundColor: herramientaActual === diag.value ? diag.color : 'transparent',
-                    borderColor: diag.color,
-                    color: herramientaActual === diag.value ? (diag.value === 'sano' ? '#374151' : '#fff') : diag.color
-                  }}
-                  title={diag.label}
-                >
-                  {diag.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <div style={{ marginBottom: "10px" }}>
+          <label style={sLabel}>Diagnóstico General</label>
+          <textarea value={diagGeneral} onChange={e => setDiagGeneral(e.target.value)}
+            placeholder="Describa el diagnóstico general del paciente..."
+            style={{ ...sInput, minHeight: "60px", resize: "vertical" }} />
+        </div>
+        <div style={{ marginBottom: "10px" }}>
+          <label style={sLabel}>Observaciones</label>
+          <textarea value={observaciones} onChange={e => setObservaciones(e.target.value)}
+            placeholder="Observaciones adicionales..."
+            style={{ ...sInput, minHeight: "44px", resize: "vertical" }} />
+        </div>
+        <button onClick={guardarDiagnosticoGeneral}
+          style={{ padding: "7px 16px", background: "#0C4A6E", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
+          <Save size={12} /> Guardar
+        </button>
       </div>
 
-      {/* Odontograma Visual */}
-      <div className="odontograma-visual">
-        {tipoDenticion === "mixta" ? (
-          <>
-            {/* Permanentes */}
-            <div className="denticion-section">
-              <h4>Dentición Permanente</h4>
-              <div className="arcada superior">
-                <div className="cuadrante-label left">Q1</div>
-                <div className="dientes-row">
-                  {denticionOrganizada.permanentes?.superior?.map(diente => (
-                    <Diente
-                      key={diente.numero_fdi}
-                      diente={diente}
-                      onSelectDiente={handleSelectDiente}
-                      onSelectSuperficie={handleSelectSuperficie}
-                      isSelected={dienteSeleccionado?.numero_fdi === diente.numero_fdi}
-                      herramientaActual={herramientaActual}
-                    />
-                  ))}
-                </div>
-                <div className="cuadrante-label right">Q2</div>
-              </div>
-              
-              <div className="linea-media" />
-              
-              <div className="arcada inferior">
-                <div className="cuadrante-label left">Q4</div>
-                <div className="dientes-row">
-                  {denticionOrganizada.permanentes?.inferior?.map(diente => (
-                    <Diente
-                      key={diente.numero_fdi}
-                      diente={diente}
-                      onSelectDiente={handleSelectDiente}
-                      onSelectSuperficie={handleSelectSuperficie}
-                      isSelected={dienteSeleccionado?.numero_fdi === diente.numero_fdi}
-                      herramientaActual={herramientaActual}
-                    />
-                  ))}
-                </div>
-                <div className="cuadrante-label right">Q3</div>
-              </div>
-            </div>
-            
-            {/* Temporales */}
-            <div className="denticion-section temporal">
-              <h4>Dentición Temporal</h4>
-              <div className="arcada superior">
-                <div className="cuadrante-label left">Q5</div>
-                <div className="dientes-row">
-                  {denticionOrganizada.temporales?.superior?.map(diente => (
-                    <Diente
-                      key={diente.numero_fdi}
-                      diente={diente}
-                      onSelectDiente={handleSelectDiente}
-                      onSelectSuperficie={handleSelectSuperficie}
-                      isSelected={dienteSeleccionado?.numero_fdi === diente.numero_fdi}
-                      herramientaActual={herramientaActual}
-                    />
-                  ))}
-                </div>
-                <div className="cuadrante-label right">Q6</div>
-              </div>
-              
-              <div className="linea-media" />
-              
-              <div className="arcada inferior">
-                <div className="cuadrante-label left">Q8</div>
-                <div className="dientes-row">
-                  {denticionOrganizada.temporales?.inferior?.map(diente => (
-                    <Diente
-                      key={diente.numero_fdi}
-                      diente={diente}
-                      onSelectDiente={handleSelectDiente}
-                      onSelectSuperficie={handleSelectSuperficie}
-                      isSelected={dienteSeleccionado?.numero_fdi === diente.numero_fdi}
-                      herramientaActual={herramientaActual}
-                    />
-                  ))}
-                </div>
-                <div className="cuadrante-label right">Q7</div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Arcada Superior */}
-            <div className="arcada superior">
-              <div className="cuadrante-label left">{tipoDenticion === 'temporal' ? 'Q5' : 'Q1'}</div>
-              <div className="dientes-row">
-                {denticionOrganizada.superior?.map(diente => (
-                  <Diente
-                    key={diente.numero_fdi}
-                    diente={diente}
-                    onSelectDiente={handleSelectDiente}
-                    onSelectSuperficie={handleSelectSuperficie}
-                    isSelected={dienteSeleccionado?.numero_fdi === diente.numero_fdi}
-                    herramientaActual={herramientaActual}
-                  />
-                ))}
-              </div>
-              <div className="cuadrante-label right">{tipoDenticion === 'temporal' ? 'Q6' : 'Q2'}</div>
-            </div>
-            
-            {/* Línea media */}
-            <div className="linea-media">
-              <span>SUPERIOR</span>
-              <div className="linea" />
-              <span>INFERIOR</span>
-            </div>
-            
-            {/* Arcada Inferior */}
-            <div className="arcada inferior">
-              <div className="cuadrante-label left">{tipoDenticion === 'temporal' ? 'Q8' : 'Q4'}</div>
-              <div className="dientes-row">
-                {denticionOrganizada.inferior?.map(diente => (
-                  <Diente
-                    key={diente.numero_fdi}
-                    diente={diente}
-                    onSelectDiente={handleSelectDiente}
-                    onSelectSuperficie={handleSelectSuperficie}
-                    isSelected={dienteSeleccionado?.numero_fdi === diente.numero_fdi}
-                    herramientaActual={herramientaActual}
-                  />
-                ))}
-              </div>
-              <div className="cuadrante-label right">{tipoDenticion === 'temporal' ? 'Q7' : 'Q3'}</div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Leyenda */}
-      <div className="leyenda-odontograma">
-        <h4>Leyenda de Diagnósticos</h4>
-        <div className="leyenda-items">
-          {DIAGNOSTICOS.map(diag => (
-            <div key={diag.value} className="leyenda-item">
-              <div 
-                className="leyenda-color" 
-                style={{ backgroundColor: diag.color, border: diag.value === 'sano' ? '1px solid #9CA3AF' : 'none' }}
-              />
-              <span>{diag.label}</span>
-            </div>
+      {/* ══ 3. TOOLBAR + ODONTOGRAMA ══════════════════════════════════════ */}
+      <div style={{ ...sCard, background: "white" }}>
+        {/* Toolbar: selector de diagnóstico */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "12px", alignItems: "center" }}>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B", marginRight: "4px" }}>Diagnóstico:</span>
+          {DIAGNOSTICOS.map(d => (
+            <button key={d.value} onClick={() => setHerramienta(d.value)}
+              style={{
+                padding: "4px 10px", borderRadius: "14px", border: `2px solid ${d.color === "#FFFFFF" ? "#D1D5DB" : d.color}`,
+                background: herramienta === d.value ? d.color : "white",
+                color: herramienta === d.value && d.color !== "#FFFFFF" ? "white" : "#374151",
+                fontSize: "11px", fontWeight: "700", cursor: "pointer",
+                boxShadow: herramienta === d.value ? "0 2px 6px rgba(0,0,0,0.2)" : "none",
+              }}>
+              {d.label}
+            </button>
           ))}
         </div>
-      </div>
 
-      {/* Panel de diagnóstico general */}
-      <div className="diagnostico-general-panel">
-        <h4>Diagnóstico General</h4>
-        <div className="form-grid">
-          <div className="form-field">
-            <Label>Higiene Oral</Label>
-            <Select value={higieneOral} onValueChange={setHigieneOral}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="buena">Buena</SelectItem>
-                <SelectItem value="regular">Regular</SelectItem>
-                <SelectItem value="mala">Mala</SelectItem>
-              </SelectContent>
-            </Select>
+        {/* Arco Superior */}
+        <div style={{ marginBottom: "4px" }}>
+          <div style={{ fontSize: "9px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "4px", textAlign: "center" }}>Superior</div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "2px", overflowX: "auto", paddingBottom: "4px" }}>
+            {superior.map(d => (
+              <Diente key={d.numero_fdi} diente={d}
+                isSelected={dienteSeleccionado?.numero_fdi === d.numero_fdi}
+                onSelectDiente={setDienteSeleccionado}
+                onSelectSuperficie={(diente, sup) => aplicarDiagnosticoSuperficie(diente, sup, herramienta)}
+              />
+            ))}
           </div>
-          <div className="form-field">
-            <Label>Estado de Encías</Label>
-            <Select value={estadoEncias} onValueChange={setEstadoEncias}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sano">Sano</SelectItem>
-                <SelectItem value="gingivitis">Gingivitis</SelectItem>
-                <SelectItem value="periodontitis_leve">Periodontitis Leve</SelectItem>
-                <SelectItem value="periodontitis_moderada">Periodontitis Moderada</SelectItem>
-                <SelectItem value="periodontitis_severa">Periodontitis Severa</SelectItem>
-              </SelectContent>
-            </Select>
+        </div>
+
+        {/* Línea divisoria */}
+        <div style={{ border: "none", borderTop: "1px dashed #CBD5E1", margin: "6px 0" }} />
+
+        {/* Arco Inferior */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "2px", overflowX: "auto", paddingBottom: "4px" }}>
+            {inferior.map(d => (
+              <Diente key={d.numero_fdi} diente={d}
+                isSelected={dienteSeleccionado?.numero_fdi === d.numero_fdi}
+                onSelectDiente={setDienteSeleccionado}
+                onSelectSuperficie={(diente, sup) => aplicarDiagnosticoSuperficie(diente, sup, herramienta)}
+              />
+            ))}
           </div>
-          <div className="form-field full-width">
-            <Label>Diagnóstico General</Label>
-            <Textarea
-              value={diagnosticoGeneral}
-              onChange={(e) => setDiagnosticoGeneral(e.target.value)}
-              placeholder="Describa el diagnóstico general del paciente..."
-              rows={3}
-            />
-          </div>
-          <div className="form-field full-width">
-            <Label>Observaciones</Label>
-            <Textarea
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
-              placeholder="Observaciones adicionales..."
-              rows={2}
-            />
-          </div>
+          <div style={{ fontSize: "9px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: "4px", textAlign: "center" }}>Inferior</div>
         </div>
       </div>
 
-      {/* Dialog para editar diente completo */}
-      <Dialog open={detalleDialogOpen} onOpenChange={setDetalleDialogOpen}>
-        <DialogContent className="dialog-content">
-          <DialogHeader>
-            <DialogTitle>
-              Diente {dienteSeleccionado?.numero_fdi}
-            </DialogTitle>
-          </DialogHeader>
-          
-          {dienteSeleccionado && (
-            <div style={{ padding: '1rem 0' }}>
-              <div className="form-field" style={{ marginBottom: '1rem' }}>
-                <Label>Estado del Diente</Label>
-                <Select 
-                  value={dienteSeleccionado.estado} 
-                  onValueChange={aplicarEstadoDiente}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ESTADOS_DIENTE.map(est => (
-                      <SelectItem key={est.value} value={est.value}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <div style={{ 
-                            width: '12px', 
-                            height: '12px', 
-                            borderRadius: '50%',
-                            backgroundColor: est.color,
-                            border: '1px solid #9CA3AF'
-                          }} />
-                          {est.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {dienteSeleccionado.estado === 'presente' && (
-                <div>
-                  <Label style={{ marginBottom: '0.5rem', display: 'block' }}>Superficies</Label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {dienteSeleccionado.superficies?.map(sup => (
-                      <div 
-                        key={sup.nombre}
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'space-between',
-                          padding: '0.5rem',
-                          background: '#F3F4F6',
-                          borderRadius: '4px'
-                        }}
-                      >
-                        <span style={{ textTransform: 'capitalize' }}>{sup.nombre}</span>
-                        <Select 
-                          value={sup.diagnostico || 'sano'}
-                          onValueChange={(val) => aplicarDiagnosticoSuperficie(dienteSeleccionado, sup.nombre, val)}
-                        >
-                          <SelectTrigger style={{ width: '140px' }}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DIAGNOSTICOS.map(diag => (
-                              <SelectItem key={diag.value} value={diag.value}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <div style={{ 
-                                    width: '10px', 
-                                    height: '10px', 
-                                    borderRadius: '50%',
-                                    backgroundColor: diag.color,
-                                    border: diag.value === 'sano' ? '1px solid #9CA3AF' : 'none'
-                                  }} />
-                                  {diag.label}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button onClick={() => setDetalleDialogOpen(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ══ 4. LEYENDA ════════════════════════════════════════════════════ */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px", padding: "8px 12px", background: "#F9FAFB", borderRadius: "8px" }}>
+        {DIAGNOSTICOS.map(d => (
+          <div key={d.value} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#374151" }}>
+            <div style={{ width: "12px", height: "12px", borderRadius: "3px", background: d.color, border: "1px solid #D1D5DB", flexShrink: 0 }} />
+            {d.label}
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#374151" }}>
+          <div style={{ width: "12px", height: "12px", borderRadius: "3px", background: "#93C5FD", border: "1px solid #D1D5DB", flexShrink: 0 }} />
+          Realizado
+        </div>
+      </div>
 
-      {/* ══ ACCIONES RÁPIDAS (motor clínico V2) ══════════════════════════ */}
-      <div style={{ margin: "16px 0 0", padding: "14px 16px", background: "#F8FAFF", border: "1px solid #BFDBFE", borderRadius: "12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+      {/* ══ 5. ACCIONES RÁPIDAS ═══════════════════════════════════════════ */}
+      <div style={sCard}>
+        <h3 style={sTitle}>
           <Zap size={14} color="#F59E0B" fill="#F59E0B" />
-          <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {dienteSeleccionado ? `Acción rápida → Diente ${dienteSeleccionado.numero_fdi}` : "Acciones Rápidas"}
-          </span>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-          {QUICK_PROCEDURES.map(({ name, color }) => {
-            const d = PROCEDURE_DEFAULTS[name] || {};
-            return (
-              <button
-                key={name}
-                onClick={() => {
-                  const dienteNum = dienteSeleccionado?.numero_fdi?.toString() || "0";
-                  const t = {
-                    id: Date.now(),
-                    descripcion: `${name}${dienteSeleccionado ? ` — D${dienteNum}` : " (General)"}`,
-                    diente: dienteNum,
-                    precio: String(d.precio || 0),
-                    estado: "pendiente",
-                  };
-                  setTratamientos(ts => [...ts, t]);
-                  // También agregar al pipeline del plan de tratamiento
-                  addProcedure({
-                    procedimiento: name,
-                    diente_numero: dienteNum,
-                    precio: d.precio || 0,
-                    fase: d.fase || 1,
-                    superficies_afectadas: [],
-                    descripcion: t.descripcion,
-                    cie10: d.cie10 || "",
-                    indicaciones: d.indicaciones || "",
-                  });
-                  // Evaluar reglas clínicas
-                  const receta = getAdjustedPrescription(name);
-                  if (receta.length > 0) {
-                    toast.info(`Receta sugerida: ${receta.map(r => r.nombre).join(", ")}`);
-                  }
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: "5px",
-                  padding: "5px 10px", border: "1.5px solid #E2E8F0",
-                  borderRadius: "20px", background: "white", cursor: "pointer",
-                  fontSize: "11px", fontWeight: "700", color: "#374151",
-                  transition: "all 0.15s",
-                }}
-              >
-                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
-                {name}
-                <span style={{ fontSize: "9px", color: "#94A3B8", fontWeight: "500" }}>${d.precio || 0}</span>
-              </button>
-            );
-          })}
+          {dienteSeleccionado ? `Acciones Rápidas → Diente ${dienteSeleccionado.numero_fdi}` : "Acciones Rápidas"}
+          {!dienteSeleccionado && <span style={{ fontSize: "10px", fontWeight: "400", color: "#94A3B8" }}>(seleccione un diente primero)</span>}
+        </h3>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: aiSugerencias.length > 0 ? "10px" : "0" }}>
+          {ACCIONES_RAPIDAS.map(accion => (
+            <button key={accion.name} onClick={() => aplicarAccionRapida(accion)}
+              style={{
+                display: "flex", alignItems: "center", gap: "4px",
+                padding: "5px 10px", border: `1.5px solid ${dienteSeleccionado ? accion.color : "#E2E8F0"}`,
+                borderRadius: "20px", background: "white", cursor: dienteSeleccionado ? "pointer" : "default",
+                fontSize: "11px", fontWeight: "700", color: dienteSeleccionado ? "#374151" : "#94A3B8",
+                opacity: dienteSeleccionado ? 1 : 0.6,
+              }}>
+              <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: accion.color, flexShrink: 0 }} />
+              {accion.name}
+              <span style={{ fontSize: "9px", color: "#94A3B8" }}>${PROCEDURE_DEFAULTS[accion.name]?.precio || PRECIOS_DEFAULT[accion.name] || 0}</span>
+            </button>
+          ))}
           <button
             onClick={async () => {
-              if (!odontograma) return;
-              const dienteNum = dienteSeleccionado?.numero_fdi;
+              if (!odontograma || !dienteSeleccionado) return;
               const sugs = await requestAIAnalysis("tratamiento", {
-                diente:      dienteNum,
-                superficies: dienteSeleccionado?.superficies?.filter(s => s.diagnostico && s.diagnostico !== "sano").map(s => s.nombre),
-                paciente:    { alergias: appointment?.alergias_medicamentos || "" },
+                diente: dienteSeleccionado.numero_fdi,
+                superficies: dienteSeleccionado.superficies?.filter(s => s.diagnostico && s.diagnostico !== "sano").map(s => s.nombre),
+                paciente: { alergias: appointment?.alergias_medicamentos || "" },
               });
-              if (sugs?.sugerencias) setAiSugerencias(sugs.sugerencias.map(s => ({ tipo: "info", texto: s })));
+              if (sugs?.sugerencias) setAiSugerencias(sugs.sugerencias.map(s => ({ tipo: "info", texto: s, diente_numero: String(dienteSeleccionado.numero_fdi) })));
             }}
-            disabled={aiLoading}
-            style={{
-              display: "flex", alignItems: "center", gap: "5px",
-              padding: "5px 12px", border: "1.5px solid #DDD6FE",
-              borderRadius: "20px", background: "#F5F3FF", cursor: "pointer",
-              fontSize: "11px", fontWeight: "700", color: "#7C3AED",
-            }}
-          >
-            <Brain size={11} /> {aiLoading ? "Analizando..." : "✦ IA"}
+            disabled={aiLoading || !dienteSeleccionado}
+            style={{ display: "flex", alignItems: "center", gap: "4px", padding: "5px 10px", border: "1.5px solid #DDD6FE", borderRadius: "20px", background: "#F5F3FF", cursor: "pointer", fontSize: "11px", fontWeight: "700", color: "#7C3AED" }}>
+            <Brain size={11} /> {aiLoading ? "..." : "✦ IA"}
           </button>
         </div>
 
-        {/* Sugerencias del motor clínico */}
+        {/* Sugerencias */}
         {aiSugerencias.length > 0 && (
-          <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "8px" }}>
             {aiSugerencias.map((s, i) => (
               <div key={i} style={{
                 padding: "7px 10px", borderRadius: "8px", fontSize: "11px",
@@ -1092,29 +659,23 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
                 border: `1px solid ${s.tipo === "danger" ? "#FCA5A5" : s.tipo === "warning" ? "#FDE68A" : "#BFDBFE"}`,
                 color: s.tipo === "danger" ? "#DC2626" : s.tipo === "warning" ? "#92400E" : "#1E40AF",
               }}>
-                {s.tipo === "danger" ? "⚠️" : s.tipo === "warning" ? "💡" : "ℹ️"} {s.texto}
+                {s.tipo === "danger" ? "⚠️" : "💡"} {s.texto}
                 {s.procedimientos_alternativos?.length > 0 && (
                   <div style={{ marginTop: "4px", display: "flex", gap: "4px", flexWrap: "wrap" }}>
                     {s.procedimientos_alternativos.map(proc => (
-                      <button
-                        key={proc}
+                      <button key={proc}
                         onClick={() => {
-                          const d = PROCEDURE_DEFAULTS[proc] || {};
-                          setTratamientos(ts => [...ts, {
-                            id: Date.now(),
-                            descripcion: `${proc}${dienteSeleccionado ? ` — D${dienteSeleccionado.numero_fdi}` : ""}`,
-                            diente: dienteSeleccionado?.numero_fdi?.toString() || "",
-                            precio: String(d.precio || 0),
-                            estado: "pendiente",
-                          }]);
+                          const dNum = s.diente_numero || dienteSeleccionado?.numero_fdi;
+                          const precio = PROCEDURE_DEFAULTS[proc]?.precio || PRECIOS_DEFAULT[proc] || 0;
+                          // REEMPLAZA el ítem del plan para este diente
+                          setPlanAuto(prev => {
+                            const sinEste = prev.filter(p => p.diente !== String(dNum));
+                            return [...sinEste, { id: `plan-${dNum}`, diente: String(dNum), procedimiento: proc, superficies: "", precio, estado: "pendiente" }];
+                          });
                           setAiSugerencias(sgs => sgs.filter((_, j) => j !== i));
+                          toast.success(`${proc} agregado al plan — reemplaza tratamiento anterior`);
                         }}
-                        style={{
-                          padding: "2px 7px", background: "#0C4A6E", color: "white",
-                          border: "none", borderRadius: "10px", fontSize: "10px",
-                          cursor: "pointer", fontWeight: "700",
-                        }}
-                      >
+                        style={{ padding: "2px 8px", background: "#0C4A6E", color: "white", border: "none", borderRadius: "10px", fontSize: "10px", cursor: "pointer", fontWeight: "700" }}>
                         + {proc}
                       </button>
                     ))}
@@ -1126,175 +687,173 @@ export const OdontogramaClinicoTab = ({ token, pacienteId, pacienteNombre, pacie
         )}
       </div>
 
-      {/* ══ TRATAMIENTOS DE ESTA CONSULTA + PROFORMA ══════════════════════ */}
-      <div style={{
-        margin: "20px 0 0", padding: "16px 20px",
-        background: "#F8FAFF", border: "1px solid #BFDBFE", borderRadius: "12px",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-          <h3 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0C4A6E" }}>
-            🦷 Tratamientos realizados en esta consulta
-          </h3>
-          {tratamientos.length > 0 && (
-            <button
-              onClick={async () => {
-                if (!appointment?.id) { toast.error("Sin cita vinculada, no se puede generar proforma"); return; }
-                setGenerandoProforma(true);
-                try {
-                  const items = tratamientos.map(t => ({
-                    descripcion: `${t.descripcion}${t.diente ? ` — Diente ${t.diente}` : ""}`,
-                    cantidad: 1,
-                    precio_unitario: parseFloat(t.precio) || 0,
-                    descuento: 0,
-                    subtotal: parseFloat(t.precio) || 0,
-                  }));
-                  const res = await axios.post(`${API}/proformas`, {
-                    paciente_nombre:   pacienteNombre || appointment?.nombre_completo || "",
-                    paciente_cedula:   pacienteCedula || appointment?.cedula || "",
-                    paciente_telefono: appointment?.telefono || "",
-                    doctor_id:         doctorId || appointment?.doctor_id || "",
-                    doctor_nombre:     appointment?.doctor_nombre || "",
-                    appointment_id:    appointment?.id,
-                    especialidad:      "Odontología",
-                    validez_dias:      30,
-                    items,
-                    subtotal:    items.reduce((s, i) => s + i.subtotal, 0),
-                    descuento:   0,
-                    total:       items.reduce((s, i) => s + i.subtotal, 0),
-                    observaciones: diagnosticoGeneral || "",
-                  }, { headers: { Authorization: `Bearer ${token}` } });
-                  toast.success(`✅ Proforma ${res.data.numero_proforma || ""} creada`);
-                } catch (e) {
-                  toast.error("Error al crear proforma: " + (e.response?.data?.detail || e.message));
-                } finally {
-                  setGenerandoProforma(false);
-                }
-              }}
-              disabled={generandoProforma}
-              style={{
-                padding: "7px 14px", background: "#0C4A6E", color: "white",
-                border: "none", borderRadius: "8px", fontSize: "12px",
-                fontWeight: "700", cursor: generandoProforma ? "not-allowed" : "pointer",
-              }}
-            >
-              {generandoProforma ? "Generando..." : "📋 Generar Proforma"}
-            </button>
-          )}
+      {/* ══ 6. PLAN DE TRATAMIENTO ════════════════════════════════════════ */}
+      <div style={sCard}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <h3 style={{ ...sTitle, margin: 0 }}>📋 Plan de Tratamiento</h3>
+          <div style={{ fontSize: "13px", fontWeight: "700", color: "#059669" }}>
+            Total: ${planAuto.filter(p => p.estado === "pendiente").reduce((s, p) => s + (parseFloat(p.precio) || 0), 0).toFixed(2)}
+          </div>
         </div>
 
-        {/* Agregar tratamiento */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "8px", marginBottom: "12px", alignItems: "end" }}>
-          <div>
-            <label style={{ fontSize: "10px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "3px", textTransform: "uppercase" }}>
-              Descripción del tratamiento
-            </label>
-            <input
-              value={nuevoTratamiento.descripcion}
-              onChange={e => setNuevoTratamiento(f => ({ ...f, descripcion: e.target.value }))}
-              placeholder="Ej: Extracción, Restauración, Endodoncia..."
-              style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #BFDBFE", borderRadius: "7px", fontSize: "13px", boxSizing: "border-box" }}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: "10px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "3px", textTransform: "uppercase" }}>
-              Diente
-            </label>
-            <input
-              value={nuevoTratamiento.diente}
-              onChange={e => setNuevoTratamiento(f => ({ ...f, diente: e.target.value }))}
-              placeholder="Ej: 16"
-              style={{ width: "70px", padding: "7px 10px", border: "1.5px solid #BFDBFE", borderRadius: "7px", fontSize: "13px" }}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: "10px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "3px", textTransform: "uppercase" }}>
-              Precio $
-            </label>
-            <input
-              type="number"
-              value={nuevoTratamiento.precio}
-              onChange={e => setNuevoTratamiento(f => ({ ...f, precio: e.target.value }))}
-              placeholder="0.00"
-              style={{ width: "80px", padding: "7px 10px", border: "1.5px solid #BFDBFE", borderRadius: "7px", fontSize: "13px" }}
-            />
-          </div>
-          <button
-            onClick={() => {
-              if (!nuevoTratamiento.descripcion.trim()) { toast.error("Ingrese la descripción"); return; }
-              setTratamientos(t => [...t, { ...nuevoTratamiento, id: Date.now() }]);
-              setNuevoTratamiento({ descripcion: "", diente: dienteSeleccionado?.numero_fdi?.toString() || "", precio: "" });
-            }}
-            style={{
-              padding: "7px 14px", background: "#0369A1", color: "white",
-              border: "none", borderRadius: "7px", fontSize: "13px",
-              fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap",
-            }}
-          >
-            + Agregar
-          </button>
-        </div>
-
-        {/* Lista de tratamientos */}
-        {tratamientos.length === 0 ? (
+        {planAuto.length === 0 ? (
           <p style={{ color: "#9CA3AF", fontSize: "12px", textAlign: "center", padding: "12px" }}>
-            Sin tratamientos. Marque superficies en el odontograma o agréguelos manualmente.
+            El plan se genera automáticamente al marcar dientes en el odontograma
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {tratamientos.map((t, i) => {
-              const realizado = t.estado === "realizado";
+            {planAuto.map(item => {
+              const realizado = item.estado === "realizado";
               return (
-                <div key={t.id} style={{
+                <div key={item.id} style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                   padding: "8px 12px", background: "white", borderRadius: "8px",
                   border: `1.5px solid ${realizado ? "#BFDBFE" : "#FCA5A5"}`,
                   borderLeft: `4px solid ${realizado ? "#3B82F6" : "#EF4444"}`,
                 }}>
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontWeight: "600", fontSize: "13px", color: realizado ? "#1E40AF" : "#0C4A6E" }}>
-                      {t.descripcion}
+                    <span style={{ fontWeight: "700", fontSize: "13px", color: realizado ? "#1E40AF" : "#0C4A6E" }}>
+                      {item.procedimiento}
                     </span>
-                    {t.diente && <span style={{ fontSize: "11px", color: "#6B7280", marginLeft: "8px" }}>D{t.diente}</span>}
+                    <span style={{ fontSize: "11px", color: "#6B7280", marginLeft: "8px" }}>D{item.diente}</span>
+                    {item.superficies && <span style={{ fontSize: "10px", color: "#94A3B8", marginLeft: "4px" }}>[{item.superficies}]</span>}
                     <span style={{
-                      marginLeft: "8px", fontSize: "10px", fontWeight: "700",
-                      padding: "1px 6px", borderRadius: "10px",
-                      background: realizado ? "#DBEAFE" : "#FEE2E2",
+                      marginLeft: "8px", fontSize: "10px", fontWeight: "700", padding: "1px 6px",
+                      borderRadius: "10px", background: realizado ? "#DBEAFE" : "#FEE2E2",
                       color: realizado ? "#1D4ED8" : "#DC2626",
                     }}>
                       {realizado ? "✓ Realizado" : "● Pendiente"}
                     </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-                    <span style={{ fontWeight: "700", color: "#059669" }}>${parseFloat(t.precio || 0).toFixed(2)}</span>
-                    <button
-                      onClick={() => setTratamientos(ts => ts.map((item, j) =>
-                        j === i ? { ...item, estado: item.estado === "realizado" ? "pendiente" : "realizado" } : item
-                      ))}
-                      style={{
-                        background: realizado ? "#DBEAFE" : "#FEE2E2",
-                        border: "none", borderRadius: "6px", padding: "3px 7px",
-                        fontSize: "10px", cursor: "pointer", fontWeight: "700",
-                        color: realizado ? "#1D4ED8" : "#DC2626",
-                      }}
-                      title="Marcar como realizado/pendiente"
-                    >
-                      {realizado ? "↩ Pendiente" : "✓ Realizado"}
-                    </button>
-                    <button
-                      onClick={() => setTratamientos(ts => ts.filter((_, j) => j !== i))}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: "16px" }}
-                    >×</button>
+                    <span style={{ fontWeight: "700", color: "#059669", fontSize: "13px" }}>${parseFloat(item.precio || 0).toFixed(2)}</span>
+                    {!realizado && (
+                      <button onClick={() => marcarRealizado(item.id)}
+                        style={{ padding: "3px 8px", background: "#DBEAFE", border: "none", borderRadius: "6px", fontSize: "10px", cursor: "pointer", fontWeight: "700", color: "#1D4ED8" }}>
+                        ✓ Realizado
+                      </button>
+                    )}
+                    <button onClick={() => setPlanAuto(prev => prev.filter(p => p.id !== item.id))}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: "16px" }}>×</button>
                   </div>
                 </div>
               );
             })}
-            <div style={{ textAlign: "right", fontWeight: "700", color: "#0C4A6E", fontSize: "14px", paddingTop: "4px" }}>
-              Total: ${tratamientos.reduce((s, t) => s + parseFloat(t.precio || 0), 0).toFixed(2)}
-            </div>
           </div>
         )}
       </div>
-    </div>
+
+      {/* ══ 7. TRATAMIENTO REALIZADO HOY ════════════════════════════════ */}
+      <div style={sCard}>
+        <h3 style={sTitle}>🦷 Tratamiento Realizado en Esta Consulta</h3>
+
+        {/* Formulario de registro */}
+        <div style={{ background: "white", border: "1px solid #E0EDFF", borderRadius: "10px", padding: "12px", marginBottom: "12px" }}>
+          <div style={{ ...sRow2, marginBottom: "8px" }}>
+            <div>
+              <label style={sLabel}>Diente</label>
+              <select value={formRealizado.diente} onChange={e => setFormRealizado(f => ({ ...f, diente: e.target.value }))} style={sInput}>
+                <option value="">Seleccione...</option>
+                {(odontograma?.dientes || []).map(d => (
+                  <option key={d.numero_fdi} value={d.numero_fdi}>D{d.numero_fdi}</option>
+                ))}
+                <option value="General">General (sin diente específico)</option>
+              </select>
+            </div>
+            <div>
+              <label style={sLabel}>Procedimiento</label>
+              <select value={formRealizado.procedimiento} onChange={e => setFormRealizado(f => ({ ...f, procedimiento: e.target.value }))} style={sInput}>
+                <option value="">Seleccione...</option>
+                {ACCIONES_RAPIDAS.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ ...sRow2, marginBottom: "8px" }}>
+            <div>
+              <label style={sLabel}>Longitud de conducto</label>
+              <input value={formRealizado.longitud_conducto}
+                onChange={e => setFormRealizado(f => ({ ...f, longitud_conducto: e.target.value }))}
+                placeholder="Ej: 21mm — solo si aplica" style={sInput} />
+            </div>
+            <div>
+              <label style={sLabel}>Materiales utilizados</label>
+              <input value={formRealizado.materiales}
+                onChange={e => setFormRealizado(f => ({ ...f, materiales: e.target.value }))}
+                placeholder="Ej: MTA, Biodentine..." style={sInput} />
+            </div>
+          </div>
+          <div style={{ marginBottom: "8px" }}>
+            <label style={sLabel}>Notas operatorias</label>
+            <textarea value={formRealizado.notas}
+              onChange={e => setFormRealizado(f => ({ ...f, notas: e.target.value }))}
+              placeholder="Observaciones del procedimiento..."
+              style={{ ...sInput, minHeight: "44px", resize: "vertical" }} />
+          </div>
+          <button onClick={agregarRealizado}
+            style={{ padding: "7px 14px", background: "#0369A1", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+            + Registrar
+          </button>
+        </div>
+
+        {/* Lista de realizados hoy */}
+        {realizados.length === 0 ? (
+          <p style={{ color: "#9CA3AF", fontSize: "12px", textAlign: "center", padding: "8px" }}>Sin procedimientos registrados en esta consulta</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {realizados.map((r, i) => (
+              <div key={r.id} style={{ padding: "8px 12px", background: "#EFF6FF", borderRadius: "8px", border: "1px solid #BFDBFE", borderLeft: "4px solid #3B82F6" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: "700", fontSize: "13px", color: "#1E40AF" }}>
+                    {r.procedimiento} — D{r.diente}
+                  </span>
+                  <span style={{ fontSize: "11px", color: "#94A3B8" }}>{r.hora}</span>
+                </div>
+                {r.longitud_conducto && <div style={{ fontSize: "11px", color: "#374151", marginTop: "2px" }}>Longitud: {r.longitud_conducto}</div>}
+                {r.materiales && <div style={{ fontSize: "11px", color: "#374151" }}>Materiales: {r.materiales}</div>}
+                {r.notas && <div style={{ fontSize: "11px", color: "#6B7280", marginTop: "2px" }}>{r.notas}</div>}
+                <button onClick={() => setRealizados(prev => prev.filter((_, j) => j !== i))}
+                  style={{ marginTop: "4px", fontSize: "10px", color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Eliminar</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ══ 8. EVOLUCIÓN ═════════════════════════════════════════════════ */}
+      <div style={sCard}>
+        <button
+          onClick={() => { setShowEvolucion(s => !s); if (!showEvolucion) cargarEvolucion(); }}
+          style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={{ ...sTitle, margin: 0 }}>
+            <Clock size={14} color="#0C4A6E" /> Evolución del Paciente
+          </h3>
+          {showEvolucion ? <ChevronUp size={16} color="#6B7280" /> : <ChevronDown size={16} color="#6B7280" />}
+        </button>
+
+        {showEvolucion && (
+          <div style={{ marginTop: "12px" }}>
+            {loadingEvolucion ? (
+              <p style={{ color: "#9CA3AF", fontSize: "12px", textAlign: "center" }}>Cargando historial...</p>
+            ) : evolucion.length === 0 ? (
+              <p style={{ color: "#9CA3AF", fontSize: "12px", textAlign: "center" }}>Sin historial de evolución previo</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {evolucion.map((ev, i) => (
+                  <div key={i} style={{ padding: "10px 12px", background: "white", borderRadius: "8px", border: "1px solid #E0EDFF" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                      <span style={{ fontWeight: "700", fontSize: "12px", color: "#0C4A6E" }}>{ev.profesional || ev.doctor_nombre || "Profesional"}</span>
+                      <span style={{ fontSize: "11px", color: "#94A3B8" }}>{ev.fecha}</span>
+                    </div>
+                    {ev.procedimiento && <div style={{ fontSize: "12px", color: "#374151" }}>🦷 {ev.procedimiento}</div>}
+                    {ev.observaciones && <div style={{ fontSize: "11px", color: "#6B7280", marginTop: "2px" }}>{ev.observaciones}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 };
