@@ -147,25 +147,35 @@ export const FacturacionTab = ({ token, user }) => {
       toast.error("Nombre y cédula del paciente son obligatorios");
       return;
     }
-    if (form.detalles.every(d => !d.descripcion)) {
-      toast.error("Agrega al menos un servicio");
+    const detallesValidos = form.detalles.filter(d => d.descripcion && parseFloat(d.precio_unitario) > 0);
+    if (detallesValidos.length === 0) {
+      toast.error("Agrega al menos un servicio con precio");
       return;
     }
     setLoading(true);
     try {
+      const detallesConSubtotal = detallesValidos.map(d => calcularDetalle(d));
+      const subtotal = detallesConSubtotal.reduce((a, d) => a + (d.subtotal || 0), 0);
       const payload = {
         ...form,
-        detalles: form.detalles
-          .filter(d => d.descripcion)
-          .map(d => calcularDetalle(d)),
+        detalles:       detallesConSubtotal,
+        fecha:          form.fecha || new Date().toISOString().split("T")[0],
+        // Compatibilidad con InvoiceCreate legacy
+        servicio:       detallesConSubtotal.map(d => d.descripcion).join(", "),
+        valor:          subtotal,
       };
-      await axios.post(`${API}/invoices`, payload, { headers });
-      toast.success("✅ Factura creada correctamente");
+      const res = await axios.post(`${API}/invoices`, payload, { headers });
+      toast.success(`✅ Factura ${res.data.numero_factura || ""} creada correctamente`);
       setForm(FORM_VACIO);
       setVista("lista");
       await cargar();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Error al crear factura");
+      const detail = e.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map(d => `${d.loc?.slice(-1)[0] || ""}: ${d.msg}`).join(" | ")
+        : (detail || e.message || "Error desconocido");
+      toast.error(`Error al crear factura: ${msg}`);
+      console.error("Invoice error:", e.response?.data);
     }
     setLoading(false);
   };

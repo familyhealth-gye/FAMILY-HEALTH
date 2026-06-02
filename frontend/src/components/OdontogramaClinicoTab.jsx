@@ -181,7 +181,33 @@ export const OdontogramaClinicoTab = ({
     appointment,
   });
 
-  // ── Carga inicial ────────────────────────────────────────────────────────────
+  // ── Cargar precios del catálogo ──────────────────────────────────────────────
+  const [preciosCatalogo, setPreciosCatalogo] = useState({});
+
+  useEffect(() => {
+    const cargarPrecios = async () => {
+      try {
+        const res = await axios.get(`${API}/financial/catalogo`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const mapa = {};
+        (res.data || []).forEach(item => {
+          if (item.nombre && item.precio) {
+            mapa[item.nombre.trim()] = parseFloat(item.precio);
+          }
+        });
+        if (Object.keys(mapa).length > 0) setPreciosCatalogo(mapa);
+      } catch {}
+    };
+    if (token) cargarPrecios();
+  }, [token]);
+
+  // Obtener precio: catálogo primero, luego PROCEDURE_DEFAULTS, luego PRECIOS_DEFAULT
+  const getPrecio = (nombre) =>
+    preciosCatalogo[nombre]
+    || PROCEDURE_DEFAULTS[nombre]?.precio
+    || PRECIOS_DEFAULT[nombre]
+    || 0;
   useEffect(() => {
     if (pacienteId || pacienteCedula) buscarOdontograma();
     else if (appointment?.id) crearOdontograma();
@@ -263,7 +289,7 @@ export const OdontogramaClinicoTab = ({
     const supCodigos = supAfectadas.map(s =>
       ({ vestibular:"V", palatino:"P", lingual:"L", mesial:"M", distal:"D", oclusal:"O", incisal:"I" })[s.nombre] || "?"
     ).join("");
-    const precio = PROCEDURE_DEFAULTS[proc]?.precio || PRECIOS_DEFAULT[proc] || 0;
+    const precio = getPrecio(proc);
     return {
       id: `plan-${numero_fdi}`,
       diente: String(numero_fdi), procedimiento: proc,
@@ -330,7 +356,7 @@ export const OdontogramaClinicoTab = ({
   // ── Aplicar acción rápida a diente seleccionado ──────────────────────────────
   const aplicarAccionRapida = async (accion) => {
     const dNum = dienteSeleccionado?.numero_fdi;
-    const precio = PROCEDURE_DEFAULTS[accion.name]?.precio || PRECIOS_DEFAULT[accion.name] || 0;
+    const precio = getPrecio(accion.name);
 
     // Si tiene estado asociado, marcarlo en el diente
     if (accion.esEstado && dNum && odontograma?.id) {
@@ -547,6 +573,37 @@ export const OdontogramaClinicoTab = ({
 
       {/* ══ 3. TOOLBAR + ODONTOGRAMA ══════════════════════════════════════ */}
       <div style={{ ...sCard, background: "white" }}>
+        {/* Selector de tipo de dentición */}
+        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", alignItems: "center" }}>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B" }}>Dentición:</span>
+          {[
+            { value: "permanente", label: "Permanente (adulto)" },
+            { value: "temporal",   label: "Decidua (niño)"      },
+            { value: "mixta",      label: "Mixta"               },
+          ].map(op => (
+            <button key={op.value} onClick={async () => {
+              setTipoDenticion(op.value);
+              // Actualizar en backend si hay odontograma
+              if (odontograma?.id) {
+                try {
+                  await axios.put(`${API}/odontogramas-clinicos/${odontograma.id}`,
+                    { tipo_denticion: op.value },
+                    { headers: { Authorization: `Bearer ${token}` } });
+                } catch {}
+              }
+            }}
+              style={{
+                padding: "4px 10px", borderRadius: "12px", border: "1.5px solid",
+                borderColor: tipoDenticion === op.value ? "#0C4A6E" : "#CBD5E1",
+                background: tipoDenticion === op.value ? "#0C4A6E" : "white",
+                color: tipoDenticion === op.value ? "white" : "#374151",
+                fontSize: "11px", fontWeight: "600", cursor: "pointer",
+              }}>
+              {op.label}
+            </button>
+          ))}
+        </div>
+
         {/* Toolbar: selector de diagnóstico */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "12px", alignItems: "center" }}>
           <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B", marginRight: "4px" }}>Diagnóstico:</span>
@@ -630,7 +687,7 @@ export const OdontogramaClinicoTab = ({
               }}>
               <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: accion.color, flexShrink: 0 }} />
               {accion.name}
-              <span style={{ fontSize: "9px", color: "#94A3B8" }}>${PROCEDURE_DEFAULTS[accion.name]?.precio || PRECIOS_DEFAULT[accion.name] || 0}</span>
+              <span style={{ fontSize: "9px", color: "#94A3B8" }}>${getPrecio(accion.name)}</span>
             </button>
           ))}
           <button
@@ -666,7 +723,7 @@ export const OdontogramaClinicoTab = ({
                       <button key={proc}
                         onClick={() => {
                           const dNum = s.diente_numero || dienteSeleccionado?.numero_fdi;
-                          const precio = PROCEDURE_DEFAULTS[proc]?.precio || PRECIOS_DEFAULT[proc] || 0;
+                          const precio = getPrecio(proc);
                           // REEMPLAZA el ítem del plan para este diente
                           setPlanAuto(prev => {
                             const sinEste = prev.filter(p => p.diente !== String(dNum));

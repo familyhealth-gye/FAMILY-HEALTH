@@ -375,15 +375,28 @@ class Invoice(BaseModel):
 
 
 class InvoiceCreate(BaseModel):
-    numero_factura: str = ""
-    paciente_nombre: str
-    paciente_cedula: str
-    doctor_id: str
-    especialidad: str
-    servicio: str
-    valor: float
-    fecha: str
-    tipo_pago: str
+    numero_factura:         str = ""
+    paciente_nombre:        str
+    paciente_cedula:        str
+    paciente_direccion:     str = ""
+    paciente_email:         str = ""
+    paciente_telefono:      str = ""
+    doctor_id:              str = ""
+    doctor_nombre:          str = ""
+    especialidad:           str = ""
+    # Campos legacy de compatibilidad
+    servicio:               str = ""
+    valor:                  float = 0.0
+    # Campos del formulario nuevo
+    detalles:               list = []
+    iva_porcentaje:         float = 0.0
+    tipo_pago:              str = "efectivo"
+    referencia_pago:        str = ""
+    consulta_financiera_id: str = ""
+    appointment_id:         str = ""
+    numero_autorizacion:    str = ""
+    observaciones:          str = ""
+    fecha:                  str = ""
 
 
 class InvoiceUpdate(BaseModel):

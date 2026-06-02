@@ -61,6 +61,7 @@ function CertificadoModal({ appointment, token, onClose }) {
   const [form, setForm] = useState({
     dias_reposo:   0,
     diagnostico:   "",
+    cie10:         "",
     observaciones: "",
     emisor_nombre: "",  // quién firma — se prerrellena con doctor si existe
   });
@@ -75,7 +76,7 @@ function CertificadoModal({ appointment, token, onClose }) {
       await descargarPdfPost(
         `${BACKEND_URL}/api/appointments/${appointment.id}/certificado-pdf`,
         token,
-        { dias_reposo: form.dias_reposo, diagnostico: form.diagnostico, observaciones: form.observaciones, emisor_nombre: form.emisor_nombre },
+        { dias_reposo: form.dias_reposo, diagnostico: form.diagnostico, cie10: form.cie10, observaciones: form.observaciones, emisor_nombre: form.emisor_nombre },
         `certificado-${appointment.nombre_completo?.replace(/\s+/g, "-") || appointment.id}.pdf`
       );
       toast.success("✅ Certificado generado");
@@ -132,6 +133,22 @@ function CertificadoModal({ appointment, token, onClose }) {
               autoFocus
               style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #BFDBFE", borderRadius: "8px", fontSize: "13px", boxSizing: "border-box", outline: "none" }}
             />
+          </div>
+
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: "700", color: "#374151", display: "block", marginBottom: "5px", textTransform: "uppercase" }}>
+              Código CIE-10 <span style={{ fontWeight: "400", color: "#9CA3AF", fontSize: "10px" }}>(requerido por IESS/MSP)</span>
+            </label>
+            <input
+              value={form.cie10}
+              onChange={e => set("cie10", e.target.value.toUpperCase())}
+              placeholder="Ej: J02.9, M54.5, J06.9, K02.9..."
+              style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #BFDBFE", borderRadius: "8px", fontSize: "13px", boxSizing: "border-box", outline: "none", fontFamily: "monospace" }}
+            />
+            <div style={{ fontSize: "10px", color: "#94A3B8", marginTop: "3px" }}>
+              Códigos frecuentes: J06.9 IRAS, J02.9 Faringitis, M54.5 Lumbalgia, K02.9 Caries, K08.1 Extracción
+            </div>
+          </div>
           </div>
 
           <div>

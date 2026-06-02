@@ -1190,6 +1190,7 @@ async def get_certificado_pdf(
 
     dias_reposo  = int(data.get("dias_reposo", 0))
     diagnostico  = data.get("diagnostico", "")
+    cie10        = data.get("cie10", "").strip().upper()
     observaciones = data.get("observaciones", "")
     fecha_emision = date.today().strftime("%d/%m/%Y")
 
@@ -1236,6 +1237,7 @@ async def get_certificado_pdf(
         f"El/La paciente {nombre_pac}, identificado/a con CI/Pasaporte: {cedula_pac},",
         f"fue atendido/a en esta institución el día {appt.get('fecha', fecha_emision)},",
         f"bajo diagnóstico de: {diagnostico if diagnostico else '___________________________________'}",
+        f"Código CIE-10: {cie10 if cie10 else '_______________'}" if cie10 or True else "",
         "",
         f"Por tal motivo, se le indica REPOSO por {dias_reposo} día(s) a partir de la fecha de emisión." if dias_reposo > 0 else "No requiere reposo.",
     ]
