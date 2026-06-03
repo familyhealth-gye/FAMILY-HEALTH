@@ -182,18 +182,37 @@ export const FacturacionTab = ({ token, user }) => {
 
   // ── Emitir al SRI ──
   const handleEmitirSRI = async (id) => {
-    if (!window.confirm("¿Emitir esta factura al SRI? Esta acción es irreversible.")) return;
+    if (!window.confirm("¿Emitir esta factura al SRI? Esta acción es irreversible.\n\nVerifique que el RUC y los datos del paciente sean correctos.")) return;
     setLoading(true);
     try {
       const res = await axios.post(`${API}/sri/emitir/${id}`, {}, { headers });
       if (res.data.ok) {
-        toast.success(`✅ Factura AUTORIZADA por el SRI\nN°: ${res.data.numero_autorizacion}`);
+        toast.success(`✅ Factura AUTORIZADA por el SRI\nN° Auth: ${res.data.numero_autorizacion}`);
       } else {
-        toast.warning(`SRI respondió: ${res.data.sri_estado} — ${res.data.autorizacion?.mensaje || res.data.envio?.mensaje || ""}`);
+        // Mostrar mensaje completo del SRI para diagnóstico
+        const msgEnvio = res.data.envio?.mensaje || res.data.envio?.estado || "";
+        const msgAuth  = res.data.autorizacion?.mensaje || "";
+        const msg = msgAuth || msgEnvio || res.data.sri_estado || "Respuesta no reconocida";
+        toast.warning(`SRI: ${res.data.sri_estado} — ${msg}`, { duration: 10000 });
+        console.error("SRI response:", res.data);
       }
       await cargar();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Error al emitir al SRI");
+      const detail = e.response?.data?.detail || "";
+      const status = e.response?.status;
+      // Mensajes de error específicos y accionables
+      if (detail.includes("p12") || detail.includes("certificado")) {
+        toast.error("⚠️ Certificado .p12 no configurado. Ve a Config → Configuración SRI.", { duration: 8000 });
+      } else if (detail.includes("RUC")) {
+        toast.error("⚠️ RUC no configurado. Ve a Facturación → Config. Clínica.", { duration: 8000 });
+      } else if (detail.includes("ya fue autorizada")) {
+        toast.info("Esta factura ya fue autorizada previamente por el SRI.");
+      } else if (status === 503) {
+        toast.error("Servicio SRI no disponible. Intente más tarde.", { duration: 8000 });
+      } else {
+        toast.error(`Error SRI (${status || "?"}): ${detail || e.message}`, { duration: 10000 });
+        console.error("SRI error detail:", e.response?.data);
+      }
     }
     setLoading(false);
   };
