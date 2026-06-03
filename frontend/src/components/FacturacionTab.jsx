@@ -247,8 +247,25 @@ export const FacturacionTab = ({ token, user }) => {
   };
 
   // ── Descargar PDF ──
-  const handlePDF = (id, numero) => {
-    window.open(`${API}/invoices/${id}/pdf?token=${token}`, "_blank");
+  const handlePDF = async (id, numero) => {
+    try {
+      const res = await fetch(`${API}/invoices/${id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.target   = "_blank";
+      a.download = `factura-${(numero || id).replace(/[^a-zA-Z0-9-]/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+    } catch (e) {
+      toast.error("Error al abrir PDF: " + e.message);
+    }
   };
 
   // ── Exportar CSV ──

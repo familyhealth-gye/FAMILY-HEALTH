@@ -211,3 +211,236 @@ def generate_certificado_pdf(data: dict) -> BytesIO:
     doc.build(elems, onFirstPage=on_page, onLaterPages=on_page)
     buffer.seek(0)
     return buffer
+
+def generate_factura_pdf(inv: dict) -> BytesIO:
+    """
+    Genera el RIDE (Representación Impresa del Documento Electrónico)
+    para facturas electrónicas según formato SRI Ecuador.
+    Compatible con resolución NAC-DGERCGC12-00105.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            rightMargin=1.5*cm, leftMargin=1.5*cm,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
+    elems = []
+    s = getSampleStyleSheet()
+
+    # ── Estilos ──────────────────────────────────────────────────────────────
+    bold_center = ParagraphStyle('BoldC', parent=s['Normal'],
+                                 fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER)
+    normal_sm   = ParagraphStyle('NormSm', parent=s['Normal'],
+                                 fontName='Helvetica', fontSize=8)
+    bold_sm     = ParagraphStyle('BoldSm', parent=s['Normal'],
+                                 fontName='Helvetica-Bold', fontSize=8)
+    tiny        = ParagraphStyle('Tiny', parent=s['Normal'],
+                                 fontName='Helvetica', fontSize=7)
+    tiny_center = ParagraphStyle('TinyC', parent=s['Normal'],
+                                 fontName='Helvetica', fontSize=7, alignment=TA_CENTER)
+    title_style = ParagraphStyle('Title', parent=s['Normal'],
+                                 fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER)
+
+    W = A4[0] - 3*cm  # ancho útil
+
+    # ── ENCABEZADO: Logo | Datos emisor | Datos documento ────────────────────
+    # Datos del emisor
+    razon_social    = inv.get('emisor_razon_social', inv.get('clinica_nombre', 'FAMILY HEALTH'))
+    nombre_comercial= inv.get('emisor_nombre_comercial', razon_social)
+    ruc             = inv.get('emisor_ruc', '')
+    direccion_matriz= inv.get('emisor_direccion', '')
+    dir_establecimiento = inv.get('emisor_direccion_establecimiento', direccion_matriz)
+    contribuyente   = inv.get('emisor_tipo_contribuyente', 'PERSONA NATURAL')
+    obligado        = 'SI' if inv.get('emisor_obligado_contabilidad', False) else 'NO'
+    ambiente_str    = 'PRODUCCIÓN' if inv.get('sri_ambiente', 'pruebas') == 'produccion' else 'PRUEBAS'
+    num_factura     = inv.get('numero_factura', '001-001-000000001')
+    clave_acceso    = inv.get('clave_acceso', '')
+    num_autorizacion= inv.get('numero_autorizacion', clave_acceso or 'PENDIENTE')
+    fecha_autorizacion = inv.get('fecha_autorizacion', '')
+    sri_estado      = inv.get('sri_estado', 'PENDIENTE')
+
+    # Columna central (datos emisor)
+    emisor_data = [
+        [Paragraph(razon_social, bold_center)],
+        [Paragraph(f'RUC: {ruc}', tiny_center)],
+        [Paragraph(nombre_comercial, tiny_center)],
+        [Paragraph(f'Dirección Matriz: {direccion_matriz}', tiny_center)],
+        [Paragraph(f'Dir. Establecimiento: {dir_establecimiento}', tiny_center)],
+        [Paragraph(f'Contribuyente: {contribuyente}', tiny_center)],
+        [Paragraph(f'Obligado a llevar contabilidad: {obligado}', tiny_center)],
+    ]
+    t_emisor = Table(emisor_data, colWidths=[W*0.45])
+    t_emisor.setStyle(TableStyle([
+        ('ALIGN', (0,0),(-1,-1),'CENTER'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('BOX', (0,0),(-1,-1), 0.5, colors.black),
+        ('INNERGRID',(0,0),(-1,-1), 0.3, colors.lightgrey),
+        ('ROWBACKGROUNDS', (0,0),(-1,-1), [colors.white, colors.HexColor('#F0F9FF')]),
+    ]))
+
+    # Columna derecha (identificación del documento)
+    doc_data = [
+        [Paragraph('R.U.C.:', bold_sm), Paragraph(ruc, normal_sm)],
+        [Paragraph('FACTURA', bold_center), Paragraph('', normal_sm)],
+        [Paragraph('No.', bold_sm), Paragraph(num_factura, normal_sm)],
+        [Paragraph('NÚMERO DE AUTORIZACIÓN', bold_sm), Paragraph('')],
+        [Paragraph(num_autorizacion[:24] if num_autorizacion else 'PENDIENTE', tiny_center), Paragraph('')],
+        [Paragraph(f'Fecha auth: {fecha_autorizacion}', tiny), Paragraph('')],
+        [Paragraph(f'AMBIENTE: {ambiente_str}', bold_sm), Paragraph('')],
+        [Paragraph(f'ESTADO: {sri_estado}', bold_sm), Paragraph('')],
+    ]
+    t_doc = Table(doc_data, colWidths=[W*0.28, W*0.27])
+    t_doc.setStyle(TableStyle([
+        ('ALIGN', (0,0),(-1,-1),'LEFT'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('BOX', (0,0),(-1,-1), 0.5, colors.black),
+        ('INNERGRID',(0,0),(-1,-1), 0.3, colors.lightgrey),
+        ('SPAN', (0,1),(1,1)),
+        ('ALIGN', (0,1),(1,1),'CENTER'),
+        ('SPAN', (0,3),(1,3)),
+        ('SPAN', (0,4),(1,4)),
+        ('SPAN', (0,5),(1,5)),
+        ('SPAN', (0,6),(1,6)),
+        ('SPAN', (0,7),(1,7)),
+    ]))
+
+    # Encabezado completo
+    header_table = Table([[t_emisor, t_doc]], colWidths=[W*0.45, W*0.55])
+    header_table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'), ('LEFTPADDING',(0,0),(-1,-1),0), ('RIGHTPADDING',(0,0),(-1,-1),0)]))
+    elems.append(header_table)
+    elems.append(Spacer(1, 6))
+
+    # ── CLAVE DE ACCESO ───────────────────────────────────────────────────────
+    if clave_acceso:
+        clave_data = [[
+            Paragraph('CLAVE DE ACCESO', bold_sm),
+            Paragraph(clave_acceso, ParagraphStyle('Mono', parent=s['Normal'], fontName='Courier', fontSize=7))
+        ]]
+        t_clave = Table(clave_data, colWidths=[W*0.25, W*0.75])
+        t_clave.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.5,colors.black), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('BACKGROUND',(0,0),(0,0),colors.HexColor('#EFF6FF'))]))
+        elems.append(t_clave)
+        elems.append(Spacer(1, 6))
+
+    # ── DATOS DEL ADQUIRENTE ─────────────────────────────────────────────────
+    fecha_str  = inv.get('fecha', '')
+    tipo_pago  = inv.get('tipo_pago', 'efectivo').upper()
+    pac_nombre = inv.get('paciente_nombre', '')
+    pac_cedula = inv.get('paciente_cedula', '')
+    pac_dir    = inv.get('paciente_direccion', '')
+    pac_email  = inv.get('paciente_email', '')
+
+    adq_data = [
+        ['Razón Social / Nombres:', pac_nombre, 'Identificación:', pac_cedula],
+        ['Fecha Emisión:', fecha_str, 'Forma de Pago:', tipo_pago],
+        ['Dirección:', pac_dir, 'Email:', pac_email],
+    ]
+    t_adq = Table(adq_data, colWidths=[W*0.22, W*0.33, W*0.18, W*0.27])
+    t_adq.setStyle(TableStyle([
+        ('FONTNAME',(0,0),(-1,-1),'Helvetica'), ('FONTSIZE',(0,0),(-1,-1),8),
+        ('FONTNAME',(0,0),(0,-1),'Helvetica-Bold'), ('FONTNAME',(2,0),(2,-1),'Helvetica-Bold'),
+        ('BOX',(0,0),(-1,-1),0.5,colors.black), ('INNERGRID',(0,0),(-1,-1),0.3,colors.lightgrey),
+        ('ROWBACKGROUNDS',(0,0),(-1,-1),[colors.HexColor('#F0F9FF'), colors.white]),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+    ]))
+    elems.append(t_adq)
+    elems.append(Spacer(1, 8))
+
+    # ── DETALLE DE SERVICIOS ─────────────────────────────────────────────────
+    det_header = [
+        Paragraph('Cód.', bold_sm),
+        Paragraph('Descripción del Servicio / Bien', bold_sm),
+        Paragraph('Cant.', bold_sm),
+        Paragraph('P. Unit.', bold_sm),
+        Paragraph('Desc.', bold_sm),
+        Paragraph('P. Total', bold_sm),
+    ]
+    det_rows = [det_header]
+
+    detalles = inv.get('detalles', [])
+    if not detalles and inv.get('servicio'):
+        detalles = [{'descripcion': inv['servicio'], 'cantidad': 1,
+                     'precio_unitario': inv.get('valor', 0), 'descuento': 0,
+                     'subtotal': inv.get('valor', 0)}]
+
+    subtotal_sin_imp = 0.0
+    for i, det in enumerate(detalles):
+        cant     = float(det.get('cantidad', 1))
+        precio   = float(det.get('precio_unitario', det.get('precio', 0)))
+        desc_val = float(det.get('descuento', 0))
+        total_det= float(det.get('subtotal', precio * cant - desc_val))
+        subtotal_sin_imp += total_det
+        bg = colors.white if i % 2 == 0 else colors.HexColor('#F9FAFB')
+        det_rows.append([
+            Paragraph(str(det.get('codigo', str(i+1))), tiny),
+            Paragraph(det.get('descripcion', ''), normal_sm),
+            Paragraph(f'{cant:.2f}', tiny_center),
+            Paragraph(f'${precio:.2f}', tiny_center),
+            Paragraph(f'${desc_val:.2f}', tiny_center),
+            Paragraph(f'${total_det:.2f}', tiny_center),
+        ])
+
+    t_det = Table(det_rows, colWidths=[W*0.07, W*0.43, W*0.1, W*0.13, W*0.1, W*0.13])
+    det_style = [
+        ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'), ('FONTSIZE',(0,0),(-1,-1),8),
+        ('BOX',(0,0),(-1,-1),0.5,colors.black), ('INNERGRID',(0,0),(-1,-1),0.3,colors.lightgrey),
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0C4A6E')),
+        ('TEXTCOLOR',(0,0),(-1,0),colors.white),
+        ('ALIGN',(2,0),(-1,-1),'CENTER'), ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+    ]
+    # Filas alternadas
+    for i in range(1, len(det_rows)):
+        if i % 2 == 0:
+            det_style.append(('BACKGROUND',(0,i),(-1,i),colors.HexColor('#F9FAFB')))
+    t_det.setStyle(TableStyle(det_style))
+    elems.append(t_det)
+    elems.append(Spacer(1, 6))
+
+    # ── TOTALES ───────────────────────────────────────────────────────────────
+    iva_pct    = float(inv.get('iva_porcentaje', 0))
+    iva_val    = round(subtotal_sin_imp * iva_pct / 100, 2)
+    total_final= round(subtotal_sin_imp + iva_val, 2)
+    descuento_total = sum(float(d.get('descuento', 0)) for d in detalles)
+
+    totales_data = [
+        ['', 'Subtotal 0%:', f'${subtotal_sin_imp:.2f}'],
+        ['', f'IVA {iva_pct:.0f}%:', f'${iva_val:.2f}'],
+        ['', 'Descuento Total:', f'${descuento_total:.2f}'],
+        ['', 'TOTAL:', f'${total_final:.2f}'],
+    ]
+    t_tot = Table(totales_data, colWidths=[W*0.6, W*0.22, W*0.18])
+    t_tot.setStyle(TableStyle([
+        ('FONTNAME',(0,0),(-1,-1),'Helvetica'), ('FONTSIZE',(0,0),(-1,-1),9),
+        ('FONTNAME',(1,-1),(2,-1),'Helvetica-Bold'), ('FONTSIZE',(1,-1),(2,-1),11),
+        ('ALIGN',(1,0),(-1,-1),'RIGHT'),
+        ('BOX',(1,0),(-1,-1),0.5,colors.black),
+        ('LINEABOVE',(1,-1),(2,-1),1,colors.black),
+        ('BACKGROUND',(1,-1),(2,-1),colors.HexColor('#0C4A6E')),
+        ('TEXTCOLOR',(1,-1),(2,-1),colors.white),
+    ]))
+    elems.append(t_tot)
+    elems.append(Spacer(1, 10))
+
+    # ── FORMA DE PAGO ────────────────────────────────────────────────────────
+    pago_data = [
+        [Paragraph('FORMA DE PAGO', bold_sm), Paragraph('VALOR', bold_sm), Paragraph('PLAZO', bold_sm), Paragraph('UNIDAD TIEMPO', bold_sm)],
+        [Paragraph(tipo_pago, normal_sm), Paragraph(f'${total_final:.2f}', normal_sm), Paragraph('0', normal_sm), Paragraph('DÍAS', normal_sm)],
+    ]
+    t_pago = Table(pago_data, colWidths=[W*0.35, W*0.25, W*0.2, W*0.2])
+    t_pago.setStyle(TableStyle([
+        ('FONTSIZE',(0,0),(-1,-1),8), ('BOX',(0,0),(-1,-1),0.5,colors.black),
+        ('INNERGRID',(0,0),(-1,-1),0.3,colors.lightgrey),
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#EFF6FF')),
+        ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
+    ]))
+    elems.append(t_pago)
+    elems.append(Spacer(1, 10))
+
+    # ── PIE: información adicional ────────────────────────────────────────────
+    pie_txt = (
+        f"Dr./Dra. {inv.get('doctor_nombre','')} — {inv.get('especialidad','')}\n"
+        f"Documento generado por FAMILY HEALTH · Sistema de Gestión Clínica\n"
+        "Los servicios médicos están exentos de IVA según la Ley Orgánica de Régimen Tributario Interno."
+    )
+    elems.append(Paragraph(pie_txt, tiny_center))
+
+    doc.build(elems)
+    buffer.seek(0)
+    return buffer
