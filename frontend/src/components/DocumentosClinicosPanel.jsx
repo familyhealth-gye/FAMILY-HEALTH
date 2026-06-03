@@ -16,6 +16,7 @@
 import { useState } from "react";
 import { FileText, Award, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { CIE10Search } from "@/components/CIE10Search";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -139,16 +140,15 @@ function CertificadoModal({ appointment, token, onClose }) {
             <label style={{ fontSize: "11px", fontWeight: "700", color: "#374151", display: "block", marginBottom: "5px", textTransform: "uppercase" }}>
               Código CIE-10 <span style={{ fontWeight: "400", color: "#9CA3AF", fontSize: "10px" }}>(requerido por IESS/MSP)</span>
             </label>
-            <input
+            <CIE10Search
               value={form.cie10}
-              onChange={e => set("cie10", e.target.value.toUpperCase())}
-              placeholder="Ej: J02.9, M54.5, J06.9, K02.9..."
-              style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #BFDBFE", borderRadius: "8px", fontSize: "13px", boxSizing: "border-box", outline: "none", fontFamily: "monospace" }}
+              onChange={(codigo, desc) => {
+                set("cie10", codigo);
+                if (desc && !form.diagnostico) set("diagnostico", desc);
+              }}
+              token={token}
+              placeholder="Buscar código CIE-10 — Ej: faringitis, lumbalgia, K02..."
             />
-            <div style={{ fontSize: "10px", color: "#94A3B8", marginTop: "3px" }}>
-              Códigos frecuentes: J06.9 IRAS, J02.9 Faringitis, M54.5 Lumbalgia, K02.9 Caries, K08.1 Extracción
-            </div>
-          </div>
           </div>
 
           <div>

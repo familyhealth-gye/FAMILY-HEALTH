@@ -342,6 +342,7 @@ export const MedicinaGeneralForm = ({ appointment, token, onClose, onSuccess }) 
       <div style={{ marginBottom:"10px" }}>
         <MedicacionRapida especialidad="Medicina General"
           medicamentos={form.medicamentos}
+          token={token}
           onChange={meds=>setForm(f=>({...f,medicamentos:meds}))} />
       </div>
 

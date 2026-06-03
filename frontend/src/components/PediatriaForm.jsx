@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { NuevaCitaModal } from "./NuevaCitaModal";
 import { AntecedentesPanel } from "./AntecedentesPanel";
+import { MedicamentoSearch } from "./MedicamentoSearch";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -643,14 +644,19 @@ export const PediatriaForm = ({ appointment, token, onClose, onSuccess }) => {
               <div className="form-grid">
                 <div className="form-field">
                   <Label>Medicamento {index + 1} *</Label>
-                  <Input
+                  <MedicamentoSearch
                     value={med.nombre}
-                    onChange={(e) => {
+                    token={token}
+                    onChange={(nombre, presentaciones) => {
                       const newMeds = [...form.medicamentos];
-                      newMeds[index].nombre = e.target.value;
+                      newMeds[index].nombre = nombre;
+                      // Auto-sugerir presentación si hay una sola
+                      if (presentaciones?.length === 1 && !newMeds[index].dosis) {
+                        newMeds[index].dosis = presentaciones[0];
+                      }
                       setForm({...form, medicamentos: newMeds});
                     }}
-                    required
+                    placeholder="Buscar medicamento..."
                   />
                 </div>
                 <div className="form-field">

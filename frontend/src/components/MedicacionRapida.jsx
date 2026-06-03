@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MedicamentoSearch } from "@/components/MedicamentoSearch";
 
 // Plantillas por especialidad
 const PLANTILLAS = {
@@ -49,7 +50,7 @@ const MED_VACIO = { nombre: "", dosis: "", frecuencia: "", duracion: "", indicac
  *   medicamentos: array de { nombre, dosis, frecuencia, duracion, indicaciones }
  *   onChange: (nuevos_medicamentos) => void
  */
-export const MedicacionRapida = ({ especialidad = "Medicina General", medicamentos = [], onChange }) => {
+export const MedicacionRapida = ({ especialidad = "Medicina General", medicamentos = [], onChange, token = "" }) => {
   const [mostrarPlantillas, setMostrarPlantillas] = useState(false);
   const plantillas = PLANTILLAS[especialidad] || PLANTILLAS["Medicina General"];
 
@@ -167,10 +168,16 @@ export const MedicacionRapida = ({ especialidad = "Medicina General", medicament
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                 <div>
                   <Label style={{ fontSize: "11px", color: "#666" }}>Medicamento *</Label>
-                  <Input
+                  <MedicamentoSearch
                     value={med.nombre}
-                    onChange={e => actualizar(idx, "nombre", e.target.value)}
-                    placeholder="Ej: Paracetamol"
+                    token={token}
+                    onChange={(nombre, presentaciones) => {
+                      actualizar(idx, "nombre", nombre);
+                      if (presentaciones?.length === 1 && !med.dosis) {
+                        actualizar(idx, "dosis", presentaciones[0]);
+                      }
+                    }}
+                    placeholder="Buscar medicamento..."
                     style={{ fontSize: "13px", height: "32px" }}
                   />
                 </div>
