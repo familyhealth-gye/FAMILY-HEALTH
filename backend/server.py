@@ -42,13 +42,11 @@ from routers.medical_history import router as medical_history_router
 from routers.billing import router as billing_router
 from routers.clinical import router as clinical_router
 
-# CORS configuration
-origins = ["*"]
-
+# CORS configuration — permite todos los orígenes para evitar bloqueos en Render
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://family-health.onrender.com", "http://localhost:8001", "http://127.0.0.1:3000", "https://ce-family-health.onrender.com"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
