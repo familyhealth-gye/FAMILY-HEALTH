@@ -223,10 +223,30 @@ async def get_invoice_pdf(invoice_id: str, current_user: TokenData = Depends(get
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    # Inyectar datos de la clínica y ambiente real
+    cfg_clinica = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+    clinica = cfg_clinica.get("valor", {}) if cfg_clinica else {}
+
+    cfg_firma = await db.configuracion.find_one({"clave": "firma_electronica"}, {"_id": 0})
+    ambiente_real = (cfg_firma.get("valor", {}) if cfg_firma else {}).get("ambiente", "produccion")
+
+    inv_completo = {
+        **clinica,       # razon_social, ruc, direccion, etc.
+        **inv,           # datos de la factura (sobreescribe si hay conflicto)
+        "emisor_razon_social":     clinica.get("razon_social", inv.get("emisor_razon_social", "FAMILY HEALTH")),
+        "emisor_nombre_comercial": clinica.get("nombre_comercial", "FAMILY HEALTH"),
+        "emisor_ruc":              clinica.get("ruc", inv.get("emisor_ruc", "")),
+        "emisor_direccion":        clinica.get("direccion", inv.get("emisor_direccion", "")),
+        # Ambiente real de la configuración (no el de la factura que puede estar desactualizado)
+        "sri_ambiente": inv.get("sri_ambiente") or ambiente_real,
+    }
+
     from pdf_generator import generate_factura_pdf
-    pdf_buffer = generate_factura_pdf(inv)
+    pdf_buffer = generate_factura_pdf(inv_completo)
     filename = f"factura_{inv.get('numero_factura','').replace('-','_')}.pdf"
-    return StreamingResponse(pdf_buffer, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={filename}"})
+    return StreamingResponse(pdf_buffer, media_type="application/pdf",
+                             headers={"Content-Disposition": f"inline; filename={filename}"})
 
 
 # ========== PROFORMA ENDPOINTS ==========
@@ -777,6 +797,22 @@ async def emitir_factura_sri(invoice_id: str, current_user: TokenData = Depends(
         raise HTTPException(status_code=400, detail="No se puede emitir una factura anulada")
     if invoice.get("sri_estado") == "AUTORIZADO":
         raise HTTPException(status_code=400, detail="Esta factura ya fue autorizada por el SRI")
+    # Proteger contra doble emisión — si ya tiene clave de acceso, consultar estado antes de reenviar
+    if invoice.get("clave_acceso") and invoice.get("sri_estado") in ("RECIBIDA", "PENDIENTE"):
+        # Intentar consultar autorización con la clave ya generada
+        from sri_facturacion import autorizar_en_sri, get_p12_desde_mongo
+        _, _, amb = await get_p12_desde_mongo(db)
+        resultado_consulta = await autorizar_en_sri(invoice["clave_acceso"], amb)
+        if resultado_consulta.get("ok"):
+            await db.invoices.update_one({"id": invoice_id}, {"$set": {
+                "sri_estado": "AUTORIZADO",
+                "numero_autorizacion": resultado_consulta.get("numero_autorizacion", invoice["clave_acceso"]),
+                "fecha_autorizacion": resultado_consulta.get("fecha_autorizacion", ""),
+            }})
+            return {"ok": True, "clave_acceso": invoice["clave_acceso"],
+                    "sri_estado": "AUTORIZADO",
+                    "numero_autorizacion": resultado_consulta.get("numero_autorizacion", ""),
+                    "mensaje": "Factura ya enviada — autorización consultada exitosamente"}
     p12_bytes, password, ambiente = await get_p12_desde_mongo(db)
     if not p12_bytes:
         raise HTTPException(status_code=503, detail="Certificado .p12 no configurado. Ve a Admin → Config. SRI")

@@ -1087,13 +1087,25 @@ async def reporte_ingresos_del_dia(
     total_otros = 0
     num_transacciones = 0
     detalles = []
-    
+
+    # Pre-cargar citas del día para enriquecer con telefono/email/direccion
+    cedulas_consultas = list({c.get("paciente_cedula","") for c in consultas if c.get("paciente_cedula")})
+    appts_map = {}
+    if cedulas_consultas:
+        async for appt in db.appointments.find(
+            {"cedula": {"$in": cedulas_consultas}},
+            {"_id":0, "cedula":1, "telefono":1, "email":1, "direccion":1, "id":1}
+        ).sort("fecha", -1):
+            ced = appt.get("cedula","")
+            if ced and ced not in appts_map:
+                appts_map[ced] = appt
+
     for consulta in consultas:
         for pago in consulta.get('pagos', []):
             if pago.get('fecha', '').startswith(fecha):
                 tipo_pago = pago.get('tipo_pago', 'otros').lower()
                 monto = pago.get('monto', 0)
-                
+
                 if tipo_pago == 'efectivo':
                     total_efectivo += monto
                 elif tipo_pago == 'transferencia':
@@ -1104,19 +1116,34 @@ async def reporte_ingresos_del_dia(
                     total_seguro += monto
                 else:
                     total_otros += monto
-                
+
                 num_transacciones += 1
-                
+
+                # Enriquecer con datos de la cita
+                cedula = consulta.get('paciente_cedula', '')
+                appt_data = appts_map.get(cedula, {})
+
+                # Verificar si ya tiene factura
+                factura_existente = await db.invoices.find_one(
+                    {"consulta_financiera_id": consulta.get('id'), "estado": {"$ne": "anulada"}},
+                    {"_id": 0, "numero_factura": 1}
+                )
+
                 detalles.append({
-                    "consulta_id": consulta.get('id'),
-                    "paciente_nombre": consulta.get('paciente_nombre'),
-                    "paciente_cedula": consulta.get('paciente_cedula'),
-                    "especialidad": consulta.get('especialidad'),
-                    "doctor_nombre": consulta.get('doctor_nombre'),
-                    "monto": monto,
-                    "tipo_pago": tipo_pago,
-                    "referencia": pago.get('referencia', ''),
-                    "hora": pago.get('fecha', '').split(' ')[-1] if ' ' in pago.get('fecha', '') else ''
+                    "consulta_id":      consulta.get('id'),
+                    "appointment_id":   appt_data.get('id', consulta.get('appointment_id', '')),
+                    "paciente_nombre":  consulta.get('paciente_nombre'),
+                    "paciente_cedula":  cedula,
+                    "paciente_telefono":consulta.get('paciente_telefono') or appt_data.get('telefono', ''),
+                    "paciente_email":   consulta.get('paciente_email')    or appt_data.get('email', ''),
+                    "paciente_direccion":consulta.get('paciente_direccion') or appt_data.get('direccion', ''),
+                    "especialidad":     consulta.get('especialidad'),
+                    "doctor_nombre":    consulta.get('doctor_nombre'),
+                    "monto":            monto,
+                    "tipo_pago":        tipo_pago,
+                    "referencia":       pago.get('referencia', ''),
+                    "hora":             pago.get('fecha', '').split(' ')[-1] if ' ' in pago.get('fecha', '') else '',
+                    "factura_numero":   factura_existente.get('numero_factura') if factura_existente else None,
                 })
     
     total_general = total_efectivo + total_transferencia + total_tarjeta + total_seguro + total_otros

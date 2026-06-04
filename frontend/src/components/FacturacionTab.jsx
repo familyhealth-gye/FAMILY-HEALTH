@@ -68,19 +68,20 @@ export const FacturacionTab = ({ token, user }) => {
     if (!raw) return;
     try {
       const datos = JSON.parse(raw);
-      localStorage.removeItem("prefill_factura"); // consumir una sola vez
+      localStorage.removeItem("prefill_factura");
       const monto = parseFloat(datos.monto) || 0;
       setForm(f => ({
         ...f,
-        paciente_nombre:        datos.paciente_nombre   || "",
-        paciente_cedula:        datos.paciente_cedula   || "",
-        paciente_telefono:      datos.paciente_telefono || "",
-        paciente_email:         datos.paciente_email    || "",
-        doctor_nombre:          datos.doctor_nombre     || "",
-        especialidad:           datos.especialidad      || "",
-        tipo_pago:              datos.tipo_pago         || "efectivo",
-        consulta_financiera_id: datos.consulta_id       || "",
-        appointment_id:         datos.appointment_id    || "",
+        paciente_nombre:        datos.paciente_nombre     || "",
+        paciente_cedula:        datos.paciente_cedula     || "",
+        paciente_telefono:      datos.paciente_telefono   || "",
+        paciente_email:         datos.paciente_email      || "",
+        paciente_direccion:     datos.paciente_direccion  || "",
+        doctor_nombre:          datos.doctor_nombre       || "",
+        especialidad:           datos.especialidad        || "",
+        tipo_pago:              datos.tipo_pago           || "efectivo",
+        consulta_financiera_id: datos.consulta_id         || "",
+        appointment_id:         datos.appointment_id      || "",
         detalles: [{
           descripcion:     `Consulta ${datos.especialidad || "Médica"}`,
           cantidad:        1,
@@ -89,8 +90,8 @@ export const FacturacionTab = ({ token, user }) => {
           subtotal:        monto,
         }],
       }));
-      setVista("nueva"); // abrir directamente en nueva factura
-    } catch { /* JSON malformado, ignorar */ }
+      setVista("nueva");
+    } catch { /* JSON malformado */ }
   }, []);
 
   const cargar = async () => {
@@ -528,7 +529,40 @@ export const FacturacionTab = ({ token, user }) => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                   <div>
                     <label style={LABEL}>Cédula / RUC *</label>
-                    <input value={form.paciente_cedula} onChange={e => setForm(f => ({ ...f, paciente_cedula: e.target.value }))}
+                    <input value={form.paciente_cedula}
+                      onChange={async e => {
+                        const ced = e.target.value;
+                        setForm(f => ({ ...f, paciente_cedula: ced }));
+                        if (ced.length >= 6) {
+                          try {
+                            // Buscar en pacientes financieros
+                            const r = await axios.get(`${API}/financial/pacientes?search=${encodeURIComponent(ced)}`, { headers });
+                            const pac = (r.data||[]).find(p => (p.cedula||"").trim() === ced.trim());
+                            if (pac) {
+                              setForm(f => ({
+                                ...f,
+                                paciente_nombre:    pac.nombre || pac.nombre_completo || f.paciente_nombre,
+                                paciente_telefono:  pac.telefono  || f.paciente_telefono,
+                                paciente_email:     pac.email     || f.paciente_email,
+                                paciente_direccion: pac.direccion || f.paciente_direccion,
+                              }));
+                            } else {
+                              // Buscar en citas
+                              const ra = await axios.get(`${API}/appointments?search=${encodeURIComponent(ced)}`, { headers });
+                              const appt = (ra.data||[]).find(a => (a.cedula||"").trim() === ced.trim());
+                              if (appt) {
+                                setForm(f => ({
+                                  ...f,
+                                  paciente_nombre:    appt.nombre_completo || appt.nombre || f.paciente_nombre,
+                                  paciente_telefono:  appt.telefono  || f.paciente_telefono,
+                                  paciente_email:     appt.email     || f.paciente_email,
+                                  paciente_direccion: appt.direccion || f.paciente_direccion,
+                                }));
+                              }
+                            }
+                          } catch {}
+                        }
+                      }}
                       placeholder="0912345678" style={INPUT} />
                   </div>
                   <div>
