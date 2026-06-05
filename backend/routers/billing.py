@@ -1323,3 +1323,91 @@ async def get_certificado_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename=certificado_{appointment_id}.pdf"}
     )
+
+
+@router.get("/sri/diagnostico")
+async def diagnostico_sri(current_user: TokenData = Depends(get_current_user)):
+    """
+    Diagnóstico completo del estado de la integración SRI.
+    Verifica: certificado, ambiente, RUC, conectividad.
+    """
+    from sri_facturacion import get_p12_desde_mongo
+    resultado = {
+        "certificado_cargado": False,
+        "ambiente": None,
+        "ruc_config": None,
+        "titular_cert": None,
+        "valido_hasta": None,
+        "conectividad_sri": None,
+        "problemas": [],
+        "recomendaciones": [],
+    }
+    try:
+        # 1. Verificar certificado
+        p12_bytes, password, ambiente = await get_p12_desde_mongo(db)
+        if not p12_bytes:
+            resultado["problemas"].append("No hay certificado .p12 cargado")
+            resultado["recomendaciones"].append("Ve a Config → Configuración SRI y sube tu certificado .p12")
+            return resultado
+        resultado["certificado_cargado"] = True
+        resultado["ambiente"] = ambiente
+
+        # 2. Leer info del certificado
+        cfg = await db.configuracion.find_one({"clave": "firma_electronica"}, {"_id": 0})
+        val = (cfg or {}).get("valor", {})
+        resultado["titular_cert"] = val.get("titular", "")
+        resultado["valido_hasta"] = val.get("valido_hasta", "")
+
+        # 3. Verificar RUC en config clínica
+        cfg_clinica = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
+        clinica = (cfg_clinica or {}).get("valor", {})
+        ruc = clinica.get("ruc", "")
+        resultado["ruc_config"] = ruc
+        if not ruc:
+            resultado["problemas"].append("RUC no configurado en Config. Clínica")
+            resultado["recomendaciones"].append("Ve a Facturación → Config. Clínica e ingresa tu RUC")
+
+        # 4. Verificar vencimiento del certificado
+        if resultado["valido_hasta"]:
+            from datetime import date
+            try:
+                vence = date.fromisoformat(resultado["valido_hasta"])
+                hoy = date.today()
+                dias_restantes = (vence - hoy).days
+                if dias_restantes < 0:
+                    resultado["problemas"].append(f"Certificado VENCIDO el {resultado['valido_hasta']}")
+                    resultado["recomendaciones"].append("Renueva tu certificado .p12 en el Banco Central o Security Data")
+                elif dias_restantes < 30:
+                    resultado["problemas"].append(f"Certificado vence pronto: {dias_restantes} días restantes")
+            except Exception:
+                pass
+
+        # 5. Ambiente
+        if ambiente == "pruebas":
+            resultado["problemas"].append("Ambiente configurado en PRUEBAS — las facturas no aparecen en el portal productivo del SRI")
+            resultado["recomendaciones"].append("Cambia el ambiente a 'produccion' en Config → Configuración SRI")
+
+        # 6. Probar conectividad al webservice del SRI
+        import httpx
+        url_test = "https://cel.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl" if ambiente == "produccion" \
+               else "https://celcer.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl"
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                r = await client.get(url_test)
+                resultado["conectividad_sri"] = r.status_code == 200
+                if r.status_code != 200:
+                    resultado["problemas"].append(f"El webservice SRI respondió con código {r.status_code}")
+        except Exception as e:
+            resultado["conectividad_sri"] = False
+            resultado["problemas"].append(f"No se pudo conectar al webservice SRI: {str(e)[:80]}")
+            resultado["recomendaciones"].append("Verifica que el servidor Render tenga acceso a Internet y al dominio cel.sri.gob.ec")
+
+        if not resultado["problemas"]:
+            resultado["estado_general"] = "✅ Todo configurado correctamente"
+        else:
+            resultado["estado_general"] = f"⚠️ {len(resultado['problemas'])} problema(s) encontrado(s)"
+
+    except Exception as e:
+        resultado["problemas"].append(f"Error inesperado: {str(e)}")
+
+    return resultado

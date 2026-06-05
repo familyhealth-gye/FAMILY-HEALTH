@@ -167,6 +167,38 @@ export const ConfiguracionSRI = ({ token }) => {
               cursor: loadingSRI || !p12File || !p12Password ? "not-allowed" : "pointer" }}>
             {loadingSRI ? "⏳ Verificando y guardando..." : "🔏 Guardar Certificado"}
           </button>
+
+          {/* ── Diagnóstico SRI ── */}
+          {sriCfg?.configurado && (
+            <button
+              onClick={async () => {
+                try {
+                  const { default: axios } = await import("axios");
+                  const res = await axios.get(
+                    `${process.env.REACT_APP_BACKEND_URL}/api/sri/diagnostico`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+                  const d = res.data;
+                  const lineas = [
+                    `Estado: ${d.estado_general || "Verificado"}`,
+                    `Ambiente: ${d.ambiente}`,
+                    `RUC: ${d.ruc_config || "No configurado"}`,
+                    `Titular: ${d.titular_cert?.split("CN=")[1] || d.titular_cert || ""}`,
+                    `Válido hasta: ${d.valido_hasta || ""}`,
+                    `Conectividad SRI: ${d.conectividad_sri ? "✅ OK" : "❌ Sin conexión"}`,
+                    d.problemas?.length ? `\nPROBLEMAS:\n${d.problemas.join("\n")}` : "\n✅ Sin problemas detectados",
+                    d.recomendaciones?.length ? `\nRECOMENDACIONES:\n${d.recomendaciones.join("\n")}` : "",
+                  ].filter(Boolean).join("\n");
+                  alert(lineas);
+                } catch (e) {
+                  alert("Error al ejecutar diagnóstico: " + (e.response?.data?.detail || e.message));
+                }
+              }}
+              style={{ padding:"9px", background:"#F0F9FF", border:"1.5px solid #BFDBFE",
+                color:"#0C4A6E", borderRadius:"8px", fontSize:"13px", fontWeight:"700", cursor:"pointer" }}>
+              🔍 Ejecutar Diagnóstico SRI
+            </button>
+          )}
         </div>
       </div>
 
