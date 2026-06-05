@@ -173,11 +173,7 @@ export const ConfiguracionSRI = ({ token }) => {
             <button
               onClick={async () => {
                 try {
-                  const { default: axios } = await import("axios");
-                  const res = await axios.get(
-                    `${process.env.REACT_APP_BACKEND_URL}/api/sri/diagnostico`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                  );
+                  const res = await axios.get(`${API}/sri/diagnostico`, { headers });
                   const d = res.data;
                   const lineas = [
                     `Estado: ${d.estado_general || "Verificado"}`,
@@ -186,12 +182,16 @@ export const ConfiguracionSRI = ({ token }) => {
                     `Titular: ${d.titular_cert?.split("CN=")[1] || d.titular_cert || ""}`,
                     `Válido hasta: ${d.valido_hasta || ""}`,
                     `Conectividad SRI: ${d.conectividad_sri ? "✅ OK" : "❌ Sin conexión"}`,
-                    d.problemas?.length ? `\nPROBLEMAS:\n${d.problemas.join("\n")}` : "\n✅ Sin problemas detectados",
-                    d.recomendaciones?.length ? `\nRECOMENDACIONES:\n${d.recomendaciones.join("\n")}` : "",
+                    d.problemas?.length
+                      ? `\nPROBLEMAS:\n${d.problemas.join("\n")}`
+                      : "\n✅ Sin problemas detectados",
+                    d.recomendaciones?.length
+                      ? `\nRECOMENDACIONES:\n${d.recomendaciones.join("\n")}`
+                      : "",
                   ].filter(Boolean).join("\n");
                   alert(lineas);
                 } catch (e) {
-                  alert("Error al ejecutar diagnóstico: " + (e.response?.data?.detail || e.message));
+                  alert("Error diagnóstico: " + (e.response?.data?.detail || e.message));
                 }
               }}
               style={{ padding:"9px", background:"#F0F9FF", border:"1.5px solid #BFDBFE",
