@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import apiClient from "@/lib/axios";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -173,7 +174,7 @@ export const ConfiguracionSRI = ({ token }) => {
             <button
               onClick={async () => {
                 try {
-                  const res = await axios.get(`${API}/sri/diagnostico`, { headers });
+                  const res = await apiClient.get("/sri/diagnostico");
                   const d = res.data;
                   const lineas = [
                     `Estado: ${d.estado_general || "Verificado"}`,
