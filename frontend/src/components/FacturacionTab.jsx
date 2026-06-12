@@ -182,40 +182,47 @@ export const FacturacionTab = ({ token, user }) => {
   };
 
   // ── Emitir al SRI ──
+  // ── Emitir al SRI — con modal de progreso en tiempo real ──
+  const [sriEmitiendo, setSriEmitiendo] = useState(false);
+  const [sriMensaje,   setSriMensaje]   = useState("");
+  const [sriFacturaId, setSriFacturaId] = useState(null);
+
   const handleEmitirSRI = async (id) => {
-    if (!window.confirm("¿Emitir esta factura al SRI? Esta acción es irreversible.\n\nVerifique que el RUC y los datos del paciente sean correctos.")) return;
-    setLoading(true);
+    if (!window.confirm("¿Emitir esta factura al SRI?\n\nVerifique RUC y datos del paciente.\nEsta acción es irreversible.")) return;
+    setSriFacturaId(id);
+    setSriEmitiendo(true);
+    setSriMensaje("📡 Enviando al SRI...");
     try {
-      const res = await axios.post(`${API}/sri/emitir/${id}`, {}, { headers });
+      const res = await axios.post(`${API}/sri/emitir/${id}`, {}, {
+        headers,
+        timeout: 90000,
+      });
       if (res.data.ok) {
-        toast.success(`✅ Factura AUTORIZADA por el SRI\nN° Auth: ${res.data.numero_autorizacion}`);
+        setSriMensaje(`✅ AUTORIZADO\nN°: ${res.data.numero_autorizacion}`);
+        setTimeout(() => { setSriEmitiendo(false); cargar(); }, 2500);
       } else {
-        // Mostrar mensaje completo del SRI para diagnóstico
-        const msgEnvio = res.data.envio?.mensaje || res.data.envio?.estado || "";
-        const msgAuth  = res.data.autorizacion?.mensaje || "";
-        const msg = msgAuth || msgEnvio || res.data.sri_estado || "Respuesta no reconocida";
-        toast.warning(`SRI: ${res.data.sri_estado} — ${msg}`, { duration: 10000 });
-        console.error("SRI response:", res.data);
+        const msg = res.data.autorizacion?.mensaje || res.data.envio?.mensaje || res.data.sri_estado || "Respuesta no reconocida";
+        setSriMensaje(`⚠️ ${res.data.sri_estado || "PENDIENTE"}\n${msg}\n\nUsa "Consultar SRI" para verificar el estado.`);
+        setTimeout(() => { setSriEmitiendo(false); cargar(); }, 4000);
       }
-      await cargar();
     } catch (e) {
       const detail = e.response?.data?.detail || "";
       const status = e.response?.status;
-      // Mensajes de error específicos y accionables
+      let msg = "";
       if (detail.includes("p12") || detail.includes("certificado")) {
-        toast.error("⚠️ Certificado .p12 no configurado. Ve a Config → Configuración SRI.", { duration: 8000 });
+        msg = "⚠️ Certificado .p12 no configurado.\nVe a Config → Configuración SRI.";
       } else if (detail.includes("RUC")) {
-        toast.error("⚠️ RUC no configurado. Ve a Facturación → Config. Clínica.", { duration: 8000 });
+        msg = "⚠️ RUC no configurado.\nVe a Facturación → Config. Clínica.";
       } else if (detail.includes("ya fue autorizada")) {
-        toast.info("Esta factura ya fue autorizada previamente por el SRI.");
-      } else if (status === 503) {
-        toast.error("Servicio SRI no disponible. Intente más tarde.", { duration: 8000 });
+        msg = "ℹ️ Esta factura ya fue autorizada por el SRI.";
+      } else if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
+        msg = "⏱️ El SRI tardó más de 90 segundos.\nLa factura puede estar procesándose.\nUsa 'Consultar SRI' en unos minutos.";
       } else {
-        toast.error(`Error SRI (${status || "?"}): ${detail || e.message}`, { duration: 10000 });
-        console.error("SRI error detail:", e.response?.data);
+        msg = `❌ Error (${status || "?"}): ${detail || e.message}`;
       }
+      setSriMensaje(msg);
+      setTimeout(() => { setSriEmitiendo(false); cargar(); }, 5000);
     }
-    setLoading(false);
   };
 
   // ── Consultar estado SRI ──
@@ -787,6 +794,52 @@ export const FacturacionTab = ({ token, user }) => {
                 💾 Guardar Configuración
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de progreso SRI ───────────────────────────────────────── */}
+      {sriEmitiendo && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 99999, padding: "20px",
+        }}>
+          <div style={{
+            background: "white", borderRadius: "16px", padding: "32px 28px",
+            maxWidth: "380px", width: "100%", textAlign: "center",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+          }}>
+            {sriMensaje.startsWith("✅") ? (
+              <div style={{ fontSize: "48px", marginBottom: "12px" }}>✅</div>
+            ) : sriMensaje.startsWith("❌") ? (
+              <div style={{ fontSize: "48px", marginBottom: "12px" }}>❌</div>
+            ) : sriMensaje.startsWith("⚠️") || sriMensaje.startsWith("⏱️") || sriMensaje.startsWith("ℹ️") ? (
+              <div style={{ fontSize: "48px", marginBottom: "12px" }}>⚠️</div>
+            ) : (
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{
+                  width: "48px", height: "48px", border: "4px solid #E0EDFF",
+                  borderTop: "4px solid #0C4A6E", borderRadius: "50%",
+                  margin: "0 auto", animation: "spin 1s linear infinite",
+                }} />
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
+            <p style={{ fontSize: "14px", fontWeight: "700", color: "#0C4A6E", margin: "0 0 8px" }}>
+              {sriMensaje.startsWith("✅") ? "Factura Autorizada" :
+               sriMensaje.startsWith("❌") ? "Error al emitir" :
+               (sriMensaje.startsWith("⚠️") || sriMensaje.startsWith("⏱️") || sriMensaje.startsWith("ℹ️")) ? "Verificar estado" :
+               "Procesando en el SRI..."}
+            </p>
+            <p style={{ fontSize: "12px", color: "#6B7280", margin: 0, whiteSpace: "pre-line", lineHeight: "1.6" }}>
+              {sriMensaje || "Enviando factura y esperando autorización...\nEsto puede tomar hasta 60 segundos."}
+            </p>
+            {!sriMensaje.startsWith("✅") && !sriMensaje.startsWith("❌") && !sriMensaje.startsWith("⚠️") && !sriMensaje.startsWith("⏱️") && !sriMensaje.startsWith("ℹ️") && (
+              <p style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "12px" }}>
+                No cierre esta pantalla
+              </p>
+            )}
           </div>
         </div>
       )}

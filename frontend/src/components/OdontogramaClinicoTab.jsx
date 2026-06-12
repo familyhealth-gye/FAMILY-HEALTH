@@ -583,13 +583,39 @@ export const OdontogramaClinicoTab = ({
           ].map(op => (
             <button key={op.value} onClick={async () => {
               setTipoDenticion(op.value);
-              // Actualizar en backend si hay odontograma
-              if (odontograma?.id) {
-                try {
-                  await axios.put(`${API}/odontogramas-clinicos/${odontograma.id}`,
-                    { tipo_denticion: op.value },
+              if (!odontograma?.id) return;
+              try {
+                await axios.put(`${API}/odontogramas-clinicos/${odontograma.id}`,
+                  { tipo_denticion: op.value },
+                  { headers: { Authorization: `Bearer ${token}` } });
+
+                const necesarios = op.value === "temporal" ? [5,6,7,8]
+                  : op.value === "mixta" ? [1,2,3,4,5,6,7,8] : [1,2,3,4];
+                const existentes = new Set((odontograma.dientes||[]).map(d => Number(d.cuadrante)));
+                const cuadrantesFaltantes = necesarios.filter(c => !existentes.has(c));
+
+                if (cuadrantesFaltantes.length > 0) {
+                  toast.info(`Agregando dientes para ${op.label}...`);
+                  const resGen = await axios.post(`${API}/odontogramas-clinicos`,
+                    { tipo_denticion: op.value,
+                      paciente_id: pacienteId || appointment?.paciente_id || "",
+                      paciente_cedula: pacienteCedula || appointment?.cedula || "",
+                      doctor_id: doctorId || appointment?.doctor_id || "" },
                     { headers: { Authorization: `Bearer ${token}` } });
-                } catch {}
+                  const dientesNuevos = (resGen.data.dientes||[]).filter(d =>
+                    cuadrantesFaltantes.includes(Number(d.cuadrante))
+                  );
+                  const dientesUnificados = [...(odontograma.dientes||[]), ...dientesNuevos];
+                  await axios.put(`${API}/odontogramas-clinicos/${odontograma.id}`,
+                    { tipo_denticion: op.value, dientes: dientesUnificados },
+                    { headers: { Authorization: `Bearer ${token}` } });
+                  setOdontograma(prev => ({ ...prev, tipo_denticion: op.value, dientes: dientesUnificados }));
+                  toast.success(`Dentición ${op.label} lista`);
+                } else {
+                  setOdontograma(prev => ({ ...prev, tipo_denticion: op.value }));
+                }
+              } catch (e) {
+                toast.error("Error al cambiar dentición: " + (e.response?.data?.detail || e.message));
               }
             }}
               style={{
@@ -908,6 +934,59 @@ export const OdontogramaClinicoTab = ({
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      {/* ══ GUARDAR Y TERMINAR ══════════════════════════════════════════ */}
+      <div style={{ padding: "16px 0 32px", display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+        <button
+          onClick={async () => {
+            try {
+              await axios.put(`${API}/odontogramas-clinicos/${odontograma.id}`, {
+                diagnostico_general: diagGeneral,
+                higiene_oral: higieneOral,
+                estado_encias: estadoEncias,
+                observaciones,
+              }, { headers: { Authorization: `Bearer ${token}` } });
+
+              if (realizados.length > 0) {
+                const evEntry = {
+                  fecha:         new Date().toISOString().split("T")[0],
+                  doctor_nombre: appointment?.doctor_nombre || "",
+                  procedimiento: realizados.map(r => `D${r.diente}: ${r.procedimiento}`).join(", "),
+                  observaciones: realizados.map(r => r.notas).filter(Boolean).join("; "),
+                  materiales:    realizados.map(r => r.materiales).filter(Boolean).join("; "),
+                };
+                try {
+                  await axios.post(
+                    `${API}/odontogramas-clinicos/${odontograma.id}/evolucion`,
+                    evEntry,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+                } catch {}
+              }
+
+              toast.success("✅ Consulta guardada");
+              if (onClose) setTimeout(onClose, 1200);
+            } catch (e) {
+              toast.error("Error al guardar: " + (e.response?.data?.detail || e.message));
+            }
+          }}
+          style={{
+            padding: "12px 28px", background: "#0C4A6E", color: "white",
+            border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700",
+            cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
+            boxShadow: "0 4px 12px rgba(12,74,110,0.3)",
+          }}
+        >
+          <Save size={16} /> Guardar y Terminar Consulta
+        </button>
+        {onClose && (
+          <button onClick={onClose}
+            style={{ padding: "12px 20px", background: "#F3F4F6", color: "#374151",
+              border: "none", borderRadius: "10px", fontSize: "14px", cursor: "pointer" }}>
+            Cerrar sin guardar
+          </button>
         )}
       </div>
 

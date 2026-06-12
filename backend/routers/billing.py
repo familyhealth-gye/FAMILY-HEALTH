@@ -847,8 +847,15 @@ async def emitir_factura_sri(invoice_id: str, current_user: TokenData = Depends(
     resultado_envio = await enviar_al_sri(xml_firmado, ambiente)
     resultado_autorizacion = {"ok": False, "estado": "PENDIENTE"}
     if resultado_envio.get("ok"):
-        await asyncio.sleep(2)
-        resultado_autorizacion = await autorizar_en_sri(clave_acceso, ambiente)
+        for espera in [3, 5, 7, 10, 12, 15]:
+            await asyncio.sleep(espera)
+            resultado_autorizacion = await autorizar_en_sri(clave_acceso, ambiente)
+            if resultado_autorizacion.get("ok"):
+                break
+            msg = resultado_autorizacion.get("mensaje", "").upper()
+            if any(x in msg for x in ["NO EXISTE", "EN PROCESO", "PENDIENTE"]):
+                continue
+            break
     update_data = {"clave_acceso": clave_acceso, "sri_estado_envio": resultado_envio.get("estado", "ERROR"), "sri_mensaje_envio": resultado_envio.get("mensaje", ""), "sri_xml_b64": xml_b64, "sri_ambiente": ambiente, "sri_fecha_envio": datetime.now(timezone.utc).isoformat()}
     if resultado_autorizacion.get("ok"):
         update_data["sri_estado"] = "AUTORIZADO"

@@ -284,6 +284,30 @@ async def eliminar_odontograma_clinico(
     result = await db.odontogramas_clinicos.delete_one({"id": odontograma_id})
 
 
+@router.post("/odontogramas-clinicos/{odontograma_id}/evolucion")
+async def agregar_evolucion_odontograma(
+    odontograma_id: str,
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Agrega una entrada de evolución al odontograma."""
+    from datetime import datetime, timezone
+    entrada = {
+        "fecha":         data.get("fecha", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+        "doctor_nombre": data.get("doctor_nombre", current_user.username),
+        "procedimiento": data.get("procedimiento", ""),
+        "observaciones": data.get("observaciones", ""),
+        "materiales":    data.get("materiales", ""),
+        "created_at":    datetime.now(timezone.utc).isoformat(),
+    }
+    await db.odontogramas_clinicos.update_one(
+        {"id": odontograma_id},
+        {"$push": {"evolucion": entrada},
+         "$set":  {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"ok": True, "entrada": entrada}
+
+
 @router.get("/odontogramas-clinicos/{odontograma_id}/evolucion")
 async def get_evolucion_odontograma(
     odontograma_id: str,
