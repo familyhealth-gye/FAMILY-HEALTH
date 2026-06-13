@@ -53,6 +53,7 @@ backend/
 | **Fecha** | 2026-06-13 |
 | **Rama principal** | `main` |
 | **Estado del build** | Todos los archivos modificados verificados con `ast.parse` (Python) y balance de llaves/paréntesis (JSX) |
+| **Auditoría completa** | Ver [`AUDIT_REPORT.md`](AUDIT_REPORT.md) (2026-06-13) — análisis directo del código fuente, backend + frontend + integraciones, sin modificaciones de código |
 
 ---
 
@@ -188,36 +189,78 @@ backend/
 1. **Modulación de `server.py`**: aún contiene rutas legacy pendientes de mover a `routers/modules/` (clinical history por especialidad) — `financial_routes.py` deliberadamente no extraído por su complejidad (operaciones atómicas, SRI, pagos)
 2. **Reintentos SRI de 60s**: si el SRI tarda más, la factura queda en estado PENDIENTE; ahora hay botón "Consultar SRI" que muestra el estado real devuelto (RECIBIDA/EN PROCESO/NO EXISTE/DEVUELTA) — pendiente probar en producción que el estado real se refleje correctamente en la tabla
 3. **Gemini AI**: decoplado pero depende de que el usuario configure su propia API key; sin key, `IAMedicaPanel` no ofrece sugerencias
-4. **Pendiente verificar**: integración completa de `FichaClinicaTab` dentro de `NuevaCitaModal` (estado incierto de sesiones previas)
-5. **MedicamentoSearch**: integrado solo en `MedicacionRapida` (Medicina General) y `PediatriaForm`; `GinecologiaForm` y `NutricionForm` aún usan input manual
-6. **CIE10Search**: integrado solo en certificado médico; no en formularios de historia clínica por especialidad
-7. **Encoding**: riesgo conocido de corrupción ASCII en merges que afecta comparaciones de especialidad — vigilar tras cualquier merge masivo
-8. **Envío de correo — PENDIENTE Parte A (configuración del usuario)**: el código ya envía vía Gmail API (HTTPS), pero falta que el usuario complete el setup OAuth2 en Google Cloud y pegue las credenciales:
+4. **MedicamentoSearch**: integrado solo en `MedicacionRapida` (Medicina General) y `PediatriaForm`; `GinecologiaForm` y `NutricionForm` aún usan input manual
+5. **CIE10Search**: integrado solo en certificado médico; no en formularios de historia clínica por especialidad
+6. **Encoding**: riesgo conocido de corrupción ASCII en merges que afecta comparaciones de especialidad — vigilar tras cualquier merge masivo
+7. **Envío de correo — PENDIENTE Parte A (configuración del usuario)**: el código ya envía vía Gmail API (HTTPS), pero falta que el usuario complete el setup OAuth2 en Google Cloud y pegue las credenciales:
    - **Parte A (manual, una vez)**: crear proyecto en Google Cloud Console → habilitar "Gmail API" → pantalla de consentimiento OAuth (Externo, scope `gmail.send`, agregar el Gmail como usuario de prueba) → credencial "ID de cliente OAuth" tipo *Aplicación de escritorio* (da Client ID + Client Secret) → ejecutar `python backend/scripts/gmail_oauth_setup.py` en local para obtener el Refresh Token
    - **Luego**: pegar Client ID / Client Secret / Refresh Token en Admin → Config. SRI → sección Gmail
    - Hasta que se complete, "Enviar por correo" devuelve 503 ("Gmail API no configurada")
+8. **Endpoint duplicado en `medical_history.py`** (hallazgo de auditoría 2026-06-13): `create_odontology_history` está definido dos veces (~línea 428 y ~440); la primera definición es código muerto. Pendiente revisar y eliminar la duplicada.
+9. **Sin rate limiting en login** (`users.py`) — hallazgo de auditoría, riesgo de fuerza bruta.
+10. **30+ bloques `except Exception: pass` silenciosos** en `odontology.py`, `medical_history.py`, `catalogs.py`, `billing.py`, `helpers.py` — dificultan debugging en producción (hallazgo de auditoría).
+11. **Sin validación de expiración del certificado `.p12`** antes de firmar XML en `sri_facturacion.py` (hallazgo de auditoría).
+12. **Archivos muertos/huérfanos** (~2400 líneas, hallazgo de auditoría): `server_old.py`, `server_fase2.py`, `server_backup_fase2.py` (backend) y `OdontogramaTab.jsx` (frontend, V1 pre-refactor, no usado — no confundir con `OdontogramaClinicoTab.jsx` activo ni `OdontogramaStandalone.jsx`, también activo).
+13. **151 llamadas axios crudas** (con headers manuales) en 30 archivos frontend, en vez de `apiClient` — funcional pero inconsistente (hallazgo de auditoría).
 
 > **Resuelto:** el PAT de GitHub usado en desarrollo **ya fue revocado/eliminado** — riesgo de seguridad cerrado.
+>
+> **Resuelto (confirmado por auditoría 2026-06-13):** la integración `FichaClinicaTab` ↔ `NuevaCitaModal` está completamente funcional (import, render condicional y flujo de guardado vía `useCitaForm.js` verificados en código).
 
 ---
 
 ## Próximas Tareas Recomendadas
 
-### Prioridad Alta — verificar en producción los fixes de esta sesión (2026-06-13)
-1. **Odontograma**: confirmar que al cambiar a Decidua/Mixta ahora se ven los dientes temporales 5-8 en ambos arcos
-2. **Envío RIDE por correo**: completar la Parte A (setup Gmail API OAuth2 — ver "Problemas Conocidos" #8) y confirmar que envía correctamente vía Gmail API
-3. **Consulta SRI**: confirmar que la tabla muestra el estado real (RECIBIDA/EN PROCESO/NO EXISTE/DEVUELTA) bajo el badge tras pulsar "Consultar SRI"
-4. Verificar y completar integración `FichaClinicaTab` ↔ `NuevaCitaModal`
+> Prioridades sincronizadas con [`AUDIT_REPORT.md`](AUDIT_REPORT.md) (auditoría completa 2026-06-13).
 
-### Prioridad Media
-5. Extender `MedicamentoSearch` a `GinecologiaForm` y `NutricionForm`
-6. Extender `CIE10Search` a formularios de historia clínica (no solo certificado)
-7. Continuar modularización de `server.py`: mover historia clínica por especialidad a `routers/modules/{especialidad}.py`
+### 🟠 Prioridad Alta
+1. Resolver endpoint duplicado `create_odontology_history` en `medical_history.py` (Problemas Conocidos #8)
+2. **Envío RIDE por correo**: completar la Parte A (setup Gmail API OAuth2 — ver "Problemas Conocidos" #7) y confirmar envío E2E vía Gmail API
+3. Verificar en producción los 3 fixes de la sesión 2026-06-13:
+   - **Odontograma**: confirmar que al cambiar a Decidua/Mixta se ven los dientes temporales 5-8 en ambos arcos
+   - **Consulta SRI**: confirmar que la tabla muestra el estado real (RECIBIDA/EN PROCESO/NO EXISTE/DEVUELTA) bajo el badge tras pulsar "Consultar SRI"
+   - Confirmar envío de correo una vez completada la Parte A
 
-### Prioridad Baja
-8. Extracción de `financial_routes.py` hacia arquitectura `services/`/`repositories/` (cuando se aborde evolución SaaS completa)
-9. Evaluar agregar resumen visual de evolución odontológica (timeline gráfico) más allá del panel colapsable actual
-10. Considerar envío de correo vía API HTTP (SendGrid/Resend) si el puerto 465 SMTP resulta poco fiable en Render
+### 🟡 Prioridad Media
+4. Agregar rate limiting al endpoint de login (`users.py`) (Problemas Conocidos #9)
+5. Reemplazar `except: pass` silenciosos por logging estructurado, priorizando `billing.py` y `odontology.py` (Problemas Conocidos #10)
+6. Agregar validación de expiración del certificado `.p12` antes de firmar (Problemas Conocidos #11)
+7. Agregar `toast.error()` en catches silenciosos de `FacturacionTab.jsx` y `ConfiguracionSRI.jsx`
+8. Extender `MedicamentoSearch` a `GinecologiaForm` y `NutricionForm`
+9. Extender `CIE10Search` a formularios de historia clínica (no solo certificado)
+10. Continuar modularización de `server.py`: mover historia clínica por especialidad a `routers/modules/{especialidad}.py`
+
+### 🟢 Prioridad Baja
+11. Eliminar archivos muertos: `server_old.py`, `server_fase2.py`, `server_backup_fase2.py`, `OdontogramaTab.jsx` (Problemas Conocidos #12)
+12. Migración gradual de axios crudo → `apiClient`, empezando por `OdontogramaClinicoTab.jsx`, `FacturacionTab.jsx`, `PlanTratamientoTab.jsx` (Problemas Conocidos #13)
+13. Extracción de `financial_routes.py` hacia arquitectura `services/`/`repositories/` (cuando se aborde evolución SaaS completa)
+14. Modularizar routers/componentes >1000 líneas (`billing.py`, `financial_routes.py`, `odontology.py`, `medical_history.py`, `PlanTratamientoTab.jsx`)
+15. Evaluar agregar resumen visual de evolución odontológica (timeline gráfico) más allá del panel colapsable actual
+
+---
+
+## Roadmap Propuesto (post-auditoría)
+
+### Fase A — Estabilización (corto plazo)
+- Resolver hallazgo Alto #1 (endpoint duplicado en `medical_history.py`)
+- Cerrar Parte A de Gmail API y validar envío de RIDE en producción
+- Verificación funcional de los 3 fixes de la sesión 2026-06-13
+
+### Fase B — Endurecimiento (seguridad y observabilidad)
+- Rate limiting en login
+- Logging estructurado para excepciones silenciosas (reemplazo gradual de `except: pass`)
+- Validación de expiración de certificado `.p12` con aviso proactivo en `ConfiguracionSRI.jsx`
+- Feedback de error (toasts) en flujos críticos de Facturación y Configuración SRI
+
+### Fase C — Limpieza y consistencia
+- Eliminación de archivos muertos (backend y frontend)
+- Migración progresiva de axios crudo → `apiClient`
+- Extensión de `MedicamentoSearch`/`CIE10Search` a formularios faltantes
+
+### Fase D — Modularización (mediano/largo plazo)
+- División de routers y componentes monolíticos (`billing.py`, `financial_routes.py`, `odontology.py`, `medical_history.py`, `PlanTratamientoTab.jsx`)
+- Continuar vaciado de `server.py` hacia `routers/modules/{especialidad}.py`
+- Evaluar extracción de `financial_routes.py` hacia `services/`/`repositories/`
 
 ---
 
