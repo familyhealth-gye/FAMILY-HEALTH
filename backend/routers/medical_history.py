@@ -429,18 +429,6 @@ async def create_odontology_history(
     input: MedicalHistoryOdontologyCreate,
     current_user: TokenData = Depends(get_current_user)
 ):
-    # Get appointment data
-    appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
-
-    # Get current user data
-    user = await db.users.find_one({"username": current_user.username}, {"_id": 0})
-
-async def create_odontology_history(
-    input: MedicalHistoryOdontologyCreate,
-    current_user: TokenData = Depends(get_current_user)
-):
     from specialty_utils import normalize_specialty
 
     appointment = await db.appointments.find_one({"id": input.appointment_id}, {"_id": 0})

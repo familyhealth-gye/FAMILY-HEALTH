@@ -181,6 +181,7 @@ backend/
 | Dentición Decidua/Mixta no mostraba dientes | `organizarDientes()` solo renderizaba cuadrantes 1-4; los temporales 5-8 nunca se dibujaban | Incluidos cuadrantes 5-8 en ambos arcos (2026-06-13) |
 | "Enviar por correo" congelaba toda la app | `smtplib.SMTP_SSL` síncrono sin timeout dentro de `async def` bloqueaba el event loop | `asyncio.to_thread()` + `timeout=20s` + 504 claro (2026-06-13) |
 | Certificado médico sin emisor configurable | Solo usaba doctor de la cita | Campo `emisor_nombre` opcional para que counter especifique quién firma |
+| `POST /medical-history/odontology` rota (guardaba historia odontológica como `None` → 500) | Función `create_odontology_history` duplicada: el decorador `@router.post` quedó pegado a un stub incompleto (sin insert ni return); la implementación completa quedó sin decorador y nunca se registró como ruta | Eliminado el stub incompleto; el decorador ahora envuelve la implementación completa (Fase A, 2026-06-13) |
 
 ---
 
@@ -196,12 +197,11 @@ backend/
    - **Parte A (manual, una vez)**: crear proyecto en Google Cloud Console → habilitar "Gmail API" → pantalla de consentimiento OAuth (Externo, scope `gmail.send`, agregar el Gmail como usuario de prueba) → credencial "ID de cliente OAuth" tipo *Aplicación de escritorio* (da Client ID + Client Secret) → ejecutar `python backend/scripts/gmail_oauth_setup.py` en local para obtener el Refresh Token
    - **Luego**: pegar Client ID / Client Secret / Refresh Token en Admin → Config. SRI → sección Gmail
    - Hasta que se complete, "Enviar por correo" devuelve 503 ("Gmail API no configurada")
-8. **Endpoint duplicado en `medical_history.py`** (hallazgo de auditoría 2026-06-13): `create_odontology_history` está definido dos veces (~línea 428 y ~440); la primera definición es código muerto. Pendiente revisar y eliminar la duplicada.
-9. **Sin rate limiting en login** (`users.py`) — hallazgo de auditoría, riesgo de fuerza bruta.
-10. **30+ bloques `except Exception: pass` silenciosos** en `odontology.py`, `medical_history.py`, `catalogs.py`, `billing.py`, `helpers.py` — dificultan debugging en producción (hallazgo de auditoría).
-11. **Sin validación de expiración del certificado `.p12`** antes de firmar XML en `sri_facturacion.py` (hallazgo de auditoría).
-12. **Archivos muertos/huérfanos** (~2400 líneas, hallazgo de auditoría): `server_old.py`, `server_fase2.py`, `server_backup_fase2.py` (backend) y `OdontogramaTab.jsx` (frontend, V1 pre-refactor, no usado — no confundir con `OdontogramaClinicoTab.jsx` activo ni `OdontogramaStandalone.jsx`, también activo).
-13. **151 llamadas axios crudas** (con headers manuales) en 30 archivos frontend, en vez de `apiClient` — funcional pero inconsistente (hallazgo de auditoría).
+8. **Sin rate limiting en login** (`users.py`) — hallazgo de auditoría, riesgo de fuerza bruta.
+9. **30+ bloques `except Exception: pass` silenciosos** en `odontology.py`, `medical_history.py`, `catalogs.py`, `billing.py`, `helpers.py` — dificultan debugging en producción (hallazgo de auditoría).
+10. **Sin validación de expiración del certificado `.p12`** antes de firmar XML en `sri_facturacion.py` (hallazgo de auditoría).
+11. **Archivos muertos/huérfanos** (~2400 líneas, hallazgo de auditoría): `server_old.py`, `server_fase2.py`, `server_backup_fase2.py` (backend) y `OdontogramaTab.jsx` (frontend, V1 pre-refactor, no usado — no confundir con `OdontogramaClinicoTab.jsx` activo ni `OdontogramaStandalone.jsx`, también activo).
+12. **151 llamadas axios crudas** (con headers manuales) en 30 archivos frontend, en vez de `apiClient` — funcional pero inconsistente (hallazgo de auditoría).
 
 > **Resuelto:** el PAT de GitHub usado en desarrollo **ya fue revocado/eliminado** — riesgo de seguridad cerrado.
 >
@@ -214,7 +214,7 @@ backend/
 > Prioridades sincronizadas con [`AUDIT_REPORT.md`](AUDIT_REPORT.md) (auditoría completa 2026-06-13).
 
 ### 🟠 Prioridad Alta
-1. Resolver endpoint duplicado `create_odontology_history` en `medical_history.py` (Problemas Conocidos #8)
+1. ✅ **Resuelto (2026-06-13)**: endpoint duplicado `create_odontology_history` en `medical_history.py` — pendiente verificar en producción que `POST /medical-history/odontology` ya guarda correctamente
 2. **Envío RIDE por correo**: completar la Parte A (setup Gmail API OAuth2 — ver "Problemas Conocidos" #7) y confirmar envío E2E vía Gmail API
 3. Verificar en producción los 3 fixes de la sesión 2026-06-13:
    - **Odontograma**: confirmar que al cambiar a Decidua/Mixta se ven los dientes temporales 5-8 en ambos arcos
