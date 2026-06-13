@@ -20,6 +20,7 @@ iniconfig==2.1.0
 isort==6.1.0
 jmespath==1.0.1
 jq==1.10.0
+lxml==5.3.0
 markdown-it-py==4.0.0
 mccabe==0.7.0
 mdurl==0.1.2
