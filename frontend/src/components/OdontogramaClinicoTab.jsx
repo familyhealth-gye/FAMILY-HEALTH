@@ -485,16 +485,22 @@ export const OdontogramaClinicoTab = ({
     const vacio = { supPerm: [], supTemp: [], infTemp: [], infPerm: [] };
     if (!odontograma?.dientes) return vacio;
     const d = odontograma.dientes;
+    // La VISUALIZACIÓN se filtra por el tipo de dentición SELECCIONADO, no por los
+    // dientes que existan en el array (los temporales/permanentes se conservan
+    // guardados al cambiar de tipo, pero solo se muestran los que corresponden):
+    //   permanente → solo definitivos (1-4) · temporal → solo deciduos (5-8) · mixta → ambos
+    const mostrarPerm = tipoDenticion !== "temporal";
+    const mostrarTemp = tipoDenticion === "temporal" || tipoDenticion === "mixta";
     // Dentro de un cuadrante, el dígito FDI más alto es el más posterior.
     // Lado derecho del paciente (Q1,Q4,Q5,Q8): posterior→línea media = desc.
     // Lado izquierdo (Q2,Q3,Q6,Q7): línea media→posterior = asc.
     const der = (n) => d.filter(x => Number(x.cuadrante) === n).sort((a, b) => Number(b.numero_fdi) - Number(a.numero_fdi));
     const izq = (n) => d.filter(x => Number(x.cuadrante) === n).sort((a, b) => Number(a.numero_fdi) - Number(b.numero_fdi));
     return {
-      supPerm: [ ...der(1), ...izq(2) ],   // 18→11 | 21→28
-      supTemp: [ ...der(5), ...izq(6) ],   // 55→51 | 61→65 (centrado)
-      infTemp: [ ...der(8), ...izq(7) ],   // 85→81 | 71→75 (centrado)
-      infPerm: [ ...der(4), ...izq(3) ],   // 48→41 | 31→38
+      supPerm: mostrarPerm ? [ ...der(1), ...izq(2) ] : [],   // 18→11 | 21→28
+      supTemp: mostrarTemp ? [ ...der(5), ...izq(6) ] : [],   // 55→51 | 61→65 (centrado)
+      infTemp: mostrarTemp ? [ ...der(8), ...izq(7) ] : [],   // 85→81 | 71→75 (centrado)
+      infPerm: mostrarPerm ? [ ...der(4), ...izq(3) ] : [],   // 48→41 | 31→38
     };
   };
 
