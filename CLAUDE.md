@@ -168,4 +168,4 @@ Toda sesión nueva (o tras compactación de contexto) debe, en este orden:
 
 ---
 
-*Última actualización: 2026-06-12*
+*Última actualización: 2026-06-13*

@@ -49,8 +49,8 @@ backend/
 
 | | |
 |---|---|
-| **Último commit** | `51e878e` — "feat: modal progreso SRI (60s), fix dentición odontograma, guardar consulta + evolución" |
-| **Fecha** | 2026-06-12 |
+| **Último commit** | `9cf793a` — "feat: re-consulta automática de estado SRI al cargar Facturación" (+ correcciones de esta sesión, ver "Cambios Recientes") |
+| **Fecha** | 2026-06-13 |
 | **Rama principal** | `main` |
 | **Estado del build** | Todos los archivos modificados verificados con `ast.parse` (Python) y balance de llaves/paréntesis (JSX) |
 
@@ -124,14 +124,25 @@ backend/
 
 ## Cambios Recientes (última sesión)
 
+### Correcciones de producción (2026-06-13)
+- **Odontograma — render de dentición Decidua/Mixta**: `organizarDientes()` solo dibujaba los cuadrantes permanentes 1-4, por lo que los dientes temporales 5-8 (correctamente guardados en backend) nunca se renderizaban. Ahora incluye los cuadrantes 5-8 agrupados por lado (`OdontogramaClinicoTab.jsx`). **Este era el motivo real por el que "los dientes faltantes no aparecían"** — la lógica de fusión backend/handler ya funcionaba.
+- **Envío de RIDE por correo — congelaba toda la app**: `enviar_ride_por_correo` ejecutaba `smtplib.SMTP_SSL` (síncrono, sin timeout) dentro de un `async def`, bloqueando el event loop de uvicorn para **todos** los usuarios mientras esperaba a Gmail. Ahora el envío se aísla en `asyncio.to_thread()` con `timeout=20s` y devuelve 504 claro si el puerto 465 está bloqueado/lento (`billing.py`).
+- **Consulta SRI — mostrar respuesta real**: `GET /sri/estado/{id}` ahora persiste siempre `sri_ultimo_estado`, `sri_ultimo_mensaje` y `sri_ultima_consulta` (no solo cuando autoriza). La tabla de Facturación muestra ese estado real bajo el badge (RECIBIDA / EN PROCESO / NO EXISTE / DEVUELTA), facilitando el diagnóstico (`billing.py`, `FacturacionTab.jsx`).
+
+### Correcciones SRI previas (commits 2551f76 → 9cf793a)
+- **`2551f76`** — Handler global de excepciones FastAPI con headers CORS + logging de traceback (el "Network Error" al emitir era un 500 sin CORS) + None-safety en `numero_factura`/`clinica_config.valor`
+- **`6dcc882`** — `lxml==5.3.0` faltaba en `requirements.txt` (importado en `sri_facturacion.py`, causaba 500 "No module named 'lxml'")
+- **`6f439da`** — Early-return en `emitir_factura_sri` para facturas ya RECIBIDA (evita re-emisión duplicada) + descarga XML vía fetch+blob+auth (corrige "Not authenticated") + mensaje de éxito solo si `sri_estado === "AUTORIZADO"`
+- **`9cf793a`** — `cargar()` auto-consulta `/sri/estado/{id}` (vía `Promise.allSettled`) para facturas pendientes al abrir Facturación
+
 ### Modal de progreso SRI
 - Backend: ciclo de reintentos de autorización extendido de 2s a ~60s (intervalos 3,5,7,10,12,15s), sigue reintentando mientras SRI responde "NO EXISTE"/"EN PROCESO"/"PENDIENTE"
 - Frontend: modal fullscreen con spinner animado (`@keyframes spin`), estados visuales ✅/⚠️/❌/⏱️, timeout axios de 90s
 - Elimina la necesidad de cerrar y reabrir la factura para ver si fue autorizada
 
-### Corrección de dentición
-- El selector Permanente/Decidua/Mixta ahora **agrega** los cuadrantes de dientes faltantes al odontograma existente (vía generación temporal + unificación), en lugar de intentar crear un odontograma nuevo desde cero
-- Preserva todo lo ya marcado al cambiar de tipo de dentición
+### Corrección de dentición (completada 2026-06-13)
+- El selector Permanente/Decidua/Mixta **agrega** los cuadrantes de dientes faltantes al odontograma existente (vía generación temporal + unificación), preservando lo ya marcado — esta parte (backend + handler) ya funcionaba
+- **Faltaba el render**: `organizarDientes()` ignoraba los cuadrantes 5-8; corregido en esta sesión (ver "Correcciones de producción" arriba). Ahora los dientes temporales se muestran en ambos arcos
 
 ### Guardar y terminar consulta
 - Nuevo botón al final del flujo de odontograma
@@ -162,40 +173,48 @@ backend/
 | `handleGuardar` de factura no hacía nada | `InvoiceCreate` tenía campos obligatorios sin default → 422 silencioso | Defaults agregados a todos los campos; error 422 mostrado en detalle |
 | Botón "Ejecutar Diagnóstico SRI" → Network Error | Usaba `axios` dinámico sin headers de autenticación | Reemplazado por `apiClient` (interceptor con token de localStorage) |
 | Consentimiento sin selector de procedimiento | Endpoint GET fijo sin parámetros | Cambiado a POST + `ConsentimientoModal` con 16 procedimientos |
+| "Network Error" al emitir factura SRI | Excepción 500 sin headers CORS (el navegador la reporta como Network Error) + `None.split()` en `numero_factura` | Handler global de excepciones con CORS + logging; None-safety (`2551f76`) |
+| 500 "No module named 'lxml'" al emitir | `lxml` importado en `sri_facturacion.py` pero ausente en `requirements.txt` | `lxml==5.3.0` agregado (`6dcc882`) |
+| Re-emisión SRI duplicada / XML "Not authenticated" / mensaje "AUTORIZADO" engañoso | Sin early-return en factura RECIBIDA; descarga XML sin token; éxito sin verificar estado | Early-return + fetch+blob+auth + check `sri_estado === "AUTORIZADO"` (`6f439da`) |
+| Facturas quedaban en "SRI Proc." tras recargar | No se re-consultaba el estado al abrir Facturación | `cargar()` auto-consulta `/sri/estado/{id}` con `Promise.allSettled` (`9cf793a`) |
+| Dentición Decidua/Mixta no mostraba dientes | `organizarDientes()` solo renderizaba cuadrantes 1-4; los temporales 5-8 nunca se dibujaban | Incluidos cuadrantes 5-8 en ambos arcos (2026-06-13) |
+| "Enviar por correo" congelaba toda la app | `smtplib.SMTP_SSL` síncrono sin timeout dentro de `async def` bloqueaba el event loop | `asyncio.to_thread()` + `timeout=20s` + 504 claro (2026-06-13) |
 | Certificado médico sin emisor configurable | Solo usaba doctor de la cita | Campo `emisor_nombre` opcional para que counter especifique quién firma |
 
 ---
 
 ## Problemas Conocidos
 
-1. **PAT de GitHub activo en el entorno de desarrollo** — debe revocarse desde GitHub Settings → Developer settings → Personal access tokens cuando se concluya el ciclo de desarrollo actual
-2. **Modulación de `server.py`**: aún contiene rutas legacy pendientes de mover a `routers/modules/` (clinical history por especialidad) — `financial_routes.py` deliberadamente no extraído por su complejidad (operaciones atómicas, SRI, pagos)
-3. **Reintentos SRI de 60s**: si el SRI tarda más, la factura queda en estado PENDIENTE y requiere "Consultar SRI" manual (no implementado como botón aún — solo vía re-emisión que ahora consulta antes de reenviar)
-4. **Gemini AI**: decoplado pero depende de que el usuario configure su propia API key; sin key, `IAMedicaPanel` no ofrece sugerencias
-5. **Pendiente verificar**: integración completa de `FichaClinicaTab` dentro de `NuevaCitaModal` (estado incierto de sesiones previas)
-6. **MedicamentoSearch**: integrado solo en `MedicacionRapida` (Medicina General) y `PediatriaForm`; `GinecologiaForm` y `NutricionForm` aún usan input manual
-7. **CIE10Search**: integrado solo en certificado médico; no en formularios de historia clínica por especialidad
-8. **Encoding**: riesgo conocido de corrupción ASCII en merges que afecta comparaciones de especialidad — vigilar tras cualquier merge masivo
-9. **Sin botón dedicado "Consultar estado SRI"** para facturas que quedaron PENDIENTE tras los 60s de reintento (la única vía actual es reintentar emisión, que internamente consulta primero)
+1. **Modulación de `server.py`**: aún contiene rutas legacy pendientes de mover a `routers/modules/` (clinical history por especialidad) — `financial_routes.py` deliberadamente no extraído por su complejidad (operaciones atómicas, SRI, pagos)
+2. **Reintentos SRI de 60s**: si el SRI tarda más, la factura queda en estado PENDIENTE; ahora hay botón "Consultar SRI" que muestra el estado real devuelto (RECIBIDA/EN PROCESO/NO EXISTE/DEVUELTA) — pendiente probar en producción que el estado real se refleje correctamente en la tabla
+3. **Gemini AI**: decoplado pero depende de que el usuario configure su propia API key; sin key, `IAMedicaPanel` no ofrece sugerencias
+4. **Pendiente verificar**: integración completa de `FichaClinicaTab` dentro de `NuevaCitaModal` (estado incierto de sesiones previas)
+5. **MedicamentoSearch**: integrado solo en `MedicacionRapida` (Medicina General) y `PediatriaForm`; `GinecologiaForm` y `NutricionForm` aún usan input manual
+6. **CIE10Search**: integrado solo en certificado médico; no en formularios de historia clínica por especialidad
+7. **Encoding**: riesgo conocido de corrupción ASCII en merges que afecta comparaciones de especialidad — vigilar tras cualquier merge masivo
+8. **Envío de correo en Render**: si Render restringe el puerto 465 saliente, el envío de RIDE devolverá 504 (ya no congela la app) — verificar conectividad SMTP en producción o considerar API HTTP (SendGrid/Resend) como alternativa
+
+> **Resuelto:** el PAT de GitHub usado en desarrollo **ya fue revocado/eliminado** — riesgo de seguridad cerrado.
 
 ---
 
 ## Próximas Tareas Recomendadas
 
-### Prioridad Alta
-1. **Botón "Consultar Estado SRI"** independiente para facturas PENDIENTE — evita reintento completo, solo consulta autorización con la `clave_acceso` existente
-2. Verificar y completar integración `FichaClinicaTab` ↔ `NuevaCitaModal`
-3. Probar en producción: emisión real de factura con el modal de 60s, cambio de dentición a Decidua/Mixta, botón "Guardar y Terminar Consulta"
+### Prioridad Alta — verificar en producción los fixes de esta sesión (2026-06-13)
+1. **Odontograma**: confirmar que al cambiar a Decidua/Mixta ahora se ven los dientes temporales 5-8 en ambos arcos
+2. **Envío RIDE por correo**: confirmar que ya no congela la app y que envía correctamente (o devuelve 504 si Render bloquea el puerto 465)
+3. **Consulta SRI**: confirmar que la tabla muestra el estado real (RECIBIDA/EN PROCESO/NO EXISTE/DEVUELTA) bajo el badge tras pulsar "Consultar SRI"
+4. Verificar y completar integración `FichaClinicaTab` ↔ `NuevaCitaModal`
 
 ### Prioridad Media
-4. Extender `MedicamentoSearch` a `GinecologiaForm` y `NutricionForm`
-5. Extender `CIE10Search` a formularios de historia clínica (no solo certificado)
-6. Continuar modularización de `server.py`: mover historia clínica por especialidad a `routers/modules/{especialidad}.py`
+5. Extender `MedicamentoSearch` a `GinecologiaForm` y `NutricionForm`
+6. Extender `CIE10Search` a formularios de historia clínica (no solo certificado)
+7. Continuar modularización de `server.py`: mover historia clínica por especialidad a `routers/modules/{especialidad}.py`
 
 ### Prioridad Baja
-7. Revocar el PAT de GitHub usado en este entorno de desarrollo al finalizar ciclo activo
 8. Extracción de `financial_routes.py` hacia arquitectura `services/`/`repositories/` (cuando se aborde evolución SaaS completa)
 9. Evaluar agregar resumen visual de evolución odontológica (timeline gráfico) más allá del panel colapsable actual
+10. Considerar envío de correo vía API HTTP (SendGrid/Resend) si el puerto 465 SMTP resulta poco fiable en Render
 
 ---
 
@@ -223,4 +242,4 @@ backend/
 
 ---
 
-*Documento generado automáticamente — última actualización: 2026-06-12*
+*Documento generado automáticamente — última actualización: 2026-06-13*
