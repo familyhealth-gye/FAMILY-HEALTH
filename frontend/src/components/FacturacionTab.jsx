@@ -102,11 +102,29 @@ export const FacturacionTab = ({ token, user }) => {
         axios.get(`${API}/invoices/stats`, { headers }),
         axios.get(`${API}/configuracion/clinica`, { headers }),
       ]);
-      setFacturas(facRes.data || []);
+      let lista = facRes.data || [];
+      setFacturas(lista);
       setStats(statRes.data);
       if (cfgRes.data && Object.keys(cfgRes.data).length > 0) {
         setConfig(cfgRes.data);
         setConfigForm({ ...CONFIG_VACIO, ...cfgRes.data });
+      }
+
+      // Re-consultar automáticamente al SRI las facturas RECIBIDA/PENDIENTE —
+      // evita que el usuario tenga que descargar la factura repetidas veces
+      // para saber si ya fue autorizada
+      const pendientes = lista
+        .filter(f => f.estado !== "anulada" && f.clave_acceso && f.sri_estado && f.sri_estado !== "AUTORIZADO")
+        .slice(0, 10);
+      if (pendientes.length > 0) {
+        const resultados = await Promise.allSettled(
+          pendientes.map(f => axios.get(`${API}/sri/estado/${f.id}`, { headers }))
+        );
+        const algunaAutorizada = resultados.some(r => r.status === "fulfilled" && r.value.data?.ok);
+        if (algunaAutorizada) {
+          const facRes2 = await axios.get(`${API}/invoices`, { headers });
+          setFacturas(facRes2.data || []);
+        }
       }
     } catch (e) {
       console.error(e);
