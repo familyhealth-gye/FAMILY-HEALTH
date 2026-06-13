@@ -125,8 +125,8 @@ backend/
 ## Cambios Recientes (última sesión)
 
 ### Correcciones de producción (2026-06-13)
-- **Odontograma — render de dentición Decidua/Mixta**: `organizarDientes()` solo dibujaba los cuadrantes permanentes 1-4, por lo que los dientes temporales 5-8 (correctamente guardados en backend) nunca se renderizaban. Ahora incluye los cuadrantes 5-8 agrupados por lado (`OdontogramaClinicoTab.jsx`). **Este era el motivo real por el que "los dientes faltantes no aparecían"** — la lógica de fusión backend/handler ya funcionaba.
-- **Envío de RIDE por correo — congelaba toda la app**: `enviar_ride_por_correo` ejecutaba `smtplib.SMTP_SSL` (síncrono, sin timeout) dentro de un `async def`, bloqueando el event loop de uvicorn para **todos** los usuarios mientras esperaba a Gmail. Ahora el envío se aísla en `asyncio.to_thread()` con `timeout=20s` y devuelve 504 claro si el puerto 465 está bloqueado/lento (`billing.py`).
+- **Odontograma — render de dentición Decidua/Mixta**: `organizarDientes()` solo dibujaba los cuadrantes permanentes 1-4, por lo que los dientes temporales 5-8 (correctamente guardados en backend) nunca se renderizaban. **Corregido en dos pasos**: primero se incluyeron los temporales, pero quedaban intercalados entre los permanentes (mal colocados); la versión final los muestra en **filas internas propias y centradas** (4 filas: permanente sup → temporal sup → temporal inf → permanente inf), como un odontograma mixto estándar (`OdontogramaClinicoTab.jsx`).
+- **Envío de RIDE por correo — migrado de SMTP a Gmail API**: `smtplib.SMTP_SSL` síncrono congelaba el event loop; se aisló primero con `asyncio.to_thread`+timeout (devolvía 504). **Pero Render bloquea todo el SMTP saliente (25/465/587)**, así que SMTP nunca funcionaría. Se migró el envío a la **Gmail API por HTTPS** (OAuth2, `httpx` async): refresh_token → access_token → `messages/send`. Requiere configurar credenciales OAuth2 (ver "Problemas Conocidos" / pendiente Parte A).
 - **Consulta SRI — mostrar respuesta real**: `GET /sri/estado/{id}` ahora persiste siempre `sri_ultimo_estado`, `sri_ultimo_mensaje` y `sri_ultima_consulta` (no solo cuando autoriza). La tabla de Facturación muestra ese estado real bajo el badge (RECIBIDA / EN PROCESO / NO EXISTE / DEVUELTA), facilitando el diagnóstico (`billing.py`, `FacturacionTab.jsx`).
 
 ### Correcciones SRI previas (commits 2551f76 → 9cf793a)
@@ -192,7 +192,10 @@ backend/
 5. **MedicamentoSearch**: integrado solo en `MedicacionRapida` (Medicina General) y `PediatriaForm`; `GinecologiaForm` y `NutricionForm` aún usan input manual
 6. **CIE10Search**: integrado solo en certificado médico; no en formularios de historia clínica por especialidad
 7. **Encoding**: riesgo conocido de corrupción ASCII en merges que afecta comparaciones de especialidad — vigilar tras cualquier merge masivo
-8. **Envío de correo en Render**: si Render restringe el puerto 465 saliente, el envío de RIDE devolverá 504 (ya no congela la app) — verificar conectividad SMTP en producción o considerar API HTTP (SendGrid/Resend) como alternativa
+8. **Envío de correo — PENDIENTE Parte A (configuración del usuario)**: el código ya envía vía Gmail API (HTTPS), pero falta que el usuario complete el setup OAuth2 en Google Cloud y pegue las credenciales:
+   - **Parte A (manual, una vez)**: crear proyecto en Google Cloud Console → habilitar "Gmail API" → pantalla de consentimiento OAuth (Externo, scope `gmail.send`, agregar el Gmail como usuario de prueba) → credencial "ID de cliente OAuth" tipo *Aplicación de escritorio* (da Client ID + Client Secret) → ejecutar `python backend/scripts/gmail_oauth_setup.py` en local para obtener el Refresh Token
+   - **Luego**: pegar Client ID / Client Secret / Refresh Token en Admin → Config. SRI → sección Gmail
+   - Hasta que se complete, "Enviar por correo" devuelve 503 ("Gmail API no configurada")
 
 > **Resuelto:** el PAT de GitHub usado en desarrollo **ya fue revocado/eliminado** — riesgo de seguridad cerrado.
 
@@ -202,7 +205,7 @@ backend/
 
 ### Prioridad Alta — verificar en producción los fixes de esta sesión (2026-06-13)
 1. **Odontograma**: confirmar que al cambiar a Decidua/Mixta ahora se ven los dientes temporales 5-8 en ambos arcos
-2. **Envío RIDE por correo**: confirmar que ya no congela la app y que envía correctamente (o devuelve 504 si Render bloquea el puerto 465)
+2. **Envío RIDE por correo**: completar la Parte A (setup Gmail API OAuth2 — ver "Problemas Conocidos" #8) y confirmar que envía correctamente vía Gmail API
 3. **Consulta SRI**: confirmar que la tabla muestra el estado real (RECIBIDA/EN PROCESO/NO EXISTE/DEVUELTA) bajo el badge tras pulsar "Consultar SRI"
 4. Verificar y completar integración `FichaClinicaTab` ↔ `NuevaCitaModal`
 
