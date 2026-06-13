@@ -477,21 +477,28 @@ export const OdontogramaClinicoTab = ({
   };
 
   // ── Organizar dientes en arcos ───────────────────────────────────────────────
+  // 4 filas independientes: permanente superior, temporal superior (centrada),
+  // temporal inferior (centrada), permanente inferior. Los temporales NO se
+  // intercalan con los permanentes — van en filas internas propias, como en un
+  // odontograma clínico estándar de dentición mixta.
   const organizarDientes = () => {
-    if (!odontograma?.dientes) return { superior: [], inferior: [] };
+    const vacio = { supPerm: [], supTemp: [], infTemp: [], infPerm: [] };
+    if (!odontograma?.dientes) return vacio;
     const d = odontograma.dientes;
-    const q = (n) => d.filter(x => Number(x.cuadrante) === n).sort((a, b) => a.posicion - b.posicion);
-    // Incluye cuadrantes temporales (5-8) junto a su lado permanente correspondiente,
-    // para que dentición Decidua/Mixta renderice los dientes 5x/6x/7x/8x.
-    // Superior: lado derecho del paciente (Q1+Q5) → línea media → lado izquierdo (Q6+Q2)
-    // Inferior: lado derecho (Q4+Q8) → línea media → lado izquierdo (Q7+Q3)
+    // Dentro de un cuadrante, el dígito FDI más alto es el más posterior.
+    // Lado derecho del paciente (Q1,Q4,Q5,Q8): posterior→línea media = desc.
+    // Lado izquierdo (Q2,Q3,Q6,Q7): línea media→posterior = asc.
+    const der = (n) => d.filter(x => Number(x.cuadrante) === n).sort((a, b) => Number(b.numero_fdi) - Number(a.numero_fdi));
+    const izq = (n) => d.filter(x => Number(x.cuadrante) === n).sort((a, b) => Number(a.numero_fdi) - Number(b.numero_fdi));
     return {
-      superior: [ ...q(1), ...q(5), ...q(6), ...q(2) ],
-      inferior: [ ...q(4), ...q(8), ...q(7), ...q(3) ],
+      supPerm: [ ...der(1), ...izq(2) ],   // 18→11 | 21→28
+      supTemp: [ ...der(5), ...izq(6) ],   // 55→51 | 61→65 (centrado)
+      infTemp: [ ...der(8), ...izq(7) ],   // 85→81 | 71→75 (centrado)
+      infPerm: [ ...der(4), ...izq(3) ],   // 48→41 | 31→38
     };
   };
 
-  const { superior, inferior } = organizarDientes();
+  const { supPerm, supTemp, infTemp, infPerm } = organizarDientes();
 
   // ── Estilos compartidos ──────────────────────────────────────────────────────
   const sCard = { marginBottom: "16px", padding: "16px", background: "#F8FAFF", border: "1px solid #BFDBFE", borderRadius: "12px" };
@@ -646,36 +653,47 @@ export const OdontogramaClinicoTab = ({
           ))}
         </div>
 
-        {/* Arco Superior */}
-        <div style={{ marginBottom: "4px" }}>
-          <div style={{ fontSize: "9px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "4px", textAlign: "center" }}>Superior</div>
-          <div style={{ display: "flex", justifyContent: "center", gap: "2px", overflowX: "auto", paddingBottom: "4px" }}>
-            {superior.map(d => (
-              <Diente key={d.numero_fdi} diente={d}
-                isSelected={dienteSeleccionado?.numero_fdi === d.numero_fdi}
-                onSelectDiente={setDienteSeleccionado}
-                onSelectSuperficie={(diente, sup) => aplicarDiagnosticoSuperficie(diente, sup, herramienta)}
-              />
-            ))}
-          </div>
-        </div>
+        {(() => {
+          const filaDientes = (arr) => (
+            <div style={{ display: "flex", justifyContent: "center", gap: "2px", overflowX: "auto", paddingBottom: "4px" }}>
+              {arr.map(d => (
+                <Diente key={d.numero_fdi} diente={d}
+                  isSelected={dienteSeleccionado?.numero_fdi === d.numero_fdi}
+                  onSelectDiente={setDienteSeleccionado}
+                  onSelectSuperficie={(diente, sup) => aplicarDiagnosticoSuperficie(diente, sup, herramienta)}
+                />
+              ))}
+            </div>
+          );
+          return (
+            <>
+              {/* Arco Superior permanente */}
+              {supPerm.length > 0 && (
+                <div style={{ marginBottom: "4px" }}>
+                  <div style={{ fontSize: "9px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "4px", textAlign: "center" }}>Superior</div>
+                  {filaDientes(supPerm)}
+                </div>
+              )}
 
-        {/* Línea divisoria */}
-        <div style={{ border: "none", borderTop: "1px dashed #CBD5E1", margin: "6px 0" }} />
+              {/* Fila temporal superior (centrada) */}
+              {supTemp.length > 0 && filaDientes(supTemp)}
 
-        {/* Arco Inferior */}
-        <div>
-          <div style={{ display: "flex", justifyContent: "center", gap: "2px", overflowX: "auto", paddingBottom: "4px" }}>
-            {inferior.map(d => (
-              <Diente key={d.numero_fdi} diente={d}
-                isSelected={dienteSeleccionado?.numero_fdi === d.numero_fdi}
-                onSelectDiente={setDienteSeleccionado}
-                onSelectSuperficie={(diente, sup) => aplicarDiagnosticoSuperficie(diente, sup, herramienta)}
-              />
-            ))}
-          </div>
-          <div style={{ fontSize: "9px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: "4px", textAlign: "center" }}>Inferior</div>
-        </div>
+              {/* Línea divisoria */}
+              <div style={{ border: "none", borderTop: "1px dashed #CBD5E1", margin: "6px 0" }} />
+
+              {/* Fila temporal inferior (centrada) */}
+              {infTemp.length > 0 && filaDientes(infTemp)}
+
+              {/* Arco Inferior permanente */}
+              {infPerm.length > 0 && (
+                <div>
+                  {filaDientes(infPerm)}
+                  <div style={{ fontSize: "9px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: "4px", textAlign: "center" }}>Inferior</div>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* ══ 4. LEYENDA ════════════════════════════════════════════════════ */}
