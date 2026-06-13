@@ -308,6 +308,51 @@ async def agregar_evolucion_odontograma(
     return {"ok": True, "entrada": entrada}
 
 
+@router.post("/odontogramas-clinicos/{odontograma_id}/terminar")
+async def terminar_consulta_odontologica(
+    odontograma_id: str,
+    data: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Cierra la consulta odontológica generando el cobro pendiente para counter,
+    igual que las demás especialidades. Cobra por los procedimientos realizados
+    (cada uno como ítem con su precio); si no hay procedimientos con precio, deja
+    la tarifa fija de consulta. Idempotente por appointment_id.
+
+    Body: { appointment_id: str, procedimientos: [{procedimiento, precio, diente}] }
+    """
+    from routers.helpers import crear_consulta_financiera_automatica
+
+    odonto = await db.odontogramas_clinicos.find_one({"id": odontograma_id}, {"_id": 0})
+    if not odonto:
+        raise HTTPException(status_code=404, detail="Odontograma no encontrado")
+
+    appointment_id = data.get("appointment_id") or ""
+    if not appointment_id:
+        # Odontograma sin cita asociada (ej. desde historial) → no se genera cobro
+        return {"ok": True, "consulta_financiera_id": None, "mensaje": "Sin cita asociada; no se generó cobro"}
+
+    procedimientos = data.get("procedimientos") or []
+
+    fin_id = await crear_consulta_financiera_automatica(
+        appointment_id,
+        odonto.get("paciente_cedula", ""),
+        odonto.get("paciente_nombre", ""),
+        odonto.get("doctor_id", ""),
+        "Odontología",
+        current_user.username,
+        servicios_custom=procedimientos,
+    )
+    if fin_id:
+        await db.odontogramas_clinicos.update_one(
+            {"id": odontograma_id},
+            {"$set": {"consulta_financiera_id": fin_id,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    return {"ok": True, "consulta_financiera_id": fin_id}
+
+
 @router.get("/odontogramas-clinicos/{odontograma_id}/evolucion")
 async def get_evolucion_odontograma(
     odontograma_id: str,

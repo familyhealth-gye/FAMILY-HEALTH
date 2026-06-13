@@ -989,7 +989,27 @@ export const OdontogramaClinicoTab = ({
                 } catch {}
               }
 
-              toast.success("✅ Consulta guardada");
+              // Generar cobro pendiente para counter (igual que las demás especialidades).
+              // Cobra por procedimientos realizados; sin cita asociada no se genera cobro.
+              const apptId = appointment?.id || "";
+              if (apptId) {
+                const procedimientos = realizados.map(r => ({
+                  diente: r.diente || "",
+                  procedimiento: r.procedimiento || "",
+                  precio: parseFloat(r.precio ?? getPrecio(r.procedimiento)) || 0,
+                }));
+                try {
+                  await axios.post(
+                    `${API}/odontogramas-clinicos/${odontograma.id}/terminar`,
+                    { appointment_id: apptId, procedimientos },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+                } catch (e) {
+                  toast.error("Consulta guardada, pero no se pudo generar el cobro: " + (e.response?.data?.detail || e.message));
+                }
+              }
+
+              toast.success(apptId ? "✅ Consulta terminada — pendiente de cobro en Caja" : "✅ Consulta guardada");
               if (onClose) setTimeout(onClose, 1200);
             } catch (e) {
               toast.error("Error al guardar: " + (e.response?.data?.detail || e.message));

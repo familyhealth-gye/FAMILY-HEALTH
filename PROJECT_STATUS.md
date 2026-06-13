@@ -182,6 +182,7 @@ backend/
 | "Enviar por correo" congelaba toda la app | `smtplib.SMTP_SSL` síncrono sin timeout dentro de `async def` bloqueaba el event loop | `asyncio.to_thread()` + `timeout=20s` + 504 claro (2026-06-13) |
 | Certificado médico sin emisor configurable | Solo usaba doctor de la cita | Campo `emisor_nombre` opcional para que counter especifique quién firma |
 | `POST /medical-history/odontology` rota (guardaba historia odontológica como `None` → 500) | Función `create_odontology_history` duplicada: el decorador `@router.post` quedó pegado a un stub incompleto (sin insert ni return); la implementación completa quedó sin decorador y nunca se registró como ruta | Eliminado el stub incompleto; el decorador ahora envuelve la implementación completa (Fase A, 2026-06-13) |
+| Odontograma: "Terminar Consulta" no generaba cobro pendiente para counter (a diferencia de las demás especialidades) | El botón solo hacía `PUT` del diagnóstico y `POST` de evolución; nunca llamaba a `crear_consulta_financiera_automatica()`, así que la cita no pasaba a "Pendiente de Pago" ni aparecía cobro en Caja | Nuevo endpoint `POST /odontogramas-clinicos/{id}/terminar` que crea la consulta financiera cobrando por procedimientos realizados (ítems con precio); `crear_consulta_financiera_automatica()` extendida con `servicios_custom` opcional (retrocompatible). El botón ahora pone la cita en "Pendiente de Pago" (2026-06-13) |
 
 ---
 

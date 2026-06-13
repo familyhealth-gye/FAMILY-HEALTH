@@ -30,14 +30,22 @@ async def crear_consulta_financiera_automatica(
     doctor_id: str,
     especialidad: str,
     username: str,
+    servicios_custom: list | None = None,
 ):
     """
     Crea consulta financiera automáticamente al cerrar cualquier consulta clínica.
     Si ya existe, la retorna sin duplicar.
-    Usada por: medical-history (general, pediatric, odontology, nutricion, ginecologia, ecografia).
+    Usada por: medical-history (general, pediatric, odontology, nutricion, ginecologia, ecografia)
+    y odontograma clínico ("Terminar Consulta").
 
     IMPORTANTE: paciente_id se resuelve desde db.pacientes por cédula.
                 NO usar appointment_id como paciente_id.
+
+    servicios_custom (opcional): lista de procedimientos a cobrar como ítems individuales,
+        cada uno { "procedimiento": str, "precio": float, "diente": str (opcional) }.
+        Si se pasa y suma > 0, el cobro se construye con esos ítems (caso odontología:
+        cobrar por procedimientos realizados). Si es None o suma 0, se usa la tarifa
+        fija de consulta del catálogo (comportamiento original de las demás especialidades).
     """
     try:
         existing = await db.consultas_financieras.find_one(
@@ -85,14 +93,40 @@ async def crear_consulta_financiera_automatica(
 
         from financial_models import ConsultaFinanciera, DetalleServicio
 
-        servicio = DetalleServicio(
-            consulta_id="",
-            servicio=f"Consulta {especialidad}",
-            descripcion=f"Consulta médica - {especialidad}",
-            precio_unitario=precio,
-            cantidad=1,
-            subtotal=precio,
-        )
+        # ── Construir servicios y total ───────────────────────────────────────
+        # Si llegan procedimientos personalizados con precio (odontología), se cobra
+        # por cada uno; si no, una sola "Consulta {especialidad}" a tarifa de catálogo.
+        servicios_obj = []
+        total = 0.0
+        if servicios_custom:
+            for sc in servicios_custom:
+                try:
+                    p = float(sc.get("precio") or 0)
+                except (TypeError, ValueError):
+                    p = 0.0
+                nombre_proc = sc.get("procedimiento") or "Procedimiento"
+                diente = sc.get("diente")
+                servicios_obj.append(DetalleServicio(
+                    consulta_id="",
+                    servicio=nombre_proc,
+                    descripcion=(f"Pieza {diente}" if diente else nombre_proc),
+                    precio_unitario=p,
+                    cantidad=1,
+                    subtotal=p,
+                ))
+                total += p
+
+        # Fallback a tarifa fija si no hubo procedimientos con precio
+        if not servicios_obj or total <= 0:
+            servicios_obj = [DetalleServicio(
+                consulta_id="",
+                servicio=f"Consulta {especialidad}",
+                descripcion=f"Consulta médica - {especialidad}",
+                precio_unitario=precio,
+                cantidad=1,
+                subtotal=precio,
+            )]
+            total = precio
 
         consulta = ConsultaFinanciera(
             paciente_id=paciente_id_real,          # ← ID real del paciente
@@ -104,16 +138,17 @@ async def crear_consulta_financiera_automatica(
             especialidad=especialidad,
             fecha=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             motivo=appointment.get("observaciones", ""),
-            total=precio,
+            total=total,
             total_pagado=0,
-            saldo=precio,
+            saldo=total,
             estado_pago="pendiente",
             servicios=[],
             pagos=[],
             created_by=username,
         )
-        servicio.consulta_id = consulta.id
-        consulta.servicios = [servicio]
+        for srv in servicios_obj:
+            srv.consulta_id = consulta.id
+        consulta.servicios = servicios_obj
 
         doc = consulta.model_dump()
         doc["created_at"] = doc["created_at"].isoformat()
