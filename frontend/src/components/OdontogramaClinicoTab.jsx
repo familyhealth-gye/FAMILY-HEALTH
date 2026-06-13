@@ -480,15 +480,14 @@ export const OdontogramaClinicoTab = ({
   const organizarDientes = () => {
     if (!odontograma?.dientes) return { superior: [], inferior: [] };
     const d = odontograma.dientes;
+    const q = (n) => d.filter(x => Number(x.cuadrante) === n).sort((a, b) => a.posicion - b.posicion);
+    // Incluye cuadrantes temporales (5-8) junto a su lado permanente correspondiente,
+    // para que dentición Decidua/Mixta renderice los dientes 5x/6x/7x/8x.
+    // Superior: lado derecho del paciente (Q1+Q5) → línea media → lado izquierdo (Q6+Q2)
+    // Inferior: lado derecho (Q4+Q8) → línea media → lado izquierdo (Q7+Q3)
     return {
-      superior: [
-        ...d.filter(x => x.cuadrante === 1).sort((a, b) => a.posicion - b.posicion),
-        ...d.filter(x => x.cuadrante === 2).sort((a, b) => a.posicion - b.posicion),
-      ],
-      inferior: [
-        ...d.filter(x => x.cuadrante === 4).sort((a, b) => a.posicion - b.posicion),
-        ...d.filter(x => x.cuadrante === 3).sort((a, b) => a.posicion - b.posicion),
-      ],
+      superior: [ ...q(1), ...q(5), ...q(6), ...q(2) ],
+      inferior: [ ...q(4), ...q(8), ...q(7), ...q(3) ],
     };
   };
 
