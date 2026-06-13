@@ -813,6 +813,13 @@ async def emitir_factura_sri(invoice_id: str, current_user: TokenData = Depends(
                     "sri_estado": "AUTORIZADO",
                     "numero_autorizacion": resultado_consulta.get("numero_autorizacion", ""),
                     "mensaje": "Factura ya enviada — autorización consultada exitosamente"}
+        # Ya fue enviada al SRI (tiene clave_acceso) y aún no está autorizada — no reenviar
+        # ni regenerar clave_acceso, solo informar el estado actual de la consulta
+        return {"ok": False, "clave_acceso": invoice["clave_acceso"],
+                "sri_estado": invoice.get("sri_estado"),
+                "mensaje": resultado_consulta.get("mensaje", "El SRI aún está procesando este comprobante"),
+                "autorizacion": resultado_consulta,
+                "reenvio_bloqueado": True}
     p12_bytes, password, ambiente = await get_p12_desde_mongo(db)
     if not p12_bytes:
         raise HTTPException(status_code=503, detail="Certificado .p12 no configurado. Ve a Admin → Config. SRI")

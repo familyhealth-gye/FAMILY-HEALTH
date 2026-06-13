@@ -197,11 +197,11 @@ export const FacturacionTab = ({ token, user }) => {
         headers,
         timeout: 90000,
       });
-      if (res.data.ok) {
+      if (res.data.sri_estado === "AUTORIZADO") {
         setSriMensaje(`✅ AUTORIZADO\nN°: ${res.data.numero_autorizacion}`);
         setTimeout(() => { setSriEmitiendo(false); cargar(); }, 2500);
       } else {
-        const msg = res.data.autorizacion?.mensaje || res.data.envio?.mensaje || res.data.sri_estado || "Respuesta no reconocida";
+        const msg = res.data.mensaje || res.data.autorizacion?.mensaje || res.data.envio?.mensaje || res.data.sri_estado || "Respuesta no reconocida";
         setSriMensaje(`⚠️ ${res.data.sri_estado || "PENDIENTE"}\n${msg}\n\nUsa "Consultar SRI" para verificar el estado.`);
         setTimeout(() => { setSriEmitiendo(false); cargar(); }, 4000);
       }
@@ -256,8 +256,24 @@ export const FacturacionTab = ({ token, user }) => {
   };
 
   // ── Descargar XML ──
-  const handleDescargarXML = (id, numero) => {
-    window.open(`${API}/sri/descargar-xml/${id}`, "_blank");
+  const handleDescargarXML = async (id, numero) => {
+    try {
+      const res = await fetch(`${API}/sri/descargar-xml/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `factura_${(numero || id).replace(/[^a-zA-Z0-9-]/g, "_")}.xml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+    } catch (e) {
+      toast.error("Error al descargar XML: " + e.message);
+    }
   };
 
   // ── Anular factura ──
