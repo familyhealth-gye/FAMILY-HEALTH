@@ -492,6 +492,14 @@ export const FacturacionTab = ({ token, user }) => {
                               {f.sri_estado === "AUTORIZADO" ? "✅ SRI OK" : f.sri_estado === "RECIBIDA" ? "⏳ SRI Proc." : `⚠️ ${f.sri_estado}`}
                             </span>
                           )}
+                          {f.sri_estado !== "AUTORIZADO" && f.sri_ultimo_estado && (
+                            <span
+                              title={f.sri_ultimo_mensaje || ""}
+                              style={{ fontSize: "9px", color: "#6b7280", whiteSpace: "nowrap", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              SRI: {f.sri_ultimo_estado}
+                              {f.sri_ultimo_mensaje ? ` — ${f.sri_ultimo_mensaje}` : ""}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: "8px 6px" }}>

@@ -887,8 +887,19 @@ async def consultar_estado_sri(invoice_id: str, current_user: TokenData = Depend
         raise HTTPException(status_code=400, detail="Esta factura no tiene clave de acceso SRI")
     _, _, ambiente = await get_p12_desde_mongo(db)
     resultado = await autorizar_en_sri(clave, ambiente)
+    # Persistir SIEMPRE el último estado/mensaje devuelto por el SRI (no solo cuando
+    # autoriza), para que la tabla de facturas pueda mostrar la respuesta real
+    # (RECIBIDA / EN PROCESO / NO EXISTE / DEVUELTA) y facilitar el diagnóstico.
+    set_data = {
+        "sri_ultimo_estado": resultado.get("estado", ""),
+        "sri_ultimo_mensaje": resultado.get("mensaje", ""),
+        "sri_ultima_consulta": datetime.now(timezone.utc).isoformat(),
+    }
     if resultado.get("ok"):
-        await db.invoices.update_one({"id": invoice_id}, {"$set": {"sri_estado": "AUTORIZADO", "numero_autorizacion": resultado.get("numero_autorizacion", clave), "fecha_autorizacion": resultado.get("fecha_autorizacion", "")}})
+        set_data["sri_estado"] = "AUTORIZADO"
+        set_data["numero_autorizacion"] = resultado.get("numero_autorizacion", clave)
+        set_data["fecha_autorizacion"] = resultado.get("fecha_autorizacion", "")
+    await db.invoices.update_one({"id": invoice_id}, {"$set": set_data})
     return resultado
 
 
@@ -905,7 +916,7 @@ async def descargar_xml_sri(invoice_id: str, current_user: TokenData = Depends(g
 
 @router.post("/sri/enviar-ride/{invoice_id}")
 async def enviar_ride_por_correo(invoice_id: str, data: dict = {}, current_user: TokenData = Depends(get_current_user)):
-    import smtplib, base64
+    import smtplib, base64, asyncio
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     from email.mime.base import MIMEBase
@@ -968,14 +979,24 @@ async def enviar_ride_por_correo(invoice_id: str, data: dict = {}, current_user:
         encoders.encode_base64(part_xml)
         part_xml.add_header("Content-Disposition", f"attachment; filename=factura_{numero_factura.replace('-','_')}.xml")
         msg.attach(part_xml)
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    # El envío SMTP es bloqueante (smtplib es síncrono). Ejecutarlo directamente
+    # dentro del endpoint async congela TODO el event loop de uvicorn (toda la app
+    # para todos los usuarios) mientras espera la conexión a Gmail. Se aísla en un
+    # hilo con asyncio.to_thread y se aplica timeout=20s para que falle rápido si
+    # el puerto 465 saliente está bloqueado/lento (p.ej. restricciones de Render).
+    def _enviar_smtp():
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as server:
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)
+
+    try:
+        await asyncio.to_thread(_enviar_smtp)
         await db.invoices.update_one({"id": invoice_id}, {"$set": {"ride_enviado_a": email_destino, "ride_enviado_fecha": datetime.now(timezone.utc).isoformat()}})
         return {"ok": True, "mensaje": f"✅ Factura enviada a {email_destino}"}
     except smtplib.SMTPAuthenticationError:
         raise HTTPException(status_code=401, detail="Error de autenticación Gmail. Usa una App Password de 16 caracteres.")
+    except (TimeoutError, smtplib.SMTPConnectError, OSError) as e:
+        raise HTTPException(status_code=504, detail=f"No se pudo conectar al servidor de correo (timeout/conexión). Detalle: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar correo: {e}")
 
