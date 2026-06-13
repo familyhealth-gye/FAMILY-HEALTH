@@ -22,7 +22,7 @@ export const ConfiguracionSRI = ({ token }) => {
   const [ambiente, setAmbiente]   = useState("produccion");
 
   // Email form
-  const [emailForm, setEmailForm] = useState({ email:"", app_password:"", nombre:"Family Health" });
+  const [emailForm, setEmailForm] = useState({ email:"", nombre:"Family Health", gmail_client_id:"", gmail_client_secret:"", gmail_refresh_token:"" });
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -37,7 +37,7 @@ export const ConfiguracionSRI = ({ token }) => {
       setSriCfg(sriRes.data);
       setEmailCfg(emailRes.data);
       if (emailRes.data?.email) {
-        setEmailForm(f => ({ ...f, email: emailRes.data.email, nombre: emailRes.data.nombre || "Family Health" }));
+        setEmailForm(f => ({ ...f, email: emailRes.data.email, nombre: emailRes.data.nombre || "Family Health", gmail_client_id: emailRes.data.gmail_client_id || "" }));
       }
     } catch (e) {
       console.error(e);
@@ -78,13 +78,18 @@ export const ConfiguracionSRI = ({ token }) => {
   };
 
   const handleEmailSubmit = async () => {
-    if (!emailForm.email || !emailForm.app_password) {
-      toast.error("Email y contraseña de aplicación son obligatorios");
+    if (!emailForm.email) {
+      toast.error("El correo remitente es obligatorio");
       return;
     }
     setLoadingEmail(true);
     try {
-      const res = await axios.post(`${API}/configuracion/email`, emailForm, { headers });
+      // No enviar campos vacíos de secretos: el backend preserva el valor previo
+      // (permite guardar solo el client_id sin re-pegar secret/refresh cada vez)
+      const payload = { email: emailForm.email, nombre: emailForm.nombre, gmail_client_id: emailForm.gmail_client_id };
+      if (emailForm.gmail_client_secret) payload.gmail_client_secret = emailForm.gmail_client_secret;
+      if (emailForm.gmail_refresh_token) payload.gmail_refresh_token = emailForm.gmail_refresh_token;
+      const res = await axios.post(`${API}/configuracion/email`, payload, { headers });
       toast.success(res.data.mensaje);
       await cargar();
     } catch (e) {
@@ -227,19 +232,37 @@ export const ConfiguracionSRI = ({ token }) => {
               placeholder="centrodeespecialidadesfamilyhe@gmail.com" style={INPUT} />
           </div>
 
+          <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:"6px", padding:"8px 10px", fontSize:"11px", color:"#1e40af" }}>
+            <p style={{ margin:"0 0 4px", fontWeight:"700" }}>ℹ️ El envío usa la Gmail API (OAuth2), no SMTP</p>
+            <p style={{ margin:0 }}>Render bloquea el SMTP saliente, por eso el envío de RIDE usa la Gmail API por HTTPS. Necesitas Client ID, Client Secret y Refresh Token (obtenidos con el script <code>backend/scripts/gmail_oauth_setup.py</code>).</p>
+          </div>
+
           <div>
-            <label style={LABEL}>Contraseña de aplicación Gmail</label>
-            <input type="password" value={emailForm.app_password}
-              onChange={e => setEmailForm(f=>({...f,app_password:e.target.value}))}
-              placeholder="xxxx xxxx xxxx xxxx (16 caracteres)" style={INPUT} />
+            <label style={LABEL}>Gmail API — Client ID</label>
+            <input value={emailForm.gmail_client_id}
+              onChange={e => setEmailForm(f=>({...f,gmail_client_id:e.target.value}))}
+              placeholder="xxxxx.apps.googleusercontent.com" style={INPUT} />
+          </div>
+
+          <div>
+            <label style={LABEL}>Gmail API — Client Secret {emailCfg?.tiene_client_secret && <span style={{ color:"#059669", fontWeight:"700" }}>(✓ guardado — deja vacío para conservar)</span>}</label>
+            <input type="password" value={emailForm.gmail_client_secret}
+              onChange={e => setEmailForm(f=>({...f,gmail_client_secret:e.target.value}))}
+              placeholder={emailCfg?.tiene_client_secret ? "•••••••• (sin cambios)" : "GOCSPX-..."} style={INPUT} />
+          </div>
+
+          <div>
+            <label style={LABEL}>Gmail API — Refresh Token {emailCfg?.tiene_refresh_token && <span style={{ color:"#059669", fontWeight:"700" }}>(✓ guardado — deja vacío para conservar)</span>}</label>
+            <input type="password" value={emailForm.gmail_refresh_token}
+              onChange={e => setEmailForm(f=>({...f,gmail_refresh_token:e.target.value}))}
+              placeholder={emailCfg?.tiene_refresh_token ? "•••••••• (sin cambios)" : "1//0g..."} style={INPUT} />
             <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:"6px", padding:"8px 10px", marginTop:"6px", fontSize:"11px", color:"#92400e" }}>
-              <p style={{ margin:"0 0 4px", fontWeight:"700" }}>⚠️ NO uses la contraseña normal de Gmail</p>
-              <p style={{ margin:0 }}>Debes crear una <strong>Contraseña de Aplicación</strong>:</p>
+              <p style={{ margin:"0 0 4px", fontWeight:"700" }}>Cómo obtener estas credenciales (una sola vez):</p>
               <ol style={{ margin:"4px 0 0", paddingLeft:"16px" }}>
-                <li>Gmail → Cuenta → Seguridad → Verificación en 2 pasos (activar)</li>
-                <li>Seguridad → Contraseñas de aplicaciones</li>
-                <li>Seleccionar app: "Correo" → Dispositivo: "Otro" → Nombrar: "FamilyHealth"</li>
-                <li>Copiar los 16 caracteres generados</li>
+                <li>Google Cloud Console → nuevo proyecto → habilitar "Gmail API"</li>
+                <li>Pantalla de consentimiento OAuth (Externo) → agregar tu Gmail como usuario de prueba → scope <code>gmail.send</code></li>
+                <li>Credenciales → ID de cliente OAuth → "Aplicación de escritorio" → copiar Client ID y Client Secret</li>
+                <li>En tu PC: <code>python backend/scripts/gmail_oauth_setup.py</code> → autorizar → copiar el Refresh Token</li>
               </ol>
             </div>
           </div>

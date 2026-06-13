@@ -916,7 +916,7 @@ async def descargar_xml_sri(invoice_id: str, current_user: TokenData = Depends(g
 
 @router.post("/sri/enviar-ride/{invoice_id}")
 async def enviar_ride_por_correo(invoice_id: str, data: dict = {}, current_user: TokenData = Depends(get_current_user)):
-    import smtplib, base64, asyncio
+    import base64, httpx
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     from email.mime.base import MIMEBase
@@ -932,17 +932,21 @@ async def enviar_ride_por_correo(invoice_id: str, data: dict = {}, current_user:
     if not cfg_email or not cfg_email.get("valor"):
         raise HTTPException(status_code=503, detail="Correo no configurado. Ve a Admin → Config. SRI → sección Gmail")
     email_cfg = cfg_email["valor"]
-    smtp_user = email_cfg.get("email", "")
-    smtp_pass = email_cfg.get("app_password", "")
-    if not smtp_user or not smtp_pass:
-        raise HTTPException(status_code=503, detail="Configuración de correo incompleta")
+    remitente = email_cfg.get("email", "")
+    gmail_client_id = email_cfg.get("gmail_client_id", "")
+    gmail_client_secret = email_cfg.get("gmail_client_secret", "")
+    gmail_refresh_token = email_cfg.get("gmail_refresh_token", "")
+    if not remitente:
+        raise HTTPException(status_code=503, detail="Falta el correo remitente. Ve a Admin → Config. SRI → sección Gmail")
+    if not (gmail_client_id and gmail_client_secret and gmail_refresh_token):
+        raise HTTPException(status_code=503, detail="Gmail API no configurada (Client ID / Secret / Refresh Token). Render bloquea SMTP; el envío usa la Gmail API.")
     pdf_buffer = generate_factura_pdf(invoice)
     pdf_bytes = pdf_buffer.read()
     numero_factura = invoice.get("numero_factura", "")
     autorizacion = invoice.get("numero_autorizacion", "")
     sri_estado = invoice.get("sri_estado", "pendiente")
     msg = MIMEMultipart()
-    msg["From"] = f"Family Health <{smtp_user}>"
+    msg["From"] = f"Family Health <{remitente}>"
     msg["To"] = email_destino
     msg["Subject"] = f"Factura {numero_factura} - Family Health"
     estado_texto = f"✅ Autorizada por el SRI — N°: {autorizacion}" if sri_estado == "AUTORIZADO" else "⏳ Pendiente de autorización SRI"
@@ -979,24 +983,46 @@ async def enviar_ride_por_correo(invoice_id: str, data: dict = {}, current_user:
         encoders.encode_base64(part_xml)
         part_xml.add_header("Content-Disposition", f"attachment; filename=factura_{numero_factura.replace('-','_')}.xml")
         msg.attach(part_xml)
-    # El envío SMTP es bloqueante (smtplib es síncrono). Ejecutarlo directamente
-    # dentro del endpoint async congela TODO el event loop de uvicorn (toda la app
-    # para todos los usuarios) mientras espera la conexión a Gmail. Se aísla en un
-    # hilo con asyncio.to_thread y se aplica timeout=20s para que falle rápido si
-    # el puerto 465 saliente está bloqueado/lento (p.ej. restricciones de Render).
-    def _enviar_smtp():
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as server:
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-
+    # Render bloquea el SMTP saliente (puertos 25/465/587), así que el envío usa
+    # la Gmail API por HTTPS (puerto 443, permitido). Flujo OAuth2:
+    #   1) refresh_token → access_token (oauth2.googleapis.com/token)
+    #   2) POST del MIME (base64url) a gmail.googleapis.com .../messages/send
+    raw_b64 = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     try:
-        await asyncio.to_thread(_enviar_smtp)
+        async with httpx.AsyncClient(timeout=30) as client:
+            # 1) Renovar access token
+            token_resp = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": gmail_client_id,
+                    "client_secret": gmail_client_secret,
+                    "refresh_token": gmail_refresh_token,
+                    "grant_type": "refresh_token",
+                },
+            )
+            if token_resp.status_code != 200:
+                detalle = token_resp.json().get("error_description") or token_resp.text
+                raise HTTPException(status_code=401, detail=f"Gmail OAuth falló (refresh token inválido o revocado): {detalle}")
+            access_token = token_resp.json().get("access_token", "")
+            # 2) Enviar el correo
+            send_resp = await client.post(
+                "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"raw": raw_b64},
+            )
+            if send_resp.status_code not in (200, 202):
+                detalle = ""
+                try:
+                    detalle = send_resp.json().get("error", {}).get("message", "")
+                except Exception:
+                    detalle = send_resp.text
+                raise HTTPException(status_code=502, detail=f"Gmail API rechazó el envío ({send_resp.status_code}): {detalle}")
         await db.invoices.update_one({"id": invoice_id}, {"$set": {"ride_enviado_a": email_destino, "ride_enviado_fecha": datetime.now(timezone.utc).isoformat()}})
         return {"ok": True, "mensaje": f"✅ Factura enviada a {email_destino}"}
-    except smtplib.SMTPAuthenticationError:
-        raise HTTPException(status_code=401, detail="Error de autenticación Gmail. Usa una App Password de 16 caracteres.")
-    except (TimeoutError, smtplib.SMTPConnectError, OSError) as e:
-        raise HTTPException(status_code=504, detail=f"No se pudo conectar al servidor de correo (timeout/conexión). Detalle: {e}")
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout conectando con la Gmail API (30s).")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar correo: {e}")
 

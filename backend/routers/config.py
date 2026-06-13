@@ -113,15 +113,25 @@ async def delete_config_ia(current_user: TokenData = Depends(get_current_user)):
 async def save_config_email(data: dict, current_user: TokenData = Depends(get_current_user)):
     if current_user.role != "Administrador":
         raise HTTPException(status_code=403, detail="Solo Administrador")
+    # Render bloquea SMTP saliente — el envío real usa la Gmail API (HTTP/OAuth2).
+    # Se conservan email/app_password por compatibilidad, pero el envío productivo
+    # usa gmail_client_id / gmail_client_secret / gmail_refresh_token.
+    existente = await db.configuracion.find_one({"clave": "email_config"}, {"_id": 0})
+    prev = (existente or {}).get("valor", {})
+    valor = {
+        "email": data.get("email", prev.get("email", "")),
+        "app_password": data.get("app_password", prev.get("app_password", "")),
+        "nombre": data.get("nombre", prev.get("nombre", "Family Health")),
+        # Credenciales Gmail API (OAuth2). Si no vienen en el payload, se preservan.
+        "gmail_client_id": data.get("gmail_client_id", prev.get("gmail_client_id", "")),
+        "gmail_client_secret": data.get("gmail_client_secret", prev.get("gmail_client_secret", "")),
+        "gmail_refresh_token": data.get("gmail_refresh_token", prev.get("gmail_refresh_token", "")),
+    }
     await db.configuracion.update_one(
         {"clave": "email_config"},
         {"$set": {
             "clave": "email_config",
-            "valor": {
-                "email": data.get("email",""),
-                "app_password": data.get("app_password",""),
-                "nombre": data.get("nombre","Family Health")
-            },
+            "valor": valor,
             "actualizado": datetime.now(timezone.utc).isoformat()
         }},
         upsert=True
@@ -137,10 +147,18 @@ async def get_config_email(current_user: TokenData = Depends(get_current_user)):
     if not cfg or not cfg.get("valor"):
         return {"configurado": False}
     val = cfg["valor"]
+    gmail_api_ok = bool(val.get("gmail_client_id") and val.get("gmail_client_secret") and val.get("gmail_refresh_token"))
     return {
-        "configurado": bool(val.get("email") and val.get("app_password")),
+        # "configurado" ahora exige Gmail API (lo único que funciona en Render)
+        "configurado": bool(val.get("email")) and gmail_api_ok,
         "email": val.get("email",""),
-        "nombre": val.get("nombre","Family Health")
+        "nombre": val.get("nombre","Family Health"),
+        "gmail_api_configurado": gmail_api_ok,
+        "smtp_configurado": bool(val.get("email") and val.get("app_password")),
+        # Nunca devolver secretos completos — solo si están presentes
+        "gmail_client_id": val.get("gmail_client_id",""),
+        "tiene_client_secret": bool(val.get("gmail_client_secret")),
+        "tiene_refresh_token": bool(val.get("gmail_refresh_token")),
     }
 
 
