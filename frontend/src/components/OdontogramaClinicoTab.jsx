@@ -138,7 +138,7 @@ const Diente = ({ diente, onSelectDiente, onSelectSuperficie, isSelected }) => {
 
 export const OdontogramaClinicoTab = ({
   token, pacienteId, pacienteNombre, pacienteCedula,
-  doctorId, onClose, onOdontogramaLoaded, appointment,
+  doctorId, onClose, onSuccess, onOdontogramaLoaded, appointment,
 }) => {
   // ── Estado ──────────────────────────────────────────────────────────────────
   const [odontograma,       setOdontograma]       = useState(null);
@@ -1009,8 +1009,15 @@ export const OdontogramaClinicoTab = ({
                 }
               }
 
-              toast.success(apptId ? "✅ Consulta terminada — pendiente de cobro en Caja" : "✅ Consulta guardada");
-              if (onClose) setTimeout(onClose, 1200);
+              // Si hay cita: delegar el cierre en onSuccess (pone la cita en
+              // "Pendiente de Pago" y refresca la lista, igual que las demás
+              // especialidades). Sin cita (historial): solo cerrar.
+              if (apptId && onSuccess) {
+                onSuccess();
+              } else {
+                toast.success("✅ Consulta guardada");
+                if (onClose) setTimeout(onClose, 1200);
+              }
             } catch (e) {
               toast.error("Error al guardar: " + (e.response?.data?.detail || e.message));
             }

@@ -705,6 +705,7 @@ export const AppointmentsWithAttention = ({
                 doctorId={closeProps.appointment?.doctor_id}
                 appointment={closeProps.appointment}
                 onClose={closeProps.onClose}
+                onSuccess={closeProps.onSuccess}
                 onOdontogramaLoaded={() => {}}
               />
             );
