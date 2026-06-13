@@ -1,10 +1,11 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import uvicorn
 import os
 import logging
+import traceback
 import uuid
 import httpx
 from pathlib import Path
@@ -16,6 +17,9 @@ from datetime import datetime, timezone
 from pymongo.errors import DuplicateKeyError
 
 from db import db, ensure_indexes, close_client
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
+logger = logging.getLogger("family_health")
 
 app = FastAPI(title="Family Health API", description="Sistema Clínico Multiespecialidad SaaS", version="2.0")
 
@@ -50,6 +54,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Handler global de excepciones no controladas — registra el traceback completo
+# y garantiza headers CORS en la respuesta de error (CORSMiddleware no los agrega
+# en respuestas generadas por excepciones no capturadas, lo que el navegador
+# reporta como "Network Error" / bloqueo CORS en vez del 500 real)
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("Excepción no controlada en %s %s:\n%s", request.method, request.url.path, traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Error interno del servidor: {exc}"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "*",
+        },
+    )
 
 # API Router con prefijo
 api_router = APIRouter(prefix="/api")

@@ -817,11 +817,12 @@ async def emitir_factura_sri(invoice_id: str, current_user: TokenData = Depends(
     if not p12_bytes:
         raise HTTPException(status_code=503, detail="Certificado .p12 no configurado. Ve a Admin → Config. SRI")
     cfg_clinica = await db.configuracion.find_one({"clave": "clinica_config"}, {"_id": 0})
-    clinica = cfg_clinica.get("valor", {}) if cfg_clinica else {}
-    ruc = clinica.get("ruc", invoice.get("emisor_ruc", ""))
+    clinica = (cfg_clinica.get("valor") or {}) if cfg_clinica else {}
+    ruc = clinica.get("ruc") or invoice.get("emisor_ruc") or ""
     if not ruc:
         raise HTTPException(status_code=400, detail="RUC no configurado. Ve a Facturación → Config. Clínica")
-    partes = invoice.get("numero_factura", "001-001-000000001").split("-")
+    numero_factura = invoice.get("numero_factura") or "001-001-000000001"
+    partes = numero_factura.split("-")
     est = partes[0] if len(partes) > 0 else "001"
     pto = partes[1] if len(partes) > 1 else "001"
     seq = partes[2] if len(partes) > 2 else "000000001"
